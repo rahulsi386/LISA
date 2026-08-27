@@ -18,7 +18,7 @@ Create or update a repository ruleset for `refs/heads/main` with these requireme
 - Block branch deletion
 - Block non-fast-forward updates
 
-The JSON template in [`repository-rulesets/main-pr-approval.json`](repository-rulesets/main-pr-approval.json) records the expected GitHub ruleset configuration for audit and setup.
+The JSON template in [`repository-rulesets/main-pr-approval.json`](./repository-rulesets/main-pr-approval.json) records the expected GitHub ruleset configuration for audit and setup.
 
 ## Verification
 
