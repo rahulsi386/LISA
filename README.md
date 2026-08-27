@@ -21,6 +21,7 @@ stage can start.
 
 ## Contents
 
+- [Repository governance](#repository-governance)
 - [Pipeline](#pipeline)
 - [Quick start](#quick-start)
 - [How to invoke a skill](#how-to-invoke-a-skill)
@@ -36,7 +37,6 @@ stage can start.
 - [Troubleshooting](#troubleshooting)
 - [Running the tests](#running-the-tests)
 - [Maintaining the skill registry](#maintaining-the-skill-registry)
-- [Repository governance](#repository-governance)
 
 ## Repository governance
 
