@@ -36,6 +36,11 @@ stage can start.
 - [Troubleshooting](#troubleshooting)
 - [Running the tests](#running-the-tests)
 - [Maintaining the skill registry](#maintaining-the-skill-registry)
+- [Repository governance](#repository-governance)
+
+## Repository governance
+
+The `main` branch must be protected from direct commits. All changes must be raised through pull requests and merged only after approval. See [`.github/BRANCH_PROTECTION.md`](./.github/BRANCH_PROTECTION.md) for the required branch ruleset settings and verification guidance.
 
 ## Pipeline
 
