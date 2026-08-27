@@ -1,0 +1,330 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://microsoft-scout.local/schemas/agent-build-handoff.schema.json",
+  "title": "Agent builder handoff",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schemaVersion",
+    "runId",
+    "generatedAt",
+    "buildMode",
+    "agent",
+    "agents",
+    "inputs",
+    "instructions",
+    "componentInventory",
+    "classificationPlan",
+    "componentDispositions",
+    "actualCoverage",
+    "simulationRegister",
+    "manualDemoSteps",
+    "deferredComponents",
+    "productionReadinessGaps",
+    "demoScript",
+    "requiredCustomerInputs",
+    "constructionVerification",
+    "qualityTargets",
+    "implementedControls",
+    "recommendations",
+    "knownBuildRisks",
+    "artifacts"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "1.0"},
+    "runId": {"type": "string", "pattern": "^BLD-[0-9]{8}-[0-9]{6}-[A-F0-9]{8}$"},
+    "generatedAt": {"type": "string", "format": "date-time"},
+    "buildMode": {"enum": ["copilot-studio-package", "cowork-configuration", "mixed", "assessment-only"]},
+    "agent": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["name", "agentId", "schemaName", "agenticPlatform", "harness", "environmentId", "environmentUrl", "recommendedTestSurface", "state"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "agentId": {"type": "string", "minLength": 1},
+        "schemaName": {"type": ["string", "null"], "minLength": 1},
+        "agenticPlatform": {"enum": ["Microsoft Copilot Studio", "Microsoft Cowork"]},
+        "harness": {"enum": ["GitHub Copilot", "Standard", "Copilot chat", null]},
+        "environmentId": {"type": "string", "minLength": 1},
+        "environmentUrl": {"type": ["string", "null"], "format": "uri"},
+        "recommendedTestSurface": {"type": "string", "minLength": 1},
+        "state": {"type": "string", "minLength": 1}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"agenticPlatform": {"const": "Microsoft Cowork"}}},
+          "then": {"properties": {"harness": {"const": null}}}
+        },
+        {
+          "if": {"properties": {"agenticPlatform": {"const": "Microsoft Copilot Studio"}}},
+          "then": {"properties": {"harness": {"enum": ["GitHub Copilot", "Standard", "Copilot chat"]}}}
+        }
+      ]
+    },
+    "agents": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "name",
+          "agentId",
+          "schemaName",
+          "agenticPlatform",
+          "harness",
+          "role",
+          "environmentId",
+          "state",
+          "projectRelativePath",
+          "instructionsSha256",
+          "components"
+        ],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "agentId": {"type": "string", "minLength": 1},
+          "schemaName": {"type": ["string", "null"], "minLength": 1},
+          "agenticPlatform": {"enum": ["Microsoft Copilot Studio", "Microsoft Cowork"]},
+          "harness": {"enum": ["GitHub Copilot", "Standard", "Copilot chat", null]},
+          "role": {"type": "string", "minLength": 1},
+          "environmentId": {"type": "string", "minLength": 1},
+          "state": {"type": "string", "minLength": 1},
+          "projectRelativePath": {
+            "type": ["string", "null"],
+            "pattern": "^project/[A-Za-z0-9_.-]+$"
+          },
+          "instructionsSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "components": {"type": "array"}
+        },
+        "allOf": [
+          {
+            "if": {"properties": {"agenticPlatform": {"const": "Microsoft Cowork"}}},
+            "then": {"properties": {"harness": {"const": null}}}
+          },
+          {
+            "if": {"properties": {"agenticPlatform": {"const": "Microsoft Copilot Studio"}}},
+            "then": {"properties": {"harness": {"enum": ["GitHub Copilot", "Standard", "Copilot chat"]}}}
+          }
+        ]
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "required": [
+        "configRelativePath",
+        "classificationRelativePath",
+        "designPointerRelativePath",
+        "outputRelativePath",
+        "knowledgeSources"
+      ],
+      "properties": {
+        "configRelativePath": {"const": "lisa-config.json"},
+        "classificationRelativePath": {
+          "type": "string",
+          "pattern": "^output/classification/complexity-classification_[0-9]{8}_[0-9]{6}(?:_[0-9]{3})?\\.json$"
+        },
+        "designPointerRelativePath": {"const": "output/design/current-design.json"},
+        "outputRelativePath": {"const": "output/build"},
+        "knowledgeSources": {"type": "array"}
+      }
+    },
+    "instructions": {
+      "type": "object",
+      "required": ["version", "sha256", "relativePath"],
+      "properties": {
+        "version": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "relativePath": {
+          "const": "agent-instructions.md"
+        }
+      }
+    },
+    "componentInventory": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "type", "status"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "type": {"type": "string", "minLength": 1},
+          "status": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "classificationPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nativeBuildPercent", "pocDemonstrationPercent", "capabilityCount"],
+      "properties": {
+        "nativeBuildPercent": {"type": "number", "minimum": 0, "maximum": 100},
+        "pocDemonstrationPercent": {"type": "number", "minimum": 0, "maximum": 100},
+        "capabilityCount": {"type": "integer", "minimum": 1}
+      }
+    },
+    "componentDispositions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "componentId",
+          "capabilityIds",
+          "plannedDisposition",
+          "actualDisposition",
+          "expectedImplementation",
+          "actualImplementation",
+          "verification",
+          "gapIds"
+        ],
+        "properties": {
+          "componentId": {"type": "string", "minLength": 1},
+          "capabilityIds": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+          "plannedDisposition": {"enum": ["build", "configure", "simulate", "static-sample-data", "manual-handoff", "defer", "block"]},
+          "actualDisposition": {"enum": ["built", "configured", "simulated", "manual", "deferred", "blocked", "failed", "not-applicable"]},
+          "expectedImplementation": {"type": "string", "minLength": 1},
+          "actualImplementation": {"type": "string", "minLength": 1},
+          "verification": {"type": "string", "minLength": 1},
+          "gapIds": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+        }
+      }
+    },
+    "actualCoverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plannedNativePercent", "actualNativePercent", "plannedPocPercent", "actualPocPercent", "varianceReasons"],
+      "properties": {
+        "plannedNativePercent": {"type": "number", "minimum": 0, "maximum": 100},
+        "actualNativePercent": {"type": "number", "minimum": 0, "maximum": 100},
+        "plannedPocPercent": {"type": "number", "minimum": 0, "maximum": 100},
+        "actualPocPercent": {"type": "number", "minimum": 0, "maximum": 100},
+        "varianceReasons": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "simulationRegister": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["componentId", "method", "userDisclosure", "testData", "replacementPath", "verification"],
+        "properties": {
+          "componentId": {"type": "string", "minLength": 1},
+          "method": {"type": "string", "minLength": 1},
+          "userDisclosure": {"type": "string", "minLength": 1},
+          "testData": {"type": "string", "minLength": 1},
+          "replacementPath": {"type": "string", "minLength": 1},
+          "verification": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "manualDemoSteps": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "deferredComponents": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "productionReadinessGaps": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "demoScript": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "requiredCustomerInputs": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "constructionVerification": {
+      "type": "object",
+      "required": ["expected", "present", "mismatched", "missing"],
+      "properties": {
+        "expected": {"type": "integer", "minimum": 0},
+        "present": {"type": "integer", "minimum": 0},
+        "mismatched": {"type": "array"},
+        "missing": {"type": "array"}
+      }
+    },
+    "qualityTargets": {"type": "object"},
+    "implementedControls": {"type": "array", "items": {"type": "string"}},
+    "recommendations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["control", "reason", "priority", "owner", "implementationPath"],
+        "properties": {
+          "control": {"type": "string", "minLength": 1},
+          "reason": {"type": "string", "minLength": 1},
+          "priority": {"enum": ["critical", "high", "medium", "low"]},
+          "owner": {"type": "string", "minLength": 1},
+          "implementationPath": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "knownBuildRisks": {"type": "array", "items": {"type": "string"}},
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["packages", "projectRelativePath", "solutionManifestRelativePath", "liveStateRelativePath", "evidence"],
+      "properties": {
+        "packages": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["relativePath", "sha256", "bytes"],
+            "properties": {
+              "relativePath": {
+                "type": "string",
+                "pattern": "^packages/[a-z0-9]+(?:-[a-z0-9]+)*\\.zip$"
+              },
+              "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+              "bytes": {"type": "integer", "minimum": 0}
+            }
+          }
+        },
+        "projectRelativePath": {
+          "type": ["string", "null"],
+          "pattern": "^project/[A-Za-z0-9_.-]+$"
+        },
+        "solutionManifestRelativePath": {"const": "agent-solution-manifest.json"},
+        "liveStateRelativePath": {"const": "agent-live-state.json"},
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^evidence/[a-z0-9]+(?:-[a-z0-9]+)*(?:\\.[a-z0-9]+)$"
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"buildMode": {"enum": ["copilot-studio-package", "mixed"]}}},
+      "then": {"properties": {"artifacts": {"properties": {"packages": {"minItems": 1}}}}}
+    },
+    {
+      "if": {"properties": {"buildMode": {"enum": ["cowork-configuration", "assessment-only"]}}},
+      "then": {"properties": {"artifacts": {"properties": {"packages": {"maxItems": 0}}}}}
+    },
+    {
+      "if": {"properties": {"buildMode": {"const": "cowork-configuration"}}},
+      "then": {
+        "properties": {
+          "agent": {
+            "properties": {
+              "agenticPlatform": {"const": "Microsoft Cowork"},
+              "harness": {"const": null}
+            }
+          },
+          "agents": {
+            "items": {
+              "properties": {
+                "agenticPlatform": {"const": "Microsoft Cowork"},
+                "harness": {"const": null}
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"buildMode": {"const": "copilot-studio-package"}}},
+      "then": {
+        "properties": {
+          "agent": {"properties": {"agenticPlatform": {"const": "Microsoft Copilot Studio"}}},
+          "agents": {"items": {"properties": {"agenticPlatform": {"const": "Microsoft Copilot Studio"}}}}
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "thresholds": {
+    "low": {
+      "max_easily_integrable_tools": 1,
+      "max_skills": 3,
+      "max_connected_agents": 0
+    },
+    "medium": {
+      "max_easily_integrable_tools": 3,
+      "max_skills": 5,
+      "max_connected_agents": 3
+    }
+  },
+  "high_triggers": [
+    "requires_pro_code",
+    "requires_custom_or_gateway",
+    "azure_ai_foundry",
+    "microsoft_agent_framework",
+    "threshold_exceeded"
+  ],
+  "rules": [
+    "Custom connectors are low-code implementation components but force High complexity under this classifier.",
+    "Real-time behavior does not force High complexity unless it requires custom, predictive, advanced-processing, gateway, middleware, or pro-code capability.",
+    "Evaluate explicit High triggers first, then Low eligibility, otherwise Medium.",
+    "Knowledge-source count never increases complexity.",
+    "Classic Copilot Studio Topics are prohibited and never counted."
+  ]
+}

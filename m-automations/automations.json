@@ -1,0 +1,265 @@
+[
+  {
+    "schedule": {
+      "kind": "single",
+      "naturalLanguage": "every day at 9am",
+      "days": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "time": {
+        "hour": 9,
+        "minute": 0
+      },
+      "hour": 9,
+      "minute": 0
+    },
+    "model": "gpt-5.6-sol",
+    "reasoningEffort": "high",
+    "permissions": {
+      "autoApproveReadOnly": true,
+      "autoApproveAllWrites": false,
+      "allow": [
+        "url:https://developers.googleblog.com/en/agent-development-kit-go-2/",
+        "url:https://crewai.com/blog",
+        "url:https://news.servicenow.com/",
+        "url:https://aws.amazon.com/blogs/aws/",
+        "url:https://cloud.google.com/blog/topics/inside-google-cloud/whats-new-google-cloud",
+        "url:https://www.langchain.com/blog/",
+        "url:https://ai.meta.com/blog/",
+        "url:https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/",
+        "url:https://www.ibm.com/think/news",
+        "url:https://www.servicenow.com/blogs/2026",
+        "url:https://x.ai/news",
+        "url:https://www.deepseek.com/",
+        "url:https://deepmind.google/research/publications/",
+        "url:https://blog.google/technology/google-deepmind/",
+        "url:https://cloud.google.com/blog/products/ai-machine-learning/google-agentspace-enterprise-ai-announcements",
+        "url:https://www.salesforce.com/blog/agentforce/?bc=HL",
+        "url:https://blog.llamaindex.ai/",
+        "url:https://aws.amazon.com/blogs/machine-learning/",
+        "url:https://github.com/microsoft/semantic-kernel/blob/main/CHANGELOG.md",
+        "url:https://www.anthropic.com/news/claude-for-desktop-workspaces",
+        "url:https://developers.googleblog.com/en/tag/agent-development-kit/",
+        "url:https://blogs.nvidia.com/blog/enterprise/"
+      ],
+      "allowModelPermissionsChange": true,
+      "tools": {
+        "tool:m_recall": true,
+        "tool:m_list_memories": true,
+        "tool:m_list_automations": true,
+        "tool:m_get_automation": true,
+        "tool:m_list_skills": true,
+        "tool:m_get_skill": true,
+        "tool:m_get_settings": true,
+        "tool:m_search_sessions": true,
+        "tool:m_get_session_transcript": true,
+        "tool:m_compact": true,
+        "tool:m_list_models": true,
+        "tool:m_get_current_model": true,
+        "tool:m_list_personalities": true,
+        "tool:m_get_heartbeat_status": true,
+        "tool:m_m365_status": true,
+        "tool:m_relay_status": true,
+        "tool:m_ask_user": true,
+        "tool:m_send_teams_message": true,
+        "tool:web_fetch": true,
+        "mcp:playwright:browser_close": true,
+        "mcp:playwright:browser_resize": true,
+        "mcp:playwright:browser_console_messages": true,
+        "mcp:playwright:browser_handle_dialog": true,
+        "mcp:playwright:browser_press_key": true,
+        "mcp:playwright:browser_type": true,
+        "mcp:playwright:browser_navigate": true,
+        "mcp:playwright:browser_navigate_back": true,
+        "mcp:playwright:browser_network_requests": true,
+        "mcp:playwright:browser_run_code": true,
+        "mcp:playwright:browser_take_screenshot": true,
+        "mcp:playwright:browser_snapshot": true,
+        "mcp:playwright:browser_click": true,
+        "mcp:playwright:browser_drag": true,
+        "mcp:playwright:browser_hover": true,
+        "mcp:playwright:browser_select_option": true,
+        "mcp:playwright:browser_tabs": true,
+        "mcp:playwright:browser_wait_for": true
+      },
+      "servers": {
+        "filesystem": {
+          "enabled": true,
+          "autoApprove": false
+        },
+        "playwright": {
+          "enabled": true,
+          "autoApprove": false
+        },
+        "shell": {
+          "enabled": true,
+          "autoApprove": false
+        },
+        "workiq": {
+          "enabled": true,
+          "autoApprove": false
+        }
+      }
+    },
+    "browserHeadless": true,
+    "teamsNotify": "always",
+    "id": "leu45rqimrkda3ox",
+    "name": "AI Market Research",
+    "steps": [
+      {
+        "id": "1",
+        "label": "Step 1",
+        "prompt": "Monitor primary channels (company blogs, developer keynotes, research papers) from major AI players and open-source communities. Filter specifically for foundational models, agentic frameworks, multi-agent orchestration tools, and enterprise automation products."
+      },
+      {
+        "id": "da3a5c80-a53e-44ed-9a37-6189fa2a25b0",
+        "label": "Step 2",
+        "prompt": "Group the collected announcements into distinct buckets: base model capabilities, agentic architecture (memory, tool use, planning), or ready-to-use user products. This prevents apples-to-oranges comparisons later."
+      },
+      {
+        "id": "a5c3810b-19b1-49ef-a530-ab563e29d028",
+        "label": "Step 3",
+        "prompt": "Spot overlapping releases where multiple organizations are launching competing features at the same time (for example, two companies dropping desktop automation agents or matching context window upgrades in the same week)."
+      },
+      {
+        "id": "c635cebd-ab95-4951-8b40-a13b19cd4586",
+        "label": "Step 4",
+        "prompt": "Evaluate the competing products side-by-side. Benchmark them across key operational metrics: token efficiency, latency, cross-app integration, degree of autonomy, and cost."
+      },
+      {
+        "id": "828ea556-5b38-4cb2-ae97-24ed47f4cb4f",
+        "label": "Step 5",
+        "prompt": "Compile the findings into a finalized analysis report. Highlight which organization holds the current edge, how these advancements change the developer ecosystem, and what the immediate practical use cases are for these new agentic architectures."
+      },
+      {
+        "id": "f1462abe-f460-4650-91ab-cbec0c4d4cfb",
+        "label": "Step 6",
+        "prompt": "Translate the structured categorization, competitive matrices, and strategic findings compiled in Steps 2 through 5 into a polished, executive-ready PPTX slide deck, utilizing clean grid layouts and clear data visualizations to present the final analysis to leadership."
+      }
+    ],
+    "enabled": false,
+    "createdAt": "2026-07-14T08:06:03.057Z",
+    "updatedAt": "2026-08-04T05:52:38.065Z",
+    "triggerType": "schedule",
+    "pinnedSessionId": "37cd0676-0737-45a0-ac84-ccd6c2b4e9f4",
+    "lastExecutedAt": "2026-08-04T03:30:49.051Z"
+  },
+  {
+    "schedule": {
+      "kind": "single",
+      "naturalLanguage": "every Monday at 8am",
+      "days": [
+        1
+      ],
+      "time": {
+        "hour": 8,
+        "minute": 0
+      },
+      "hour": 8,
+      "minute": 0
+    },
+    "id": "b1hlanuimswuf5kw",
+    "name": "LISA-Prerequisites",
+    "steps": [
+      {
+        "id": "1",
+        "label": "Step 1",
+        "prompt": "Find the Microsoft Scout's per-user data/configuration directory"
+      },
+      {
+        "id": "446b61aa-3868-456f-859c-eaee1ae40ff1",
+        "label": "Step 2",
+        "prompt": "Create the following artifacts in the identified directory if do not exist:\n1.  Create a folder named LISA in this directory.\n2.  Under LISA folder, create three sub-folders called Requirements, Output, and KnowledgeSource\n3. Create a lisa-config.json file in the LISA directory."
+      }
+    ],
+    "enabled": false,
+    "createdAt": "2026-08-17T06:18:48.704Z",
+    "updatedAt": "2026-08-24T06:36:33.363Z",
+    "triggerType": "schedule",
+    "pinnedSessionId": "0f4e46de-1290-4773-a19a-7ad7c67aba11",
+    "lastExecutedAt": "2026-08-24T02:30:18.435Z"
+  },
+  {
+    "schedule": {
+      "kind": "single",
+      "naturalLanguage": "every Monday at 8am",
+      "days": [
+        1
+      ],
+      "time": {
+        "hour": 8,
+        "minute": 0
+      },
+      "hour": 8,
+      "minute": 0
+    },
+    "model": "gpt-5.6-sol",
+    "reasoningEffort": "medium",
+    "id": "ej519inymt89xysc",
+    "name": "LISA-CAD",
+    "steps": [
+      {
+        "id": "2huufx1jmt89xysa",
+        "label": "Step 1",
+        "prompt": "1. Read the LISA configuration file at `C:\\Users\\rahulsi\\.scout\\LISA\\lisa-config.json`\n2. Following are the definition of each of the fields from config file, use them accordingly in all the subsequent steps wherever it's required:\n- basePath: This is the base path that every relative path in the skill uses.\n- custName: Name of the customer for who agent is being built.\n- knowledgeSources: The verified knowledge sources to be added to the agent.\n- copilotStudio.envUrl: Environment URL where agent must be deployed.\n- agentRegistry.sharepoint.deployableAgentLibraryName: Location where the agent deployable zip package needs to be uploaded.\n- agentRegistry.sharepoint.agentArtifactLibraryName: Location where all other artifacts generated by LISA during execution must be uploaded.\n\nuse the above configuration values in the subsequent steps wherever required."
+      },
+      {
+        "id": "lw6aefkpmt89xysa",
+        "label": "Step 2",
+        "prompt": "Invoke the skill /requirement-analyzer directly in this session.\n\n- Do not delegate the entire skill to one nested task or subagent.\n- Execute the skill in bounded phases. No phase may run silently for more than 90 seconds.\n\nAfter each phase:\n1. Return a concise progress update to the parent session.\n2. Persist intermediate state under output folder pertaining to this skill.\n3. Start the next phase with a new tool call.\n\nAlways emit a final textual response after the last tool call."
+      },
+      {
+        "id": "0xvjijr4mt89xysa",
+        "label": "Step 3",
+        "prompt": "Invoke the skill /complexity-classifier directly in this session.\n\n- Do not delegate the entire skill to one nested task or subagent.\n- Execute the skill in bounded phases. No phase may run silently for more than 90 seconds.\n\nAfter each phase:\n1. Return a concise progress update to the parent session.\n2. Persist intermediate state under output folder pertaining to this skill.\n3. Start the next phase with a new tool call.\n\nAlways emit a final textual response after the last tool call."
+      },
+      {
+        "id": "ys4lls2emt89xysa",
+        "label": "Step 4",
+        "prompt": "Invoke the skill /solution-designer directly in this session.\n\n- Do not delegate the entire skill to one nested task or subagent.\n- Execute the skill in bounded phases. No phase may run silently for more than 90 seconds.\n\nAfter each phase:\n1. Return a concise progress update to the parent session.\n2. Persist intermediate state under output folder pertaining to this skill.\n3. Start the next phase with a new tool call.\n\nAlways emit a final textual response after the last tool call."
+      },
+      {
+        "id": "yat54dr1mt89xysa",
+        "label": "Step 5",
+        "prompt": "Invoke the skill /agent-builder directly in this session.\n\n- Do not delegate the entire skill to one nested task or subagent.\n- Execute the skill in bounded phases. No phase may run silently for more than 90 seconds.\n\nAfter each phase:\n1. Return a concise progress update to the parent session.\n2. Persist intermediate state under output folder pertaining to this skill.\n3. Start the next phase with a new tool call.\n\nAlways emit a final textual response after the last tool call."
+      },
+      {
+        "id": "5qikfobfmt89xysa",
+        "label": "Step 6",
+        "prompt": "Invoke the skill /agent-evaluator directly in this session.\n\n- Do not delegate the entire skill to one nested task or subagent.\n- Execute the skill in bounded phases. No phase may run silently for more than 90 seconds.\n\nAfter each phase:\n1. Return a concise progress update to the parent session.\n2. Persist intermediate state under output folder pertaining to this skill.\n3. Start the next phase with a new tool call.\n\nAlways emit a final textual response after the last tool call."
+      },
+      {
+        "id": "tbdtvc7gmt89xysa",
+        "label": "Step 7",
+        "prompt": "Invoke the skill /agent-optimizer directly in this session.\n\n- Do not delegate the entire skill to one nested task or subagent.\n- Execute the skill in bounded phases. No phase may run silently for more than 90 seconds.\n\nAfter each phase:\n1. Return a concise progress update to the parent session.\n2. Persist intermediate state under output folder pertaining to this skill.\n3. Start the next phase with a new tool call.\n\nAlways emit a final textual response after the last tool call."
+      },
+      {
+        "id": "ybafac4mmt89xysa",
+        "label": "Step 8",
+        "prompt": "Invoke the skill /artifact-generator directly in this session.\n\n- Do not delegate the entire skill to one nested task or subagent.\n- Execute the skill in bounded phases. No phase may run silently for more than 90 seconds.\n\nAfter each phase:\n1. Return a concise progress update to the parent session.\n2. Persist intermediate state under output folder pertaining to this skill.\n3. Start the next phase with a new tool call.\n\nAlways emit a final textual response after the last tool call."
+      },
+      {
+        "id": "33mswc6gmt89xysa",
+        "label": "Step 9",
+        "prompt": "Invoke the skill /artifact-publisher directly in this session.\n\n- Do not delegate the entire skill to one nested task or subagent.\n- Execute the skill in bounded phases. No phase may run silently for more than 90 seconds.\n\nAfter each phase:\n1. Return a concise progress update to the parent session.\n2. Persist intermediate state under output folder pertaining to this skill.\n3. Start the next phase with a new tool call.\n\nAlways emit a final textual response after the last tool call."
+      },
+      {
+        "id": "ugae8rs3mt89xysa",
+        "label": "Step 10",
+        "prompt": "Send following confirmation prompt to the user before cleanup:\n- Artifacts published remotely. Do you want to delete local copies? (Delete/Cancel)\n- If user confirms deletion then invoke the skill /postpublish-cleanup directly in this session."
+      }
+    ],
+    "enabled": false,
+    "createdAt": "2026-08-25T06:18:48.540Z",
+    "updatedAt": "2026-08-25T06:18:48.540Z",
+    "triggerType": "schedule",
+    "pinnedSessionId": "6d5031a0-cbfb-4bfb-b37d-efca1f0f3eba",
+    "lastExecutedAt": "2026-08-25T14:23:40.527Z"
+  }
+]

@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://microsoft-scout.local/schemas/artifact-contract.schema.json",
+  "title": "Microsoft Scout local skill artifact contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "skill",
+    "stage",
+    "rootFolder",
+    "producesArtifacts",
+    "inputs",
+    "allowedStatuses",
+    "files",
+    "directories",
+    "patterns",
+    "forbiddenPathPatterns"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "1.0"},
+    "skill": {
+      "enum": [
+        "requirement-analyzer",
+        "complexity-classifier",
+        "solution-designer",
+        "agent-builder",
+        "agent-evaluator",
+        "agent-optimizer",
+        "artifact-generator",
+        "artifact-publisher",
+        "postpublish-cleanup",
+        "cad-orchestrator"
+      ]
+    },
+    "stage": {
+      "enum": [
+        "analysis",
+        "classification",
+        "design",
+        "build",
+        "evaluation",
+        "optimization",
+        "artifacts",
+        "publication",
+        "cleanup",
+        "orchestration"
+      ]
+    },
+    "rootFolder": {
+      "type": ["string", "null"],
+      "enum": [
+        "analysis",
+        "classification",
+        "design",
+        "build",
+        "evaluation",
+        "optimization",
+        "artifacts",
+        "publication",
+        null
+      ]
+    },
+    "producesArtifacts": {"type": "boolean"},
+    "inputs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["relativePath", "required", "kind"],
+        "properties": {
+          "relativePath": {"$ref": "#/$defs/safeRelativePath"},
+          "required": {"type": "boolean"},
+          "kind": {
+            "enum": ["config", "directory", "json", "markdown", "image", "package", "state"]
+          }
+        }
+      }
+    },
+    "runIdPattern": {"type": ["string", "null"]},
+    "allowedStatuses": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "manifest": {"type": ["string", "null"]},
+    "resultSchema": {"type": ["string", "null"]},
+    "files": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/artifact"}
+    },
+    "directories": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/directory"}
+    },
+    "patterns": {
+      "type": "object",
+      "additionalProperties": {"type": "string", "minLength": 1}
+    },
+    "artifactRules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pattern", "schema"],
+        "properties": {
+          "pattern": {"type": "string", "minLength": 1},
+          "schema": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "forbiddenPathPatterns": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"producesArtifacts": {"const": true}},
+        "required": ["producesArtifacts"]
+      },
+      "then": {
+        "properties": {
+          "rootFolder": {"type": "string"},
+          "files": {"minItems": 1}
+        }
+      },
+      "else": {
+        "properties": {
+          "rootFolder": {"type": "null"},
+          "files": {"maxItems": 0},
+          "directories": {"maxItems": 0}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "safeRelativePath": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "pattern": "(^|[\\\\/])\\.\\.([\\\\/]|$)|^[A-Za-z]:|^[\\\\/]"
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relativePath", "required", "schema"],
+      "properties": {
+        "relativePath": {"$ref": "#/$defs/safeRelativePath"},
+        "required": {"type": "boolean"},
+        "schema": {"type": ["string", "null"]},
+        "kind": {
+          "enum": [
+            "json",
+            "markdown",
+            "html",
+            "csv",
+            "image",
+            "package",
+            "directory",
+            "other"
+          ]
+        }
+      }
+    },
+    "directory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relativePath", "required"],
+      "properties": {
+        "relativePath": {"$ref": "#/$defs/safeRelativePath"},
+        "required": {"type": "boolean"}
+      }
+    }
+  }
+}

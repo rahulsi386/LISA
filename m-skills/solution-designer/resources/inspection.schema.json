@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Solution Designer rendered inspection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "run_id",
+    "inspected_at",
+    "status",
+    "solution_architecture_png_sha256",
+    "sequence_png_sha256",
+    "checks",
+    "issues",
+    "summary"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "inspected_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "enum": [
+        "passed",
+        "failed"
+      ]
+    },
+    "solution_architecture_png_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "sequence_png_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "spelling",
+        "clipping",
+        "icon_correctness",
+        "connector_visibility",
+        "primary_agent_hierarchy",
+        "empty_space",
+        "label_collisions",
+        "sequence_phase_grouping",
+        "truncation",
+        "overall_composition"
+      ],
+      "properties": {
+        "spelling": {
+          "type": "boolean"
+        },
+        "clipping": {
+          "type": "boolean"
+        },
+        "icon_correctness": {
+          "type": "boolean"
+        },
+        "connector_visibility": {
+          "type": "boolean"
+        },
+        "primary_agent_hierarchy": {
+          "type": "boolean"
+        },
+        "empty_space": {
+          "type": "boolean"
+        },
+        "label_collisions": {
+          "type": "boolean"
+        },
+        "sequence_phase_grouping": {
+          "type": "boolean"
+        },
+        "truncation": {
+          "type": "boolean"
+        },
+        "overall_composition": {
+          "type": "boolean"
+        }
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

@@ -1,0 +1,93 @@
+# LISA local skills — Python dependency manifest
+#
+# This is the single, central manifest for every skill in this folder. The
+# individual skill folders deliberately do NOT carry their own requirements.txt.
+#
+#   python -m pip install -r requirements.txt
+#
+# Verified on CPython 3.13.15 (Windows 11). Python 3.11 or newer is recommended.
+# Every other module these skills import is part of the Python standard library
+# (argparse, concurrent.futures, dataclasses, email, hashlib, hmac, pathlib,
+# subprocess, tempfile, urllib, uuid, xml, zipfile, zoneinfo, and similar).
+# There is no runtime dependency on requests, pytest, or any test framework:
+# the regression suites use the standard-library `unittest` runner.
+
+
+# ---------------------------------------------------------------------------
+# Required by ALL nine skills
+# ---------------------------------------------------------------------------
+# validate_artifact_contracts.py validates each skill's artifact-contract.json
+# against the shared artifact-contract.schema.json and is imported by every
+# skill entry point. lifecycle_artifacts.py (agent-builder, agent-evaluator,
+# agent-optimizer), requirement_analyzer.py, complexity_classifier.py and
+# solution_designer.py additionally validate their own JSON payloads with it.
+# artifact-publisher reaches it by shelling out from publication-guard.ps1.
+jsonschema>=4.23,<5
+
+
+# ---------------------------------------------------------------------------
+# Required by requirement-analyzer only (source-document extraction)
+# ---------------------------------------------------------------------------
+pypdf>=6.0,<7           # PDF text/page extraction          requirement_analyzer.py:1019
+python-docx>=1.2,<2     # DOCX paragraph/table extraction   requirement_analyzer.py:546
+python-pptx>=1.0,<2     # PPTX slide/notes extraction       requirement_analyzer.py:954
+Pillow>=11,<13          # image inspection + visual review  requirement_analyzer.py:1090
+
+# openpyxl is not imported by the extractor itself — XLSX files are streamed
+# with the standard-library zipfile/xml parser so large workbooks are never
+# materialised in memory. It is still required because the extractor records
+# its version in the cache fingerprint (_extractor_fingerprint), and because
+# the regression suite builds .xlsx fixtures with it.
+openpyxl>=3.1,<4
+
+
+# ===========================================================================
+# NON-PIP PREREQUISITES  (cannot be installed by this file — install manually)
+# ===========================================================================
+#
+# Node.js 18+                       verified on v24.13.0
+#   - solution-designer rasterises SVG to PNG through its packaged renderer
+#     (solution-designer/renderer/render.js). Its npm dependencies
+#     @resvg/resvg-js 2.6.2 and pngjs 7.0.0 are already vendored under
+#     solution-designer/renderer/node_modules — run `npm ci` in that folder
+#     only if the vendored tree is missing.
+#   - artifact-publisher's regression suite executes its fast publisher with
+#     `node`; that test skips automatically when Node is absent.
+#
+# PowerShell                        verified on PowerShell 7.6.5 (pwsh)
+#   - Windows PowerShell 5.1 is also required: solution_designer.py launches
+#     the packaged fast path with the `powershell` executable, while the
+#     artifact-publisher tests prefer `pwsh` and fall back to `powershell`.
+#   - Both ship with Windows; pwsh 7 must be installed separately.
+#
+# Microsoft Power Platform CLI (pac)
+#   - agent-builder, agent-evaluator and agent-optimizer use `pac auth list`,
+#     `pac env list/who`, `pac copilot *` and `pac solution *` to verify the
+#     target environment and to publish and package agents.
+#
+# Playwright browser automation
+#   - agent-evaluator drives the Copilot Studio test surface and
+#     artifact-publisher performs authenticated SharePoint REST publication
+#     through the host's browser tools. These are provided by the Microsoft
+#     Scout runtime, not by a package installed from this file.
+#
+# .NET 10 SDK                       OPTIONAL — build-time only
+#   - solution-designer ships a self-contained single-file MSAGL layout engine
+#     at solution-designer/resources/layout-engine/SolutionDesigner.LayoutEngine.exe
+#     which runs without a .NET runtime installed. The SDK is needed only to
+#     rebuild it from solution-designer/layout-engine/layout-engine.csproj
+#     (Microsoft.Msagl 1.1.6, net10.0).
+#
+# ===========================================================================
+# Per-skill Python requirements at a glance
+# ===========================================================================
+#   agent-builder ........... jsonschema
+#   agent-evaluator ......... jsonschema
+#   agent-optimizer ......... jsonschema
+#   artifact-generator ...... jsonschema
+#   artifact-publisher ...... jsonschema
+#   complexity-classifier ... jsonschema
+#   postpublish-cleanup ..... jsonschema
+#   solution-designer ....... jsonschema
+#   requirement-analyzer .... jsonschema, pypdf, python-docx, python-pptx,
+#                             Pillow, openpyxl

@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 1,
+  "refreshedAt": "2026-08-13T01:51:09+05:30",
+  "maxAgeDays": 30,
+  "timedRunNetworkAccess": false,
+  "sources": [
+    {
+      "key": "architecture-diagrams",
+      "platforms": ["all"],
+      "topics": ["diagramming"],
+      "url": "https://learn.microsoft.com/en-us/azure/well-architected/architect-role/design-diagrams",
+      "updatedAt": "2025-12-09T23:07:00Z",
+      "gitCommit": "db5318122eaad8020502ae5df8dbff2c3b39efdc",
+      "guidance": "Choose a diagram type for its audience and intent; make boundaries, relationships, and design decisions explicit."
+    },
+    {
+      "key": "copilot-studio-overview",
+      "platforms": ["copilot-studio"],
+      "topics": ["core"],
+      "url": "https://learn.microsoft.com/en-us/microsoft-copilot-studio/fundamentals-what-is-copilot-studio",
+      "updatedAt": "2026-08-03T14:59:00Z",
+      "gitCommit": "d3dd478d56933bdfd2dc0d5e562fd9546ab9823e",
+      "guidance": "Model Copilot Studio as the low-code agent platform that connects agents to organizational data, systems, workflows, and channels."
+    },
+    {
+      "key": "copilot-studio-harnesses",
+      "platforms": ["copilot-studio"],
+      "topics": ["harness"],
+      "url": "https://learn.microsoft.com/en-us/microsoft-copilot-studio/harnesses-overview",
+      "updatedAt": "2026-08-03T14:59:00Z",
+      "gitCommit": "d3dd478d56933bdfd2dc0d5e562fd9546ab9823e",
+      "guidance": "Show the evidenced GitHub Copilot, standard, or Copilot chat harness; do not treat harnesses as interchangeable."
+    },
+    {
+      "key": "copilot-studio-orchestration",
+      "platforms": ["copilot-studio"],
+      "topics": ["orchestration"],
+      "url": "https://learn.microsoft.com/en-us/microsoft-copilot-studio/advanced-generative-actions",
+      "updatedAt": "2026-08-03T14:59:00Z",
+      "gitCommit": "d3dd478d56933bdfd2dc0d5e562fd9546ab9823e",
+      "guidance": "Generative orchestration can select among instructions, topics, tools, knowledge, and other agents; show it as agent behavior rather than a separate deployable product."
+    },
+    {
+      "key": "copilot-studio-knowledge",
+      "platforms": ["copilot-studio"],
+      "topics": ["knowledge"],
+      "url": "https://learn.microsoft.com/en-us/microsoft-copilot-studio/knowledge-copilot-studio",
+      "updatedAt": "2026-08-05T01:03:00Z",
+      "gitCommit": "66c8761e1103771c4e092d2ecfba9a202f22180b",
+      "guidance": "Represent only evidenced enterprise data, websites, files, Dataverse, or external systems used for grounded answers."
+    },
+    {
+      "key": "copilot-studio-tools",
+      "platforms": ["copilot-studio"],
+      "topics": ["tools"],
+      "url": "https://learn.microsoft.com/en-us/microsoft-copilot-studio/add-tools-custom-agent",
+      "updatedAt": "2026-08-03T14:59:00Z",
+      "gitCommit": "d3dd478d56933bdfd2dc0d5e562fd9546ab9823e",
+      "guidance": "Tools extend agents with evidenced actions. Name connectors and authorization modes only when the evidence identifies them."
+    },
+    {
+      "key": "copilot-studio-agent-flows",
+      "platforms": ["copilot-studio"],
+      "topics": ["flows"],
+      "url": "https://learn.microsoft.com/en-us/microsoft-copilot-studio/flows-overview",
+      "updatedAt": "2026-08-03T14:59:00Z",
+      "gitCommit": "d3dd478d56933bdfd2dc0d5e562fd9546ab9823e",
+      "guidance": "Agent flows automate repetitive tasks and app or service integration; include them only for evidenced automation."
+    },
+    {
+      "key": "copilot-studio-connected-agents",
+      "platforms": ["copilot-studio"],
+      "topics": ["connected-agents"],
+      "url": "https://learn.microsoft.com/en-us/microsoft-copilot-studio/authoring-add-other-agents",
+      "updatedAt": "2026-08-03T14:59:00Z",
+      "gitCommit": "d3dd478d56933bdfd2dc0d5e562fd9546ab9823e",
+      "guidance": "Connected agents are modular agents that can receive delegated work or hand off interactions; preserve ownership and decision boundaries."
+    },
+    {
+      "key": "copilot-studio-authentication",
+      "platforms": ["copilot-studio"],
+      "topics": ["identity"],
+      "url": "https://learn.microsoft.com/en-us/microsoft-copilot-studio/configuration-end-user-authentication",
+      "updatedAt": "2026-07-21T01:03:00Z",
+      "gitCommit": "98752660aea3b6fec9561cb338ce4b6036691703",
+      "guidance": "Show the evidenced user authentication mode and token boundary; do not assume OAuth, OIDC, or managed identity without evidence."
+    },
+    {
+      "key": "copilot-studio-analytics",
+      "platforms": ["copilot-studio"],
+      "topics": ["monitoring"],
+      "url": "https://learn.microsoft.com/en-us/microsoft-copilot-studio/analytics-overview",
+      "updatedAt": "2026-08-03T14:59:00Z",
+      "gitCommit": "d3dd478d56933bdfd2dc0d5e562fd9546ab9823e",
+      "guidance": "Use Copilot Studio analytics for evidenced agent performance, usage, satisfaction, or ROI monitoring."
+    },
+    {
+      "key": "m365-declarative-agents",
+      "platforms": ["microsoft-365-copilot"],
+      "topics": ["core", "harness"],
+      "url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/overview-declarative-agent",
+      "updatedAt": "2026-07-02T21:12:00Z",
+      "gitCommit": "0321a12a827ad490e8ecc62787bf48f85f8a1f44",
+      "guidance": "Declarative agents customize Microsoft 365 Copilot through instructions, actions, and knowledge; show Microsoft 365 Copilot as the host when evidenced."
+    },
+    {
+      "key": "foundry-agent-service",
+      "platforms": ["microsoft-foundry"],
+      "topics": ["core", "pro-code"],
+      "url": "https://learn.microsoft.com/en-us/azure/foundry/agents/overview",
+      "updatedAt": "2026-07-09T22:17:00Z",
+      "gitCommit": "56079b589263677f24eaf547d940bbc14c02b5f7",
+      "guidance": "Model Microsoft Foundry Agent Service only for evidenced Azure-hosted or pro-code agents, tools, runtime, observability, or lifecycle features."
+    },
+    {
+      "key": "power-platform-data-policies",
+      "platforms": ["power-platform"],
+      "topics": ["governance"],
+      "url": "https://learn.microsoft.com/en-us/power-platform/admin/wp-data-loss-prevention",
+      "updatedAt": "2026-07-11T01:03:00Z",
+      "gitCommit": "b45ab15cef142a18f3a16ac19e164f1c16006a89",
+      "guidance": "Data policies act as connector and data-use guardrails; include them only when the solution evidence requires Power Platform governance."
+    },
+    {
+      "key": "power-platform-managed-environments",
+      "platforms": ["power-platform"],
+      "topics": ["governance"],
+      "url": "https://learn.microsoft.com/en-us/power-platform/admin/managed-environment-overview",
+      "updatedAt": "2026-07-11T01:03:00Z",
+      "gitCommit": "b03e97da81075f6b27b67d942eb3e04d64beb225",
+      "guidance": "Managed Environments provide administration, control, and insights at scale; show them as cross-cutting governance when evidenced."
+    },
+    {
+      "key": "microsoft-purview",
+      "platforms": ["microsoft-purview"],
+      "topics": ["governance", "security"],
+      "url": "https://learn.microsoft.com/en-us/purview/purview",
+      "updatedAt": "2026-06-26T22:34:00Z",
+      "gitCommit": "0282654a210bc75bf83daf012aa3452ee6c032c4",
+      "guidance": "Microsoft Purview provides data governance, protection, and compliance. Include only evidenced Purview controls or policies."
+    },
+    {
+      "key": "power-platform-alm",
+      "platforms": ["power-platform", "copilot-studio"],
+      "topics": ["alm"],
+      "url": "https://learn.microsoft.com/en-us/power-platform/alm/overview-alm",
+      "updatedAt": "2025-05-07T19:00:00Z",
+      "gitCommit": "4a431de5136a5f08b6a81aff1395312b32c17fd1",
+      "guidance": "Represent solutions, environments, deployment, and lifecycle controls only when ALM is in scope."
+    }
+  ]
+}

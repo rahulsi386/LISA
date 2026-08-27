@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "1.0",
+  "skill": "artifact-generator",
+  "stage": "artifacts",
+  "rootFolder": "artifacts",
+  "producesArtifacts": true,
+  "inputs": [
+    {"relativePath": "lisa-config.json", "required": true, "kind": "config"},
+    {"relativePath": "output/analysis", "required": true, "kind": "directory"},
+    {"relativePath": "output/classification", "required": true, "kind": "directory"},
+    {"relativePath": "output/design", "required": true, "kind": "directory"},
+    {"relativePath": "output/build", "required": true, "kind": "directory"},
+    {"relativePath": "output/evaluation", "required": true, "kind": "directory"},
+    {"relativePath": "output/optimization", "required": true, "kind": "directory"}
+  ],
+  "runIdPattern": "^ART-[0-9]{8}-[0-9]{6}-[A-F0-9]{8}$",
+  "allowedStatuses": ["passed", "failed"],
+  "manifest": "artifact-generation-manifest.json",
+  "resultSchema": "artifact-generation-manifest.schema.json",
+  "files": [
+    {"relativePath": "artifact-generation-manifest.json", "required": true, "schema": "artifact-generation-manifest.schema.json", "kind": "json"},
+    {"relativePath": "solution-document.md", "required": true, "schema": null, "kind": "markdown"},
+    {"relativePath": "lisa-execution-tree.html", "required": true, "schema": null, "kind": "html"},
+    {"relativePath": "solution-architecture.png", "required": false, "schema": null, "kind": "image"},
+    {"relativePath": "solution-sequence.png", "required": false, "schema": null, "kind": "image"}
+  ],
+  "directories": [],
+  "patterns": {
+    "manifest": "^artifact-generation-manifest\\.json$",
+    "artifact": "^[a-z0-9]+(?:-[a-z0-9]+)*\\.(md|html|png)$"
+  },
+  "forbiddenPathPatterns": [
+    "(?i)(^|/)(cookies?|tokens?|credentials?|secrets?)\\.(json|txt)$"
+  ]
+}

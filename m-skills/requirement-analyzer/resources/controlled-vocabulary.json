@@ -1,0 +1,71 @@
+{
+  "schemaVersion": "1.0",
+  "agentDevelopmentPlatforms": [
+    "Copilot Studio",
+    "Agent Builder",
+    "Azure Foundry",
+    "Pro Code",
+    "Third Party Provider"
+  ],
+  "platformRequirementStatuses": [
+    "Required",
+    "Preferred",
+    "Candidate",
+    "Current",
+    "Explicitly excluded"
+  ],
+  "agenticBehaviors": [
+    "Conversational",
+    "Autonomous",
+    "Child-Agent/Multi-Agent",
+    "Human Handoff/oversight"
+  ],
+  "agenticRequirementStatuses": [
+    "Confirmed",
+    "Candidate",
+    "Current",
+    "Explicitly excluded",
+    "Not evidenced"
+  ],
+  "findingKinds": [
+    "Explicit requirement",
+    "Observed fact",
+    "Derived classification",
+    "Analyst-identified gap",
+    "Conflict",
+    "Decision"
+  ],
+  "findingStatuses": [
+    "Confirmed",
+    "Current",
+    "Required",
+    "Preferred",
+    "Candidate",
+    "Strong candidate",
+    "Optional",
+    "Near-term",
+    "Future",
+    "Potential",
+    "Explicitly excluded",
+    "Not evidenced",
+    "Unresolved"
+  ],
+  "confidenceLevels": [
+    "Confirmed",
+    "Probable",
+    "Ambiguous",
+    "Missing"
+  ],
+  "knowledgeSourceClassifications": [
+    "Confirmed Knowledge Source",
+    "Strong Candidate Knowledge Source",
+    "Configured Knowledge Source"
+  ],
+  "prohibitedAgenticBehaviorLabels": [
+    "Action-oriented",
+    "Advisory",
+    "Delegated",
+    "Workflow",
+    "Tool-calling"
+  ]
+}

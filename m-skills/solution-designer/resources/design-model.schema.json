@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Solution Designer normalized model",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["scenarioSlug", "title", "summary", "complexity", "coverage", "referenceKeys", "components", "relationships", "sequence"],
+  "properties": {
+    "scenarioSlug": {"type": "string", "pattern": "^[A-Za-z0-9_]+$"},
+    "title": {"type": "string", "minLength": 1, "maxLength": 80},
+    "summary": {"type": "string", "minLength": 1, "maxLength": 300},
+    "complexity": {"enum": ["Low", "Medium", "High"]},
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nativeBuildPercent", "pocDemonstrationPercent", "unsupportedPercent", "unknownPercent"],
+      "properties": {
+        "nativeBuildPercent": {"type": "number", "minimum": 0, "maximum": 100},
+        "pocDemonstrationPercent": {"type": "number", "minimum": 0, "maximum": 100},
+        "unsupportedPercent": {"type": "number", "minimum": 0, "maximum": 100},
+        "unknownPercent": {"type": "number", "minimum": 0, "maximum": 100}
+      }
+    },
+    "sourceClassification": {"type": "string", "minLength": 1},
+    "sourceClassificationSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "referenceKeys": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string"}
+    },
+    "components": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "layer", "kind", "status", "implementationStatus", "buildOwner", "pocScope", "productionStatus", "iconKey", "description"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"},
+          "name": {"type": "string", "minLength": 1, "maxLength": 120},
+          "layer": {"enum": ["users", "channels", "agent-platform", "data-integration", "governance", "monitoring"]},
+          "kind": {"enum": ["actor", "channel", "agent", "knowledge", "tool", "flow", "data", "integration", "external", "human", "security", "monitoring", "alm"]},
+          "status": {"enum": ["existing", "to-create", "tbd"]},
+          "implementationStatus": {"enum": ["build", "configure", "simulate", "static-sample-data", "manual-handoff", "defer", "block", "existing"]},
+          "buildOwner": {"enum": ["agent-builder", "customer", "external-team", "unassigned"]},
+          "pocScope": {"enum": ["included", "represented", "excluded"]},
+          "productionStatus": {"enum": ["ready", "requires-hardening", "gap"]},
+          "iconKey": {"type": "string", "minLength": 1},
+          "description": {"type": "string", "maxLength": 600},
+          "members": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "evidenceIds": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
+    "relationships": {
+      "type": "array",
+      "maxItems": 60,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["from", "to", "label", "style", "implementationMode"],
+        "properties": {
+          "from": {"type": "string"},
+          "to": {"type": "string"},
+          "label": {"type": "string", "minLength": 1, "maxLength": 42},
+          "style": {"enum": ["call", "response", "optional", "tbd"]},
+          "implementationMode": {"enum": ["real", "simulated", "manual", "deferred", "blocked"]},
+          "evidenceIds": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
+    "sequence": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["from", "to", "label", "type", "implementationMode"],
+        "properties": {
+          "from": {"type": "string"},
+          "to": {"type": "string"},
+          "label": {"type": "string", "minLength": 1, "maxLength": 56},
+          "type": {"enum": ["call", "response", "self", "approval"]},
+          "implementationMode": {"enum": ["real", "simulated", "manual", "deferred", "blocked"]},
+          "capabilityId": {"type": ["string", "null"]},
+          "fragment": {"type": ["string", "null"], "maxLength": 40},
+          "phase": {"type": "string", "minLength": 1, "maxLength": 40},
+          "evidenceIds": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    }
+  }
+}

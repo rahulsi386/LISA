@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "1.0",
+  "skill": "agent-evaluator",
+  "stage": "evaluation",
+  "rootFolder": "evaluation",
+  "producesArtifacts": true,
+  "inputs": [
+    {"relativePath": "lisa-config.json", "required": true, "kind": "config"},
+    {"relativePath": "output/classification/complexity-classification_<timestamp>.json", "required": true, "kind": "json"},
+    {"relativePath": "output/build/agent-build-handoff.json", "required": true, "kind": "json"},
+    {"relativePath": "evalData", "required": true, "kind": "directory"}
+  ],
+  "resultSchema": "lifecycle-artifact-manifest.schema.json",
+  "runIdPattern": "^EVAL-[0-9]{8}-[0-9]{6}-[A-F0-9]{8}$",
+  "allowedStatuses": ["pass", "fail", "blocked"],
+  "manifest": "evaluation-manifest.json",
+  "files": [
+    {"relativePath": "evaluation-manifest.json", "required": true, "schema": "lifecycle-artifact-manifest.schema.json"},
+    {"relativePath": "evaluation-dataset.json", "required": true, "schema": "evaluation-dataset.schema.json"},
+    {"relativePath": "evaluation-dataset.csv", "required": true, "schema": null},
+    {"relativePath": "evaluation-rubric.json", "required": true, "schema": "evaluation-rubric.schema.json"},
+    {"relativePath": "evaluation-observations.json", "required": true, "schema": "evaluation-observations.schema.json"},
+    {"relativePath": "regression-baseline.json", "required": true, "schema": "regression-baseline.schema.json"},
+    {"relativePath": "evaluation-run-report.md", "required": true, "schema": null},
+    {"relativePath": "deployment-gate-summary.md", "required": true, "schema": null}
+  ],
+  "directories": [
+    {"relativePath": "evidence", "required": true}
+  ],
+  "patterns": {
+    "evidence": "^evidence/EVAL-[0-9]{3,}-attempt-[0-9]{2}\\.(png|jpg|jpeg|json)$"
+  },
+  "forbiddenPathPatterns": [
+    "(?i)(^|/)(storage-state|storageState|cookies?|tokens?|credentials?)\\.(json|txt)$"
+  ]
+}

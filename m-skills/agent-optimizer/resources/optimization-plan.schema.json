@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://microsoft-scout.local/schemas/optimization-plan.schema.json",
+  "title": "Agent optimization plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "runId", "generatedAt", "agent", "sourceEvaluation", "policy", "rounds", "deferredFindings"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {"const": "1.0"},
+    "runId": {"type": "string", "pattern": "^OPT-[0-9]{8}-[0-9]{6}-[A-F0-9]{8}$"},
+    "generatedAt": {"type": "string", "format": "date-time"},
+    "agent": {
+      "type": "object",
+      "required": ["name", "agentId", "harness", "environmentId", "environmentUrl"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "agentId": {"type": "string", "minLength": 1},
+        "schemaName": {"type": ["string", "null"]},
+        "harness": {"enum": ["GitHub Copilot", "Standard", "Copilot chat"]},
+        "environmentId": {"type": "string", "minLength": 1},
+        "environmentUrl": {"type": "string", "format": "uri"}
+      }
+    },
+    "sourceEvaluation": {
+      "type": "object",
+      "required": ["runId", "decision", "observationsRelativePath", "deploymentGateRelativePath"],
+      "properties": {
+        "runId": {"type": "string", "pattern": "^EVAL-[0-9]{8}-[0-9]{6}-[A-F0-9]{8}$"},
+        "decision": {"enum": ["PASS", "FAIL", "BLOCKED", "NOT_RUN"]},
+        "observationsRelativePath": {"const": "evaluation/evaluation-observations.json"},
+        "deploymentGateRelativePath": {"const": "evaluation/deployment-gate-summary.md"}
+      }
+    },
+    "policy": {"type": "object"},
+    "rounds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["roundId", "roundNumber", "status", "findingIds", "proposedChanges", "risk", "rollback", "requiredRetestScope"],
+        "additionalProperties": true,
+        "properties": {
+          "roundId": {"type": "string", "pattern": "^round-[0-9]{3}$"},
+          "roundNumber": {"type": "integer", "minimum": 1},
+          "status": {"enum": ["planned", "ready-to-apply", "applied-awaiting-retest", "accepted", "rejected-and-rolled-back", "blocked"]},
+          "findingIds": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "proposedChanges": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["changeId", "surface", "action", "current", "proposed", "expectedMechanism", "affectedComponents"],
+              "properties": {
+                "changeId": {"type": "string", "pattern": "^CHG-[0-9]{3,}$"},
+                "surface": {"type": "string", "minLength": 1},
+                "action": {"type": "string", "minLength": 1},
+                "current": {},
+                "proposed": {},
+                "expectedMechanism": {"type": "string", "minLength": 1},
+                "affectedComponents": {
+                  "type": "array",
+                  "items": {"type": "string", "minLength": 1}
+                }
+              }
+            }
+          },
+          "risk": {"type": "string", "minLength": 1},
+          "rollback": {"type": "string", "minLength": 1},
+          "requiredRetestScope": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^EVAL-[0-9]{3,}$"}
+          }
+        }
+      }
+    },
+    "deferredFindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "reason"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "reason": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}
