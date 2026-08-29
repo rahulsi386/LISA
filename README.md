@@ -122,7 +122,7 @@ silently rolled back.
 > requires a ZIP. Treat a Cowork-only result as a documented terminal handoff rather than expecting
 > end-to-end publication from the current suite.
 
-## Downloaded repository layout
+## LISA repository layout
 
 After downloading or cloning LISA from GitHub, the repository root must have this structure:
 
@@ -150,7 +150,7 @@ After downloading or cloning LISA from GitHub, the repository root must have thi
 ```
 
 Keep `README.md`, `lisa-config.json`, `requirements.txt`, and
-`Install-LISA-Prerequisites.ps1` at the repository root. Do not move those files into `m-skills`.
+`Install-LISA-Prerequisites.ps1` at the repository root.
 The installer resolves `requirements.txt` and `m-skills` relative to its own root location, validates
 the optional `m-automations` folder, and deploys only the contents of `m-skills` into Scout.
 
@@ -190,13 +190,12 @@ The installer performs this gated sequence:
   `requirements`, `output`, and `evalData`.
 6. Prompts for the downloaded LISA codebase root. Supply the same root shown above, not its
   `m-skills` child. The installer validates a non-empty `m-skills`, optional non-empty
-  `m-automations`, and valid root `lisa-config.json`. The source skills must include
-  `SKILL.md` definitions, `skills-metadata.json`, and `sync_skills_metadata.py`.
-7. Warns that matching entries in `%USERPROFILE%\.scout\m-skills` will be replaced and waits for
+  `m-automations`, and valid root `lisa-config.json`.
+1. Warns that matching entries in `%USERPROFILE%\.scout\m-skills` will be replaced and waits for
   the exact confirmation `INSTALL SKILLS`.
-8. Stages and installs every item beneath the source `m-skills`, replacing matching top-level
+1. Stages and installs every item beneath the source `m-skills`, replacing matching top-level
   entries while retaining unrelated installed skills.
-9. Runs the installed `sync_skills_metadata.py` and asks the user to restart Scout so it reloads
+1. Runs the installed `sync_skills_metadata.py` and asks the user to restart Scout so it reloads
   the registry.
 
 The installer deliberately does not copy `m-automations` or `lisa-config.json`; it validates them
@@ -233,8 +232,7 @@ software and skills, synchronizes the skill registry, and creates the empty proj
 
 Before invoking `/cad-orchestrator`, you must always review and revise
 `%USERPROFILE%\.scout\LISA\lisa-config.json` with the required customer, knowledge, environment,
-and publication information. Copy the root distribution `lisa-config.json` to that location, then
-replace the applicable example values with approved values for the current project.
+and publication information.
 
 > [!CAUTION]
 > Do not change `basePath` unless you are certain that the replacement points to the intended LISA
@@ -244,6 +242,9 @@ replace the applicable example values with approved values for the current proje
 >
 > Do not rename `deployableAgentLibraryName` or `agentArtifactLibraryName`, and do not change their
 > required library names: **Agent Library** and **Agent Artifact**.
+>
+> Currently, LISA caters to only one scenario per run. Hence, avoid adding multiple scenarios to the
+> requirements folder.
 
 Review and update these values for every project:
 
