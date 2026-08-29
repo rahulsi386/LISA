@@ -1,0 +1,47 @@
+{
+  "version": "1.0.0",
+  "custName": "Contoso Health",
+  "timeZone": "Asia/Kolkata",
+  "basePath": "C:\\Users\\rahulsi\\.scout\\LISA",
+  "entitlements": [
+    {
+      "name": "Microsoft Copilot Studio",
+      "entitlementId": "copilotStudio"
+    },
+    {
+      "name": "Microsoft 365 Copilot",
+      "entitlementId": "copilotChat"
+    },
+    {
+      "name": "Microsoft Cowork",
+      "entitlementId": "cowork"
+    },
+    {
+      "name": "Microsoft Scout",
+      "entitlementId": "scout"
+    }
+  ],
+  "knowledgeSources": [
+    {
+      "name": "Procurement Knowledge Source",
+      "path": "https://m365cpi52942772.sharepoint.com/:f:/s/RPSCAD/IgBv7bKolZPERbvPRmeDH4awAbOIlkFvTHUmWw31zpH4QNU?e=e98vLE"
+    }
+  ],
+  "copilotStudio": {
+    "envUrl": "https://rpsfdeagents.crm.dynamics.com",
+    "envId": "1fff1cb3-c3c1-e156-b569-099c2060e40b",
+    "llmModel": ""
+  },
+  "integrations":[],
+  "agentRegistry": {
+    "sharepoint": {
+      "siteUrl": "https://m365cpi52942772.sharepoint.com/sites/RPSCAD/",
+      "deployableAgentLibraryName": "Agent Library",
+      "agentArtifactLibraryName": "Agent Artifact"
+    }
+  },
+  "eval":{
+    "maxConcurrency": 1,
+    "maxRetries": 3
+  }
+}
