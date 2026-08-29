@@ -432,25 +432,7 @@ as nested.
 | `copilotStudio.envId` | Required for Copilot Studio or mixed builds | Exact environment ID checked against authenticated state. |
 | `agentRegistry.sharepoint.siteUrl` | Required for publication | Target SharePoint site. |
 | `agentRegistry.sharepoint.deployableAgentLibraryName` | Required for publication | Library receiving the deployable ZIP at its root. |
-| `agentRegistry.sharepoint.agentArtifactLibraryName` | Required for publication | Library receiving the agent artifact folder and files. |
-| `agentUrl` | Conditional evaluator target | Published agent or demo-site URL. May be omitted when the build handoff or identifiers resolve a target. |
-| `environmentId` | Optional evaluator target | Used with `botId` or `agentName` when `agentUrl` is absent. |
-| `botId` | Optional evaluator target | Deployed bot/agent ID used to construct a harness-correct test URL. |
-| `agentName` | Optional evaluator target | Alternative target identity when the environment can resolve it. |
-| `harness` | Optional | `GitHub Copilot`, `Standard`, or `Copilot chat`. Evaluator detects it when absent. |
-| `maxConcurrency` | Optional, default `1` | Number of evaluator workers. Start sequentially unless the test surface supports isolation. |
-| `testSetId` | Optional | Pins an evaluator test set. |
-| `mcsConnectionId` | Optional | Evaluator connection identity when required by the target. |
-| `evaluationThresholds` | Optional | Stage-defined gate thresholds. Never lower these to manufacture a pass. |
-| `playwrightTimeoutMs` | Optional | Evaluator browser timeout for slow retrieval surfaces. |
-| `expectedCitationMode` | Optional | Evaluator citation expectation. |
-| `maxOptimizationRounds` | Optional, default `3` | Maximum reversible optimizer rounds. |
-| `minimumImprovement` | Optional | Minimum evaluator-measured gain needed to accept an optimizer round. |
-
-The classifier can also interpret channel and publication intent from project configuration and
-requirements, but this bundle does not publish a stable JSON shape for channel-specific config.
-State required channels clearly in the source requirements rather than inventing an undocumented
-configuration object.
+| `agentRegistry.sharepoint.agentArtifactLibraryName` | Required for publication | Library receiving the agent artifact folder and files.
 
 For evaluator and optimizer options whose value shape is project-specific, follow the relevant
 [agent-evaluator skill](./m-skills/agent-evaluator/SKILL.md) or
