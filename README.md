@@ -39,7 +39,6 @@ stage can start.
 - [Project layout](#project-layout)
 - [Configuration reference](#configuration-reference)
 - [Side effects and approvals](#side-effects-and-approvals)
-- [Skill reference](#skill-reference)
 - [Outputs](#outputs)
 - [Resume and recovery](#resume-and-recovery)
 - [Command reference](#command-reference)
@@ -51,6 +50,7 @@ stage can start.
 ## Pipeline
 
 ```mermaid
+%%{init: {"themeVariables": {"fontFamily": "Segoe UI Variable Text, Segoe UI, Aptos, Arial, sans-serif", "fontSize": "14px"}}}%%
 flowchart TD
     U[User] --> CAD[cad-orchestrator]
     R[requirements/] --> RA[1 requirement-analyzer]
