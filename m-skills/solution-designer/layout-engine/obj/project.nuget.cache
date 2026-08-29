@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "gUuz3fWSxdk=",
+  "dgSpecHash": "GkC3QhdsW0s=",
   "success": true,
-  "projectFilePath": "C:\\Users\\rahulsi\\.scout\\m-skills\\solution-designer\\layout-engine\\layout-engine.csproj",
+  "projectFilePath": "C:\\Users\\rahulsi\\MyProjects\\LISA\\m-skills\\solution-designer\\layout-engine\\layout-engine.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\rahulsi\\.nuget\\packages\\microsoft.msagl\\1.1.6\\microsoft.msagl.1.1.6.nupkg.sha512",
     "C:\\Users\\rahulsi\\.nuget\\packages\\microsoft.net.illink.tasks\\10.0.11\\microsoft.net.illink.tasks.10.0.11.nupkg.sha512",

@@ -122,11 +122,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\rahulsi\\.scout\\m-skills\\solution-designer\\layout-engine\\layout-engine.csproj",
+      "projectUniqueName": "C:\\Users\\rahulsi\\MyProjects\\LISA\\m-skills\\solution-designer\\layout-engine\\layout-engine.csproj",
       "projectName": "SolutionDesigner.LayoutEngine",
-      "projectPath": "C:\\Users\\rahulsi\\.scout\\m-skills\\solution-designer\\layout-engine\\layout-engine.csproj",
+      "projectPath": "C:\\Users\\rahulsi\\MyProjects\\LISA\\m-skills\\solution-designer\\layout-engine\\layout-engine.csproj",
       "packagesPath": "C:\\Users\\rahulsi\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\rahulsi\\.scout\\m-skills\\solution-designer\\layout-engine\\obj\\",
+      "outputPath": "C:\\Users\\rahulsi\\MyProjects\\LISA\\m-skills\\solution-designer\\layout-engine\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
