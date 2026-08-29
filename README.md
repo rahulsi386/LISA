@@ -673,14 +673,6 @@ Use the orchestrator to advance workflow state. Low-level `start-stage`, `checkp
 [workflow-checkpointing.md](./m-skills/workflow-checkpointing.md) and are primarily for skill
 execution and recovery, not manual stage skipping.
 
-### Generate customer artifacts directly
-
-Use this only when all required upstream stage directories are complete and valid:
-
-```powershell
-python .\artifact-generator\scripts\generate_artifacts.py --config $Config
-```
-
 ### Inventory cleanup without deleting
 
 ```powershell
