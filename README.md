@@ -292,20 +292,26 @@ place source documents under `output`.
 
 ### 3. Prepare external access
 
-- Authenticate the Power Platform CLI (`pac`) to the exact configured tenant and environment.
-- Confirm the build identity can create, publish, and package the intended agent resources.
-- Confirm the evaluator can open the deployed test surface in the Scout browser session.
-- Confirm the publisher identity can write files and metadata in both configured SharePoint
+- Authenticate the Power Platform CLI (`pac`) to the exact configured tenant and environment by 
+  running the following command:
+  
+ ```powershell
+ pac auth create --environment https://xyz.crm.dynamics.com
+ ```
+ **NOTE**: *Replace the environment URL with your own Copilot Studio environment.*
+
+- Confirm the signed-in identity can create, publish, and package the intended agent resources.
+- Confirm the singed-in identity can write files and metadata in both configured SharePoint
   libraries.
 
 These identity, tenant, licensing, and permission checks cannot be completed by the local installer.
 
 ### 4. Restart Scout and invoke the orchestrator
 
-Restart Scout after installation. In Scout chat, make the skill and config explicit:
+Restart Scout after installation. In Scout chat, invoke the skill:
 
 ```text
-Run cad-orchestrator using %USERPROFILE%\.scout\LISA\lisa-config.json.
+/cad-orchestrator
 ```
 
 Stay available for the mandatory classification and build reviews. Cleanup also requires two
