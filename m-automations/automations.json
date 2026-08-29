@@ -2,207 +2,23 @@
   {
     "schedule": {
       "kind": "single",
-      "naturalLanguage": "every day at 9am",
+      "naturalLanguage": "every Monday at 8am",
       "days": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6
+        1
       ],
       "time": {
-        "hour": 9,
+        "hour": 8,
         "minute": 0
       },
-      "hour": 9,
+      "hour": 8,
       "minute": 0
     },
     "model": "gpt-5.6-sol",
     "reasoningEffort": "high",
-    "permissions": {
-      "autoApproveReadOnly": true,
-      "autoApproveAllWrites": false,
-      "allow": [
-        "url:https://developers.googleblog.com/en/agent-development-kit-go-2/",
-        "url:https://crewai.com/blog",
-        "url:https://news.servicenow.com/",
-        "url:https://aws.amazon.com/blogs/aws/",
-        "url:https://cloud.google.com/blog/topics/inside-google-cloud/whats-new-google-cloud",
-        "url:https://www.langchain.com/blog/",
-        "url:https://ai.meta.com/blog/",
-        "url:https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/",
-        "url:https://www.ibm.com/think/news",
-        "url:https://www.servicenow.com/blogs/2026",
-        "url:https://x.ai/news",
-        "url:https://www.deepseek.com/",
-        "url:https://deepmind.google/research/publications/",
-        "url:https://blog.google/technology/google-deepmind/",
-        "url:https://cloud.google.com/blog/products/ai-machine-learning/google-agentspace-enterprise-ai-announcements",
-        "url:https://www.salesforce.com/blog/agentforce/?bc=HL",
-        "url:https://blog.llamaindex.ai/",
-        "url:https://aws.amazon.com/blogs/machine-learning/",
-        "url:https://github.com/microsoft/semantic-kernel/blob/main/CHANGELOG.md",
-        "url:https://www.anthropic.com/news/claude-for-desktop-workspaces",
-        "url:https://developers.googleblog.com/en/tag/agent-development-kit/",
-        "url:https://blogs.nvidia.com/blog/enterprise/"
-      ],
-      "allowModelPermissionsChange": true,
-      "tools": {
-        "tool:m_recall": true,
-        "tool:m_list_memories": true,
-        "tool:m_list_automations": true,
-        "tool:m_get_automation": true,
-        "tool:m_list_skills": true,
-        "tool:m_get_skill": true,
-        "tool:m_get_settings": true,
-        "tool:m_search_sessions": true,
-        "tool:m_get_session_transcript": true,
-        "tool:m_compact": true,
-        "tool:m_list_models": true,
-        "tool:m_get_current_model": true,
-        "tool:m_list_personalities": true,
-        "tool:m_get_heartbeat_status": true,
-        "tool:m_m365_status": true,
-        "tool:m_relay_status": true,
-        "tool:m_ask_user": true,
-        "tool:m_send_teams_message": true,
-        "tool:web_fetch": true,
-        "mcp:playwright:browser_close": true,
-        "mcp:playwright:browser_resize": true,
-        "mcp:playwright:browser_console_messages": true,
-        "mcp:playwright:browser_handle_dialog": true,
-        "mcp:playwright:browser_press_key": true,
-        "mcp:playwright:browser_type": true,
-        "mcp:playwright:browser_navigate": true,
-        "mcp:playwright:browser_navigate_back": true,
-        "mcp:playwright:browser_network_requests": true,
-        "mcp:playwright:browser_run_code": true,
-        "mcp:playwright:browser_take_screenshot": true,
-        "mcp:playwright:browser_snapshot": true,
-        "mcp:playwright:browser_click": true,
-        "mcp:playwright:browser_drag": true,
-        "mcp:playwright:browser_hover": true,
-        "mcp:playwright:browser_select_option": true,
-        "mcp:playwright:browser_tabs": true,
-        "mcp:playwright:browser_wait_for": true
-      },
-      "servers": {
-        "filesystem": {
-          "enabled": true,
-          "autoApprove": false
-        },
-        "playwright": {
-          "enabled": true,
-          "autoApprove": false
-        },
-        "shell": {
-          "enabled": true,
-          "autoApprove": false
-        },
-        "workiq": {
-          "enabled": true,
-          "autoApprove": false
-        }
-      }
-    },
-    "browserHeadless": true,
+    "browserHeadless": false,
     "teamsNotify": "always",
-    "id": "leu45rqimrkda3ox",
-    "name": "AI Market Research",
-    "steps": [
-      {
-        "id": "1",
-        "label": "Step 1",
-        "prompt": "Monitor primary channels (company blogs, developer keynotes, research papers) from major AI players and open-source communities. Filter specifically for foundational models, agentic frameworks, multi-agent orchestration tools, and enterprise automation products."
-      },
-      {
-        "id": "da3a5c80-a53e-44ed-9a37-6189fa2a25b0",
-        "label": "Step 2",
-        "prompt": "Group the collected announcements into distinct buckets: base model capabilities, agentic architecture (memory, tool use, planning), or ready-to-use user products. This prevents apples-to-oranges comparisons later."
-      },
-      {
-        "id": "a5c3810b-19b1-49ef-a530-ab563e29d028",
-        "label": "Step 3",
-        "prompt": "Spot overlapping releases where multiple organizations are launching competing features at the same time (for example, two companies dropping desktop automation agents or matching context window upgrades in the same week)."
-      },
-      {
-        "id": "c635cebd-ab95-4951-8b40-a13b19cd4586",
-        "label": "Step 4",
-        "prompt": "Evaluate the competing products side-by-side. Benchmark them across key operational metrics: token efficiency, latency, cross-app integration, degree of autonomy, and cost."
-      },
-      {
-        "id": "828ea556-5b38-4cb2-ae97-24ed47f4cb4f",
-        "label": "Step 5",
-        "prompt": "Compile the findings into a finalized analysis report. Highlight which organization holds the current edge, how these advancements change the developer ecosystem, and what the immediate practical use cases are for these new agentic architectures."
-      },
-      {
-        "id": "f1462abe-f460-4650-91ab-cbec0c4d4cfb",
-        "label": "Step 6",
-        "prompt": "Translate the structured categorization, competitive matrices, and strategic findings compiled in Steps 2 through 5 into a polished, executive-ready PPTX slide deck, utilizing clean grid layouts and clear data visualizations to present the final analysis to leadership."
-      }
-    ],
-    "enabled": false,
-    "createdAt": "2026-07-14T08:06:03.057Z",
-    "updatedAt": "2026-08-04T05:52:38.065Z",
-    "triggerType": "schedule",
-    "pinnedSessionId": "37cd0676-0737-45a0-ac84-ccd6c2b4e9f4",
-    "lastExecutedAt": "2026-08-04T03:30:49.051Z"
-  },
-  {
-    "schedule": {
-      "kind": "single",
-      "naturalLanguage": "every Monday at 8am",
-      "days": [
-        1
-      ],
-      "time": {
-        "hour": 8,
-        "minute": 0
-      },
-      "hour": 8,
-      "minute": 0
-    },
-    "id": "b1hlanuimswuf5kw",
-    "name": "LISA-Prerequisites",
-    "steps": [
-      {
-        "id": "1",
-        "label": "Step 1",
-        "prompt": "Find the Microsoft Scout's per-user data/configuration directory"
-      },
-      {
-        "id": "446b61aa-3868-456f-859c-eaee1ae40ff1",
-        "label": "Step 2",
-        "prompt": "Create the following artifacts in the identified directory if do not exist:\n1.  Create a folder named LISA in this directory.\n2.  Under LISA folder, create three sub-folders called Requirements, Output, and KnowledgeSource\n3. Create a lisa-config.json file in the LISA directory."
-      }
-    ],
-    "enabled": false,
-    "createdAt": "2026-08-17T06:18:48.704Z",
-    "updatedAt": "2026-08-24T06:36:33.363Z",
-    "triggerType": "schedule",
-    "pinnedSessionId": "0f4e46de-1290-4773-a19a-7ad7c67aba11",
-    "lastExecutedAt": "2026-08-24T02:30:18.435Z"
-  },
-  {
-    "schedule": {
-      "kind": "single",
-      "naturalLanguage": "every Monday at 8am",
-      "days": [
-        1
-      ],
-      "time": {
-        "hour": 8,
-        "minute": 0
-      },
-      "hour": 8,
-      "minute": 0
-    },
-    "model": "gpt-5.6-sol",
-    "reasoningEffort": "medium",
     "id": "ej519inymt89xysc",
-    "name": "LISA-CAD",
+    "name": "LISA",
     "steps": [
       {
         "id": "2huufx1jmt89xysa",
@@ -257,11 +73,9 @@
     ],
     "enabled": false,
     "createdAt": "2026-08-25T06:18:48.540Z",
-    "updatedAt": "2026-08-28T10:10:27.419Z",
+    "updatedAt": "2026-08-29T09:17:58.059Z",
     "triggerType": "schedule",
     "pinnedSessionId": "6d5031a0-cbfb-4bfb-b37d-efca1f0f3eba",
-    "lastExecutedAt": "2026-08-25T14:23:40.527Z",
-    "browserHeadless": false,
-    "teamsNotify": "always"
+    "lastExecutedAt": "2026-08-25T14:23:40.527Z"
   }
 ]
