@@ -18,37 +18,9 @@ The descriptions below distinguish these implementation levels:
 
 ## End-to-end lifecycle
 
-```mermaid
-flowchart TD
-    C[Configuration and workflow recovery] --> RA[1. Requirement Analyzer]
-    RA --> CC[2. Complexity Classifier]
-    CC --> CR{Human classification review}
-    CR -->|Revise| CC
-    CR -->|Accept| SD[3. Solution Designer]
-    SD --> AB[4. Agent Builder]
-    AB --> BR{Human build review}
-    BR -->|Revise| AB
-    BR -->|Accept committed build| AE[5. Agent Evaluator]
-    AE -->|PASS or evidence-backed FAIL| AO[6. Agent Optimizer]
-    AO -->|Retest| AE
-    AO -->|Complete| AG[7. Artifact Generator]
-    AG --> AP[8. Artifact Publisher]
-    AP -->|Fresh verification = PUBLISHED| D{Delete local output?}
-    D -->|Cancel| DONE[Workflow completed]
-    D -->|Delete + DELETE OUTPUT| PC[9. Post-Publish Cleanup]
-    PC --> DONE
+![LISA Copilot Agent Delivery lifecycle data-flow diagram](lisa-cad-lifecycle.svg)
 
-    CR -->|Cancel| STOP[Stop and preserve work]
-    BR -->|Cancel or blocked| STOP
-    RA -->|Execution failure| STOP
-    CC -->|Execution failure| STOP
-    SD -->|Execution failure| STOP
-    AB -->|Execution failure| STOP
-    AE -->|Invalid or missing artifacts| STOP
-    AO -->|Blocked or rolled back| STOP
-    AG -->|Execution failure| STOP
-    AP -->|Unverified| STOP
-```
+**How to read the diagram:** this fixed-layout SVG uses Visio-style swimlanes and a left-to-right/right-to-left flow to keep each handoff short. Rectangles are processes, cylinders are data or durable state, and diamonds are review or validation gates. Every transition requires a validated terminal marker and checkpoint commit. Revision returns to its owning stage with a new run ID; optimization retests return to Evaluation. Any cancellation, blocked result, invalid artifact, failed validation, or unverified publication stops the route while preserving completed evidence and remote state.
 
 The orchestrator route is **agent-directed** by [`cad-orchestrator/SKILL.md`](cad-orchestrator/SKILL.md); there is no executable program that automatically runs the full pipeline. The shared checkpoint engine persists position and recovery data, but it does not enforce stage order by itself.
 
