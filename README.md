@@ -317,29 +317,22 @@ Restart Scout after installation. In Scout chat, invoke the skill:
 Stay available for the mandatory classification and build reviews. Cleanup also requires two
 separate decisions after a verified publication.
 
-## How to invoke a skill
+## How to invoke a skill individually
 
 The prerequisite installer copies local skills into Scout's active
 `%USERPROFILE%\.scout\m-skills` directory and synchronizes `skills-metadata.json`. Each directory's
-`SKILL.md` remains the canonical skill definition. Restart Scout after installation because this
-bundle does not define a host-level live-registry refresh command. All ten registry entries are
-enabled, and `disabled-skills.json` is empty.
-
-Invoke a skill by name in Scout chat and provide the config path:
-
-```text
-Run requirement-analyzer using C:\LISA\Contoso\lisa-config.json.
-Run solution-designer using C:\LISA\Contoso\lisa-config.json.
-```
-
-The stage names are written as `/requirement-analyzer`, `/agent-builder`, and similar names inside
-the orchestrator instructions. Whether they appear as typed slash commands depends on the Scout
-host version. A natural-language request containing the exact skill name is the portable invocation
-method for this bundle.
-
-Use `cad-orchestrator` for a full or resumed lifecycle. Invoke a stage skill directly only for a
+`SKILL.md` remains the canonical skill definition. Invoke a stage skill directly only for a
 deliberate standalone stage run. Standalone execution may omit workflow checkpointing, but all
 normal input and terminal artifact validation still applies.
+
+Invoke an individual skill by name in Microsoft Scout chat:
+
+```text
+/requirement-analyzer
+/solution-designer
+```
+
+Use `/cad-orchestrator` for a full or resumed lifecycle. 
 
 The Python and PowerShell files under `scripts` implement deterministic portions of a skill. Running
 one script is not equivalent to invoking the complete skill because architecture decisions, browser
