@@ -19,9 +19,20 @@ stage can start.
 > files to SharePoint, and delete local output. Read [Side effects and approvals](#side-effects-and-approvals)
 > before starting an end-to-end run.
 
+## Recommendation
+
+> [!TIP]
+> **Preferred configuration:** Use **GPT-5.6 Sol** with a **922K context size** and **high reasoning
+> effort**. This configuration has yielded satisfactory results across the scenarios tested.
+>
+> **Lower-complexity alternatives:** **GPT-5.6 Terra** and **GPT-5.6 Luna** can also be used with
+> the same context size and reasoning effort.
+
 ## Contents
 
 - [Pipeline](#pipeline)
+- [Downloaded repository layout](#downloaded-repository-layout)
+- [Automated prerequisite installer](#automated-prerequisite-installer)
 - [Quick start](#quick-start)
 - [How to invoke a skill](#how-to-invoke-a-skill)
 - [Prerequisites](#prerequisites)
@@ -111,84 +122,174 @@ silently rolled back.
 > requires a ZIP. Treat a Cowork-only result as a documented terminal handoff rather than expecting
 > end-to-end publication from the current suite.
 
-## Quick start
+## Downloaded repository layout
 
-Run these commands from the local skills root, normally
-`C:\Users\<user>\.scout\m-skills` on Windows.
-
-### 1. Install Python dependencies
-
-```powershell
-Set-Location "$HOME\.scout\m-skills"
-python -m pip install -r .\requirements.txt
-```
-
-### 2. Create the project inputs
-
-Create a project directory containing an exact `lisa-config.json` filename, a non-empty
-`requirements` folder, and evaluation material under `evalData`.
+After downloading or cloning LISA from GitHub, the repository root must have this structure:
 
 ```text
-C:\LISA\Contoso\
+<downloaded-LISA-codebase>\
+|-- m-automations\
+|   `-- automations.json
+|-- m-skills\
+|   |-- cad-orchestrator\
+|   |-- requirement-analyzer\
+|   |-- complexity-classifier\
+|   |-- solution-designer\
+|   |-- agent-builder\
+|   |-- agent-evaluator\
+|   |-- agent-optimizer\
+|   |-- artifact-generator\
+|   |-- artifact-publisher\
+|   |-- postpublish-cleanup\
+|   |-- skills-metadata.json
+|   `-- sync_skills_metadata.py
+|-- README.md
 |-- lisa-config.json
-|-- requirements\
-|   |-- requirements.docx
-|   `-- policies\
-|       `-- approved-policy.pdf
-`-- evalData\
-    `-- expected-behavior.docx
+|-- requirements.txt
+`-- Install-LISA-Prerequisites.ps1
 ```
 
-`output` and `.lisa` are created as the workflow runs. Do not place source documents under
-`output`.
+Keep `README.md`, `lisa-config.json`, `requirements.txt`, and
+`Install-LISA-Prerequisites.ps1` at the repository root. Do not move those files into `m-skills`.
+The installer resolves `requirements.txt` and `m-skills` relative to its own root location, validates
+the optional `m-automations` folder, and deploys only the contents of `m-skills` into Scout.
 
-### 3. Add the configuration
+The downloaded repository is the installation source. The runtime project created under
+`%USERPROFILE%\.scout\LISA` is separate and stores customer configuration, inputs, outputs, and
+checkpoints.
 
-This example uses the directory containing the config as `basePath` and includes the fields needed
-for a full build and SharePoint publication:
+## Automated prerequisite installer
+
+The root-level `Install-LISA-Prerequisites.ps1` is the supported first-run bootstrap for Windows.
+Run it from the downloaded repository root before placing customer inputs in the project folders:
+
+```powershell
+Set-Location "<downloaded-LISA-codebase>"
+
+# Read-only prerequisite assessment; exits before sign-in or file changes.
+powershell.exe -ExecutionPolicy Bypass -File .\Install-LISA-Prerequisites.ps1 -WhatIf
+
+# Interactive installation.
+powershell.exe -ExecutionPolicy Bypass -File .\Install-LISA-Prerequisites.ps1
+```
+
+The installer performs this gated sequence:
+
+1. Checks WinGet, Microsoft Scout, Windows PowerShell 5.1, PowerShell 7, Python, the Python
+  libraries in the sibling root `requirements.txt`, Node.js/npm, the renderer and layout engine
+  beneath `m-skills`, modern Power Platform CLI support, and conditional .NET 10 availability.
+2. Lists every missing prerequisite and its installation action. It changes nothing until the user
+  types the exact confirmation `INSTALL`.
+3. Installs only missing local prerequisites. It uses WinGet for supported Windows applications,
+  pip for Python packages, npm for locked renderer packages, and the current-user .NET global-tool
+  installation for modern Power Platform CLI.
+4. Opens or reuses Microsoft Scout and asks the user to complete Microsoft 365 sign-in under
+  **Settings > Integrations**. Continue with `Y` or `YES` only after Scout reports the connection.
+  The installer also requires a non-empty Scout Microsoft 365 account record.
+5. Creates `%USERPROFILE%\.scout\LISA` and the empty lowercase/camel-case folders
+  `requirements`, `output`, and `evalData`.
+6. Prompts for the downloaded LISA codebase root. Supply the same root shown above, not its
+  `m-skills` child. The installer validates a non-empty `m-skills`, optional non-empty
+  `m-automations`, and valid root `lisa-config.json`. The source skills must include
+  `SKILL.md` definitions, `skills-metadata.json`, and `sync_skills_metadata.py`.
+7. Warns that matching entries in `%USERPROFILE%\.scout\m-skills` will be replaced and waits for
+  the exact confirmation `INSTALL SKILLS`.
+8. Stages and installs every item beneath the source `m-skills`, replacing matching top-level
+  entries while retaining unrelated installed skills.
+9. Runs the installed `sync_skills_metadata.py` and asks the user to restart Scout so it reloads
+  the registry.
+
+The installer deliberately does not copy `m-automations` or `lisa-config.json`; it validates them
+as distribution inputs. It also does not authenticate PAC, provision cloud licenses or capacity,
+create tenant resources, configure SharePoint, or populate customer evidence. Complete those
+environment-specific tasks after local installation.
+
+> [!CAUTION]
+> The three project folders must be absent or empty when the installer reaches project setup. It
+> stops rather than deleting existing requirements, output, or evaluation data. Back up existing
+> `%USERPROFILE%\.scout\LISA` content and installed skills before rerunning a fresh installation.
+
+## Quick start
+
+### 1. Run the installer
+
+From the downloaded repository root, follow
+[Automated prerequisite installer](#automated-prerequisite-installer). It installs the local
+software and skills, synchronizes the skill registry, and creates the empty project folders under:
+
+```text
+%USERPROFILE%\.scout\LISA\
+|-- requirements\
+|-- output\
+`-- evalData\
+```
+
+- `requirements`: Store all customer requirements data in this folder, including chat transcripts,
+  business requirement documents, and other source material.
+- `output`: Every artifact generated by LISA is stored in this folder.
+- `evalData`: Store the evaluation dataset that LISA should use to test the agent it has built.
+
+### 2. Configure the project and add evidence
+
+Before invoking `/cad-orchestrator`, you must always review and revise
+`%USERPROFILE%\.scout\LISA\lisa-config.json` with the required customer, knowledge, environment,
+and publication information. Copy the root distribution `lisa-config.json` to that location, then
+replace the applicable example values with approved values for the current project.
+
+> [!CAUTION]
+> Do not change `basePath` unless you are certain that the replacement points to the intended LISA
+> runtime project directory. The literal `%USERPROFILE%` token shown below is a portable template;
+> replace only that token with the current user's actual Windows profile path before invoking LISA.
+> The current path resolver does not expand `%USERPROFILE%` inside JSON.
+>
+> Do not rename `deployableAgentLibraryName` or `agentArtifactLibraryName`, and do not change their
+> required library names: **Agent Library** and **Agent Artifact**.
+
+Review and update these values for every project:
+
+1. `custName`: Specify the customer for whom the agent is being built.
+2. `knowledgeSources`: Populate every identified knowledge source that the agent is expected to
+   use. Avoid local filesystem paths; SharePoint locations are recommended.
+3. `copilotStudio`: Provide the correct environment URL and environment ID that LISA will use to
+   deploy and test the agent.
+4. `agentRegistry.sharepoint.siteUrl`: Specify the SharePoint site where **Agent Library** and
+   **Agent Artifact** are provisioned.
 
 ```json
 {
-  "basePath": ".",
+  "version": "1.0.0",
   "custName": "Contoso Health",
+  "timeZone": "Asia/Kolkata",
+  "basePath": "%USERPROFILE%\\.scout\\LISA",
   "knowledgeSources": [
     {
-      "name": "Approved policy corpus",
-      "path": "requirements\\policies"
+      "name": "Contoso Health Knowledge Source",
+      "path": "https://contoso.sharepoint.com/sites/contosohealth/IgBuoARgFiyOSbqUae0Cd2MdAZMd5iyvLalYyfuHKidPkPw?e=8i8B2s"
     }
   ],
   "copilotStudio": {
-    "envUrl": "https://org00000000.crm.dynamics.com",
-    "envId": "00000000-0000-0000-0000-000000000000"
+    "envUrl": "https://<your-environment>.crm.dynamics.com",
+    "envId": "1f001cb3-0001-e156-b569-00000000e40b"
   },
   "agentRegistry": {
     "sharepoint": {
-      "siteUrl": "https://contoso.sharepoint.com/sites/AgentRegistry",
-      "deployableAgentLibraryName": "Deployable Agents",
-      "agentArtifactLibraryName": "Agent Artifacts"
+      "siteUrl": "https://m365cpi52942772.sharepoint.com/sites/RPSCAD/",
+      "deployableAgentLibraryName": "Agent Library",
+      "agentArtifactLibraryName": "Agent Artifact"
     }
   }
 }
 ```
 
-Use placeholders only while preparing the file. The skills do not invent missing tenant,
-environment, customer, or SharePoint values.
+Use placeholders only while preparing the file. Do not invoke `/cad-orchestrator` until every
+required value has been reviewed. The skills do not invent missing tenant, environment, customer,
+knowledge-source, or SharePoint values.
 
-### 4. Validate local setup
+After installation, populate `requirements` with at least one readable customer source and
+`evalData` with source-grounded evaluation material. Keep `output` empty before a new run. Do not
+place source documents under `output`.
 
-```powershell
-$Config = "C:\LISA\Contoso\lisa-config.json"
-python .\sync_skills_metadata.py
-python .\lisa_path_resolver.py --config $Config
-python .\validate_artifact_contracts.py
-```
-
-Registry synchronization must report all ten skills, the path command must report the expected
-project directories, and contract validation must pass for all skills before a run begins. Ensure
-Scout has loaded the regenerated registry before invoking a skill; this repository does not define
-the host-specific registry refresh command.
-
-### 5. Prepare external access
+### 3. Prepare external access
 
 - Authenticate the Power Platform CLI (`pac`) to the exact configured tenant and environment.
 - Confirm the build identity can create, publish, and package the intended agent resources.
@@ -196,12 +297,14 @@ the host-specific registry refresh command.
 - Confirm the publisher identity can write files and metadata in both configured SharePoint
   libraries.
 
-### 6. Invoke the orchestrator
+These identity, tenant, licensing, and permission checks cannot be completed by the local installer.
 
-In Scout chat, make the skill and config explicit:
+### 4. Restart Scout and invoke the orchestrator
+
+Restart Scout after installation. In Scout chat, make the skill and config explicit:
 
 ```text
-Run cad-orchestrator using C:\LISA\Contoso\lisa-config.json.
+Run cad-orchestrator using %USERPROFILE%\.scout\LISA\lisa-config.json.
 ```
 
 Stay available for the mandatory classification and build reviews. Cleanup also requires two
@@ -209,10 +312,11 @@ separate decisions after a verified publication.
 
 ## How to invoke a skill
 
-This repository does not include a Scout installer or a host-level command for registering local
-skills. It assumes these folders are already under the active Scout local-skills root. Each
-directory's `SKILL.md` is the canonical skill definition; `skills-metadata.json` is the generated
-local registry. All ten entries are currently enabled, and `disabled-skills.json` is empty.
+The prerequisite installer copies local skills into Scout's active
+`%USERPROFILE%\.scout\m-skills` directory and synchronizes `skills-metadata.json`. Each directory's
+`SKILL.md` remains the canonical skill definition. Restart Scout after installation because this
+bundle does not define a host-level live-registry refresh command. All ten registry entries are
+enabled, and `disabled-skills.json` is empty.
 
 Invoke a skill by name in Scout chat and provide the config path:
 
@@ -236,47 +340,50 @@ steps, reviews, remote reconciliation, and model-guided work remain owned by the
 
 ## Prerequisites
 
-| Requirement | Supported or verified version | Used by |
+### Local machine requirements
+
+| Requirement | Supported or verified version | Installer behavior |
 |---|---|---|
-| Windows | Windows 11 verified | Packaged PowerShell and layout paths |
-| Python | 3.11+ recommended; 3.13.15 verified | All skills and tests |
-| `jsonschema` | `>=4.23,<5` | Contract and payload validation |
-| `pypdf` | `>=6,<7` | PDF extraction |
-| `python-docx` | `>=1.2,<2` | DOCX extraction |
-| `python-pptx` | `>=1,<2` | PPTX extraction |
-| `Pillow` | `>=11,<13` | Image inspection |
-| `openpyxl` | `>=3.1,<4` | Analyzer cache fingerprint and XLSX test fixtures |
-| Node.js | 18+; 24.13.0 verified | Diagram PNG rendering and publisher tests |
-| PowerShell 7 | 7.6.5 verified | Runners and publication guard |
-| Windows PowerShell | 5.1 | Solution Designer fast path |
-| Power Platform CLI (`pac`) | No minimum version declared | Build, evaluation target verification, optimization, packaging |
-| Scout Playwright browser tools | Host-provided | Agent evaluation and authenticated SharePoint publication |
-| .NET SDK | 10, optional | Rebuilding the bundled MSAGL engine only |
+| Windows | Windows 11 verified | Required host; the installer stops on other operating systems |
+| WinGet | Current Microsoft App Installer | Checked first; must be installed manually if absent |
+| Microsoft Scout | Current-user Windows installation | Installed with `Microsoft.ScoutAgent` when absent; M365 sign-in remains interactive |
+| Python | 3.11+; 3.13.15 verified | Installs `Python.Python.3.13` when missing or too old |
+| Python libraries | See [requirements.txt](./requirements.txt) | Installs with pip into the detected Python environment |
+| Node.js and npm | Node.js 18+; 24.13.0 verified | Installs `OpenJS.NodeJS.LTS` when missing or too old |
+| Renderer packages | `@resvg/resvg-js` 2.6.2 and `pngjs` 7.0.0 | Uses the vendored tree or restores the lockfile with `npm ci` |
+| PowerShell 7 | 7.6.5 verified | Installs `Microsoft.PowerShell` when absent |
+| Windows PowerShell | 5.1 | Checked only; it must be enabled as a Windows component |
+| Power Platform CLI (`pac`) | Modern CLI with `copilot` and `solution` commands | Installs `Microsoft.PowerApps.CLI.Tool` as a current-user .NET global tool when needed |
+| .NET SDK | 10 | Installed conditionally to bootstrap modern PAC or rebuild the layout engine |
+| Layout engine | Packaged self-contained Windows executable | Uses the packaged EXE or rebuilds it from the packaged .NET project |
 
-The suite's declared pip dependencies are centralized in [requirements.txt](./requirements.txt).
-Python on Windows may not include an IANA timezone database. If you configure `timeZone` and receive
-an unknown-timezone error, install `tzdata` into the same Python environment or omit `timeZone` to
-use the local timezone:
+The Python manifest includes `jsonschema[format-nongpl]`, `pypdf`, `python-docx`, `python-pptx`,
+`Pillow`, `openpyxl`, and `tzdata`. The format extra activates URI and RFC 3339 date-time checks;
+`tzdata` makes configured IANA zones deterministic on Windows. Do not install those packages one by
+one during normal setup; approve the installer's consolidated prerequisite action instead.
 
-```powershell
-python -m pip install tzdata
-```
+The bundled `SolutionDesigner.LayoutEngine.exe` is self-contained. A .NET runtime is unnecessary
+when that executable and modern PAC are already available.
 
-The Solution
-Designer includes vendored `@resvg/resvg-js` 2.6.2 and `pngjs` 7.0.0 packages. If that vendored tree
-is missing, restore it with `npm ci` from `solution-designer\renderer`.
+### Manual service and project requirements
 
-The bundled `SolutionDesigner.LayoutEngine.exe` is self-contained. An installed .NET runtime is not
-required unless you are rebuilding it.
-
-Operational prerequisites are as important as local packages:
+The installer cannot establish or approve the following requirements:
 
 - Appropriate Copilot Studio, Microsoft 365, Teams, Cowork, and Power Platform licensing for the
   selected design.
+- Copilot Credits, prepaid capacity or PAYG, throughput quota, and tenant product availability for
+  the selected platform and harness.
+- PAC authentication whose active tenant, environment URL, and environment ID exactly match
+  `lisa-config.json`.
+- Scout filesystem, shell, Playwright, web, `m_get_skill`, and `m_ask_user` access required by the
+  selected stages.
 - Access to an approved test environment and approved test data.
+- A non-empty `requirements` corpus and source-grounded `evalData` for the full evaluation route.
 - SharePoint permissions for file upload, replacement, folder creation, and required metadata
   updates.
-- An IANA timezone database recognizable by Python when `timeZone` is configured.
+- Two configured SharePoint document libraries with the writable metadata fields required by
+  `artifact-publisher`.
+- Human availability for classification and build review, plus explicit cleanup consent.
 
 ## Project layout
 
@@ -346,9 +453,9 @@ State required channels clearly in the source requirements rather than inventing
 configuration object.
 
 For evaluator and optimizer options whose value shape is project-specific, follow the relevant
-[agent-evaluator skill](./agent-evaluator/SKILL.md) or
-[agent-optimizer skill](./agent-optimizer/SKILL.md). The build handoff remains authoritative for the
-deployed agent identity, harness, component inventory, and package selection.
+[agent-evaluator skill](./m-skills/agent-evaluator/SKILL.md) or
+[agent-optimizer skill](./m-skills/agent-optimizer/SKILL.md). The build handoff remains authoritative
+for the deployed agent identity, harness, component inventory, and package selection.
 
 ## Side effects and approvals
 
@@ -547,12 +654,17 @@ Before any remote write, builder, optimizer, and publisher persist an operation 
 canonical target, idempotency key, expected hash, and read-back method. Credentials, cookies, and
 tokens are forbidden in checkpoints and receipts.
 
-See [workflow-checkpointing.md](./workflow-checkpointing.md) for durable phase boundaries and the
-full recovery contract.
+See [workflow-checkpointing.md](./m-skills/workflow-checkpointing.md) for durable phase boundaries
+and the full recovery contract.
 
 ## Command reference
 
-Run commands from the local skills root.
+Run the commands in this section from Scout's installed local-skills root, not the downloaded
+repository root:
+
+```powershell
+Set-Location "$env:USERPROFILE\.scout\m-skills"
+```
 
 ### Validate config paths and stage inputs
 
@@ -576,8 +688,8 @@ python .\workflow_checkpoint.py --help
 
 Use the orchestrator to advance workflow state. Low-level `start-stage`, `checkpoint`,
 `complete-stage`, and `finish` commands are documented in
-[workflow-checkpointing.md](./workflow-checkpointing.md) and are primarily for skill execution and
-recovery, not manual stage skipping.
+[workflow-checkpointing.md](./m-skills/workflow-checkpointing.md) and are primarily for skill
+execution and recovery, not manual stage skipping.
 
 ### Generate customer artifacts directly
 
@@ -637,6 +749,37 @@ validation by calling only the last phase.
 
 ## Troubleshooting
 
+### The installer reports missing prerequisites
+
+Review the displayed `Detected` and `Install` details, then rerun without `-WhatIf` and type
+`INSTALL`. The installer uses the same `python` executable it reports during detection. Do not
+install a package named `jsonschema-formats`; that is a diagnostic label for the optional format
+validators supplied by `jsonschema[format-nongpl]` in `requirements.txt`.
+
+If WinGet is missing, install or update Microsoft App Installer first. If Windows PowerShell 5.1 is
+missing, enable it as a Windows component. The installer intentionally stops for those two host
+capabilities because it cannot bootstrap them reliably.
+
+### The installer cannot confirm Microsoft 365 sign-in
+
+Use the existing Scout window when it is already running. In Scout, open **Settings >
+Integrations**, complete Microsoft 365 sign-in, return to the terminal, and answer `Y` or `YES`.
+The installer requires Scout's non-empty `m-auth\msal-last-account.enc` record. It does not launch a
+second Scout instance when the installed executable is already running.
+
+### The installer rejects the LISA project folder
+
+The installer is a fresh-install workflow. `%USERPROFILE%\.scout\LISA\requirements`, `output`, and
+`evalData` must be absent or empty. It never clears those folders automatically. Preserve or move
+an existing project before rerunning installation.
+
+### The downloaded codebase is rejected
+
+Select the codebase root, not its `m-skills` child. The selected root must contain a non-empty
+`m-skills`, a valid `lisa-config.json`, and optionally a non-empty `m-automations`. The source
+`m-skills` must contain at least one child `SKILL.md`, `skills-metadata.json`, and
+`sync_skills_metadata.py`.
+
 ### Config is rejected
 
 - Confirm the filename is exactly `lisa-config.json`.
@@ -679,9 +822,9 @@ and identity must match the verified PAC identity.
 
 ### Diagram rendering fails
 
-Confirm Node.js 18+ and Windows PowerShell 5.1 are available. The renderer dependencies should be
-vendored under `solution-designer\renderer\node_modules`; run `npm ci` there only if they are
-missing. The bundled layout engine does not require an installed .NET runtime.
+Rerun `Install-LISA-Prerequisites.ps1`. It checks Node.js, npm, the locked renderer dependency tree,
+and the packaged layout engine, and repairs missing components after `INSTALL` confirmation. The
+bundled layout engine does not require an installed .NET runtime.
 
 ### Publication cannot start
 
@@ -698,9 +841,11 @@ consent. Prior consent is intentionally invalid.
 
 ## Running the tests
 
-Run the complete local suite from the local skills root:
+Run the complete local suite from Scout's installed local-skills root:
 
 ```powershell
+Set-Location "$env:USERPROFILE\.scout\m-skills"
+
 $Skills = @(
   'cad-orchestrator',
   'requirement-analyzer',
@@ -733,10 +878,12 @@ pin a number that can become stale.
 
 ## Maintaining the skill registry
 
-`SKILL.md` is canonical for each skill's frontmatter and instructions. After changing a skill
-definition, regenerate `skills-metadata.json` from the local skills root:
+Initial installation synchronizes the registry automatically. `SKILL.md` remains canonical for each
+skill's frontmatter and instructions. Maintainers who change a skill after installation must
+regenerate `skills-metadata.json` from the active local-skills root:
 
 ```powershell
+Set-Location "$env:USERPROFILE\.scout\m-skills"
 python .\sync_skills_metadata.py
 python .\validate_artifact_contracts.py
 ```
@@ -745,15 +892,15 @@ The synchronization script requires every discovered skill name to already have 
 it does not silently add unknown skills. Keep secrets and machine-specific credentials out of both
 the skill definitions and generated metadata.
 
-Shared implementation and contract files at this root include:
+Shared implementation and contract files under `m-skills` include:
 
 | File | Responsibility |
 |---|---|
-| [lisa_path_resolver.py](./lisa_path_resolver.py) | Config loading and canonical path containment |
-| [resolve_skill_inputs.py](./resolve_skill_inputs.py) | Per-stage canonical input resolution |
-| [workflow_checkpoint.py](./workflow_checkpoint.py) | Hash-protected workflow snapshots and recovery |
-| [workflow-checkpoint.schema.json](./workflow-checkpoint.schema.json) | Checkpoint state contract |
-| [validate_artifact_contracts.py](./validate_artifact_contracts.py) | Packaged contract validation |
-| [artifact-contract.schema.json](./artifact-contract.schema.json) | Shared skill artifact-contract schema |
-| [lifecycle_artifacts.py](./lifecycle_artifacts.py) | Build/evaluation/optimization manifest engine |
-| [Platform-Decision.md](./Platform-Decision.md) | Microsoft agent platform decision framework |
+| [lisa_path_resolver.py](./m-skills/lisa_path_resolver.py) | Config loading and canonical path containment |
+| [resolve_skill_inputs.py](./m-skills/resolve_skill_inputs.py) | Per-stage canonical input resolution |
+| [workflow_checkpoint.py](./m-skills/workflow_checkpoint.py) | Hash-protected workflow snapshots and recovery |
+| [workflow-checkpoint.schema.json](./m-skills/workflow-checkpoint.schema.json) | Checkpoint state contract |
+| [validate_artifact_contracts.py](./m-skills/validate_artifact_contracts.py) | Packaged contract validation |
+| [artifact-contract.schema.json](./m-skills/artifact-contract.schema.json) | Shared skill artifact-contract schema |
+| [lifecycle_artifacts.py](./m-skills/lifecycle_artifacts.py) | Build/evaluation/optimization manifest engine |
+| [Platform-Decision.md](./m-skills/Platform-Decision.md) | Microsoft agent platform decision framework |

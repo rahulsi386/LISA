@@ -1,93 +1,97 @@
-# LISA local skills — Python dependency manifest
+# LISA complete prerequisite manifest
 #
-# This is the single, central manifest for every skill in this folder. The
-# individual skill folders deliberately do NOT carry their own requirements.txt.
+# This file is intentionally pip-compatible: only the uncommented requirement
+# lines are installed by pip. System software and cloud prerequisites are
+# documented below and installed or checked by Install-LISA-Prerequisites.ps1.
 #
-#   python -m pip install -r requirements.txt
-#
-# Verified on CPython 3.13.15 (Windows 11). Python 3.11 or newer is recommended.
-# Every other module these skills import is part of the Python standard library
-# (argparse, concurrent.futures, dataclasses, email, hashlib, hmac, pathlib,
-# subprocess, tempfile, urllib, uuid, xml, zipfile, zoneinfo, and similar).
-# There is no runtime dependency on requests, pytest, or any test framework:
-# the regression suites use the standard-library `unittest` runner.
+# Supported host: Windows 11
+# Python: 3.11 or newer; CPython 3.13.15 verified
+# Install Python packages with:
+#   python -m pip install --upgrade -r requirements.txt
 
+# JSON Schema validation is shared by all lifecycle stages. The non-GPL format
+# extra guarantees that URI and RFC 3339 date-time checks used by the packaged
+# schemas are active instead of being silently skipped.
+jsonschema[format-nongpl]>=4.23,<5
 
-# ---------------------------------------------------------------------------
-# Required by ALL nine skills
-# ---------------------------------------------------------------------------
-# validate_artifact_contracts.py validates each skill's artifact-contract.json
-# against the shared artifact-contract.schema.json and is imported by every
-# skill entry point. lifecycle_artifacts.py (agent-builder, agent-evaluator,
-# agent-optimizer), requirement_analyzer.py, complexity_classifier.py and
-# solution_designer.py additionally validate their own JSON payloads with it.
-# artifact-publisher reaches it by shelling out from publication-guard.ps1.
-jsonschema>=4.23,<5
+# Requirement Analyzer document and image extraction.
+pypdf>=6.0,<7
+python-docx>=1.2,<2
+python-pptx>=1.0,<2
+Pillow>=11,<13
 
-
-# ---------------------------------------------------------------------------
-# Required by requirement-analyzer only (source-document extraction)
-# ---------------------------------------------------------------------------
-pypdf>=6.0,<7           # PDF text/page extraction          requirement_analyzer.py:1019
-python-docx>=1.2,<2     # DOCX paragraph/table extraction   requirement_analyzer.py:546
-python-pptx>=1.0,<2     # PPTX slide/notes extraction       requirement_analyzer.py:954
-Pillow>=11,<13          # image inspection + visual review  requirement_analyzer.py:1090
-
-# openpyxl is not imported by the extractor itself — XLSX files are streamed
-# with the standard-library zipfile/xml parser so large workbooks are never
-# materialised in memory. It is still required because the extractor records
-# its version in the cache fingerprint (_extractor_fingerprint), and because
-# the regression suite builds .xlsx fixtures with it.
+# The analyzer records this version in its extraction fingerprint and the test
+# suite uses it to construct XLSX fixtures. Runtime XLSX scanning is streamed.
 openpyxl>=3.1,<4
 
+# Windows Python does not ship the IANA database used by ZoneInfo. LISA accepts
+# IANA names such as Asia/Kolkata in lisa-config.json, so install it everywhere
+# to make fresh-machine behavior deterministic.
+tzdata>=2024.1
 
-# ===========================================================================
-# NON-PIP PREREQUISITES  (cannot be installed by this file — install manually)
-# ===========================================================================
+# ---------------------------------------------------------------------------
+# Required system software (not installable by pip)
+# ---------------------------------------------------------------------------
+# Microsoft Scout
+#   - Installed and signed in for the current Windows user.
+#   - The ten LISA skill folders and skills-metadata.json must be under the
+#     active Scout local-skills root: %USERPROFILE%\.scout\m-skills.
+#   - Filesystem, shell, Playwright, m_get_skill, m_ask_user, web access,
+#     browser file upload, screenshots, and browser_run_code_unsafe must be
+#     enabled. Scout supplies Playwright; do not install the npm package here.
 #
-# Node.js 18+                       verified on v24.13.0
-#   - solution-designer rasterises SVG to PNG through its packaged renderer
-#     (solution-designer/renderer/render.js). Its npm dependencies
-#     @resvg/resvg-js 2.6.2 and pngjs 7.0.0 are already vendored under
-#     solution-designer/renderer/node_modules — run `npm ci` in that folder
-#     only if the vendored tree is missing.
-#   - artifact-publisher's regression suite executes its fast publisher with
-#     `node`; that test skips automatically when Node is absent.
+# Python 3.11+
+#   - WinGet package: Python.Python.3.13
 #
-# PowerShell                        verified on PowerShell 7.6.5 (pwsh)
-#   - Windows PowerShell 5.1 is also required: solution_designer.py launches
-#     the packaged fast path with the `powershell` executable, while the
-#     artifact-publisher tests prefer `pwsh` and fall back to `powershell`.
-#   - Both ship with Windows; pwsh 7 must be installed separately.
+# Node.js 18+
+#   - WinGet package: OpenJS.NodeJS.LTS
+#   - solution-designer/renderer/package-lock.json pins @resvg/resvg-js 2.6.2
+#     and pngjs 7.0.0. The tree is vendored; npm ci restores it when absent.
 #
-# Microsoft Power Platform CLI (pac)
-#   - agent-builder, agent-evaluator and agent-optimizer use `pac auth list`,
-#     `pac env list/who`, `pac copilot *` and `pac solution *` to verify the
-#     target environment and to publish and package agents.
+# PowerShell
+#   - PowerShell 7+: WinGet package Microsoft.PowerShell
+#   - Windows PowerShell 5.1: built into supported Windows installations and
+#     separately required by the Solution Designer fast path.
 #
-# Playwright browser automation
-#   - agent-evaluator drives the Copilot Studio test surface and
-#     artifact-publisher performs authenticated SharePoint REST publication
-#     through the host's browser tools. These are provided by the Microsoft
-#     Scout runtime, not by a package installed from this file.
+# Microsoft Power Platform CLI (modern pac CLI)
+#   - Required for Copilot Studio build, verification, publish, pull, and
+#     solution packaging. Required groups include auth, env, org, copilot, and
+#     solution; `pac copilot init help` must expose cli-copilot authoring.
+#   - Install as the current user's .NET global tool:
+#       dotnet tool install --global Microsoft.PowerApps.CLI.Tool
+#   - Do not substitute the legacy WinGet Microsoft.PowerAppsCLI 1.0 package.
 #
-# .NET 10 SDK                       OPTIONAL — build-time only
-#   - solution-designer ships a self-contained single-file MSAGL layout engine
-#     at solution-designer/resources/layout-engine/SolutionDesigner.LayoutEngine.exe
-#     which runs without a .NET runtime installed. The SDK is needed only to
-#     rebuild it from solution-designer/layout-engine/layout-engine.csproj
-#     (Microsoft.Msagl 1.1.6, net10.0).
+# .NET 10 SDK
+#   - WinGet package: Microsoft.DotNet.SDK.10
+#   - Required when bootstrapping modern pac as a .NET tool.
+#   - Otherwise optional unless rebuilding the packaged self-contained MSAGL
+#     layout engine from solution-designer/layout-engine/layout-engine.csproj.
 #
-# ===========================================================================
-# Per-skill Python requirements at a glance
-# ===========================================================================
-#   agent-builder ........... jsonschema
-#   agent-evaluator ......... jsonschema
-#   agent-optimizer ......... jsonschema
-#   artifact-generator ...... jsonschema
-#   artifact-publisher ...... jsonschema
-#   complexity-classifier ... jsonschema
-#   postpublish-cleanup ..... jsonschema
-#   solution-designer ....... jsonschema
-#   requirement-analyzer .... jsonschema, pypdf, python-docx, python-pptx,
-#                             Pillow, openpyxl
+# Packaged Solution Designer runtime
+#   - resources/layout-engine/SolutionDesigner.LayoutEngine.exe
+#   - renderer/render.js, renderer/fonts/InterVariable.ttf, and healthy npm
+#     dependencies. No separate .NET runtime is needed for the packaged EXE.
+#
+# Internet access is needed during installation for WinGet, PyPI, NuGet, and
+# npm restoration. Runtime access is needed to learn.microsoft.com and, for
+# cloud stages, the configured Microsoft tenant and service endpoints.
+
+# ---------------------------------------------------------------------------
+# Required accounts and service readiness (validated, not installed)
+# ---------------------------------------------------------------------------
+# - Power Platform authentication to the exact configured tenant/environment.
+# - Copilot Studio/Microsoft 365 Copilot/Cowork/Teams licensing and capacity
+#   appropriate to the selected platform and harness; GitHub Copilot harness
+#   requires allocated Copilot Credits.
+# - A browser identity in the same tenant with access to the authoring and test
+#   surfaces. Evaluation requires source-grounded evalData and a deployed agent.
+# - Build rights for agents, components, solutions, publish, pull, and export.
+# - SharePoint write/read-back rights plus the two configured document libraries
+#   and required writable metadata fields for Artifact Publisher.
+# - Human availability for classification/build reviews and cleanup consent.
+#
+# Optional/conditional software:
+# - Rights-aware Microsoft 365 or Office access for protected source documents.
+# - .NET 10 SDK remains installed if the layout engine must be rebuilt.
+# - No requests, pytest, OCR engine, LibreOffice, ImageMagick, or test framework
+#   is required by the packaged standard path; tests use unittest.
