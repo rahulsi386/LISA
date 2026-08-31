@@ -1,0 +1,23 @@
+{
+  "version": "1.0.0",
+  "custName": "Contoso Health",
+  "timeZone": "Asia/Kolkata",
+  "basePath": "%USERPROFILE%\\.scout\\LISA",
+  "knowledgeSources": [
+    {
+      "name": "Contoso Health Knowledge Source",
+      "path": "https://contoso.sharepoint.com/sites/contosohealth/IgBuoARgFiyOSbqUae0Cd2MdAZMd5iyvLalYyfuHKidPkPw?e=8i8B2s"
+    }
+  ],
+  "copilotStudio": {
+    "envUrl": "https://<your-environment>.crm.dynamics.com",
+    "envId": "1f001cb3-0001-e156-b569-00000000e40b"
+  },
+  "agentRegistry": {
+    "sharepoint": {
+      "siteUrl": "https://contoso.sharepoint.com/sites/contosohealth/",
+      "deployableAgentLibraryName": "Agent Library",
+      "agentArtifactLibraryName": "Agent Artifact"
+    }
+  }
+}
