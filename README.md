@@ -10,9 +10,10 @@ currently built and tested for use only with Microsoft Scout.** LISA can autonom
 requirements into designed and built Microsoft agent solutions while retaining explicit review and
 safety gates for consequential decisions and remote changes.
 
-**Current build scope:** LISA builds agents only in **Microsoft Copilot Studio**, using all three
-supported Copilot Studio harnesses: **Standard**, **GitHub Copilot**, and **Copilot chat**. For
-**Microsoft Cowork**, LISA builds **skills only**.
+> [!IMPORTANT]
+> **Current build scope:** LISA builds agents only in **Microsoft Copilot Studio**, using all three
+> supported Copilot Studio harnesses: **Standard**, **GitHub Copilot**, and **Copilot chat**. For
+> **Microsoft Cowork**, LISA builds **skills only**.
 
 This repository provides LISA as a suite of ten local Scout skills covering requirement analysis,
 solution design, agent building, evaluation, optimization, artifact generation, publication,
