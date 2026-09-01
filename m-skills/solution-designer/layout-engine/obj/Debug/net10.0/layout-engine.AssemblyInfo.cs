@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("SolutionDesigner.LayoutEngine")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+d26072b639c3977f560d133751859b5951570923")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+57ae4567d17c2f41012f48fc20528afbbe7130da")]
 [assembly: System.Reflection.AssemblyProductAttribute("SolutionDesigner.LayoutEngine")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SolutionDesigner.LayoutEngine")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
