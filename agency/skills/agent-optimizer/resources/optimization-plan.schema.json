@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://microsoft-scout.local/schemas/optimization-plan.schema.json",
+  "$id": "urn:lisa:schemas:optimization-plan:1.0",
   "title": "Agent optimization plan",
   "type": "object",
   "additionalProperties": false,
