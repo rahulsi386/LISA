@@ -5,7 +5,6 @@
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "runId", "generatedAt", "agent", "sourceEvaluation", "policy", "rounds", "deferredFindings"],
-  "additionalProperties": false,
   "properties": {
     "schemaVersion": {"const": "1.0"},
     "runId": {"type": "string", "pattern": "^OPT-[0-9]{8}-[0-9]{6}-[A-F0-9]{8}$"},
