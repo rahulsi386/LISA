@@ -32,5 +32,6 @@
         "--allow-unrestricted-file-access"
       ],
       "description": "Authenticated browser automation for LISA build, evaluation, optimization, and SharePoint publication stages (requires unrestricted local file access; run only in trusted workspaces)."
+    }
   }
 }
