@@ -33,6 +33,10 @@ class AgencyPluginTests(unittest.TestCase):
                 value = json.loads((PLUGIN_ROOT / relative_path).read_text(encoding="utf-8"))
                 self.assertIsInstance(value, dict)
 
+    def test_agency_manifest_declares_supported_engines(self) -> None:
+        manifest = json.loads((PLUGIN_ROOT / "agency.json").read_text(encoding="utf-8"))
+        self.assertEqual(["copilot", "claude"], manifest["engines"])
+
     def test_all_skills_are_registered_and_present(self) -> None:
         manifest = json.loads(
             (PLUGIN_ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
