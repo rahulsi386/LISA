@@ -91,7 +91,7 @@ def resolve_lisa_config(config_path: Path) -> LisaPaths:
     config = load_object(config_path)
     configured_base = config.get("basePath")
     if not isinstance(configured_base, str) or not configured_base.strip():
-        raise LisaConfigError("lisa-config.json must define a relative basePath")
+        raise LisaConfigError("lisa-config.json must define basePath")
     configured_path = Path(configured_base).expanduser()
     base = (
         configured_path.resolve()
