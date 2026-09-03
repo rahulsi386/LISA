@@ -8,7 +8,7 @@ omit workflow checkpointing, but its normal terminal artifact validation remains
 After a stage obtains its run ID:
 
 ```powershell
-python "<local-skills-root>\workflow_checkpoint.py" --config "<CONFIG>" start-stage --stage "<STAGE>" --stage-run-id "<RUN-ID>" --phase "<PHASE>" --unit-id "<UNIT>"
+python "<plugin-root>\skills\workflow_checkpoint.py" --config "<CONFIG>" start-stage --stage "<STAGE>" --stage-run-id "<RUN-ID>" --phase "<PHASE>" --unit-id "<UNIT>"
 ```
 
 At every durable phase or work-unit boundary:
