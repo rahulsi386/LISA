@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "1.0",
+  "skill": "agent-optimizer",
+  "stage": "optimization",
+  "rootFolder": "optimization",
+  "producesArtifacts": true,
+  "inputs": [
+    {"relativePath": "lisa-config.json", "required": true, "kind": "config"},
+    {"relativePath": "output/evaluation", "required": true, "kind": "directory"},
+    {"relativePath": "output/build/build-manifest.json", "required": false, "kind": "json"},
+    {"relativePath": "output/build/agent-build-handoff.json", "required": false, "kind": "json"}
+  ],
+  "resultSchema": "lifecycle-artifact-manifest.schema.json",
+  "runIdPattern": "^OPT-[0-9]{8}-[0-9]{6}-[A-F0-9]{8}$",
+  "allowedStatuses": ["complete", "blocked", "rolled-back"],
+  "manifest": "optimization-manifest.json",
+  "files": [
+    {"relativePath": "optimization-manifest.json", "required": true, "schema": "lifecycle-artifact-manifest.schema.json"},
+    {"relativePath": "optimization-plan.json", "required": true, "schema": "optimization-plan.schema.json"},
+    {"relativePath": "optimization-change-log.json", "required": true, "schema": "optimization-change-log.schema.json"},
+    {"relativePath": "optimization-run-report.md", "required": true, "schema": null},
+    {"relativePath": "instruction-audit.json", "required": true, "schema": null},
+    {"relativePath": "instruction-audit.md", "required": true, "schema": null}
+  ],
+  "directories": [
+    {"relativePath": "rounds", "required": true}
+  ],
+  "patterns": {
+    "roundDirectory": "^rounds/round-[0-9]{3}/$",
+    "beforeState": "^rounds/round-[0-9]{3}/before-state-manifest\\.json$",
+    "afterState": "^rounds/round-[0-9]{3}/after-state-manifest\\.json$",
+    "rollbackState": "^rounds/round-[0-9]{3}/rollback-state-manifest\\.json$",
+    "package": "^rounds/round-[0-9]{3}/snapshots/(before|after|rollback)/[a-z0-9]+(?:-[a-z0-9]+)*\\.zip$",
+    "evidence": "^rounds/round-[0-9]{3}/evidence/[a-z0-9]+(?:-[a-z0-9]+)*(?:\\.[a-z0-9]+)$"
+  },
+  "artifactRules": [
+    {
+      "pattern": "^rounds/round-[0-9]{3}/(before|after|rollback)-state-manifest\\.json$",
+      "schema": "optimization-state-manifest.schema.json"
+    }
+  ],
+  "forbiddenPathPatterns": [
+    "(?i)(^|/)(storage-state|storageState|cookies?|tokens?|credentials?)\\.(json|txt)$"
+  ]
+}

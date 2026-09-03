@@ -1,0 +1,99 @@
+{
+  "schema_version": "1.0",
+  "run_id": "RA-FIXTURE",
+  "findings": [
+    {
+      "finding_id": "REQ-AAAA000001",
+      "kind": "Explicit requirement",
+      "status": "Required",
+      "statement": "Users require grounded conversational answers.",
+      "confidence": "Confirmed",
+      "evidence": []
+    },
+    {
+      "finding_id": "REQ-BBBB000002",
+      "kind": "Explicit requirement",
+      "status": "Required",
+      "statement": "The solution requires a scheduled compliance check.",
+      "confidence": "Confirmed",
+      "evidence": []
+    },
+    {
+      "finding_id": "GAP-CCCC000003",
+      "kind": "Analyst-identified gap",
+      "status": "Not evidenced",
+      "statement": "The delivery channel is not evidenced.",
+      "confidence": "Missing",
+      "evidence": []
+    }
+  ],
+  "source_annotations": [
+    {
+      "source_id": "SRC-FIXTURE",
+      "role": "Requirements",
+      "classification": "Requirements narrative",
+      "finding_ids": [
+        "REQ-AAAA000001",
+        "REQ-BBBB000002"
+      ]
+    }
+  ],
+  "knowledge_sources": [
+    {
+      "name": "Policy",
+      "classification": "Confirmed Knowledge Source",
+      "location": "C:\\Requirements\\policy.pdf",
+      "source_id": "SRC-FIXTURE",
+      "hosting_type": "File",
+      "content_type": "PDF",
+      "structure": "Sections",
+      "grounding_purpose": "Answer policy questions",
+      "authority_priority": "Primary",
+      "access_behavior": "Read",
+      "ownership_freshness": "Current",
+      "intended_use": "Grounding",
+      "finding_ids": [
+        "REQ-AAAA000001"
+      ]
+    }
+  ],
+  "integrations": [],
+  "agentic_behaviors": [
+    {
+      "behavior": "Conversational",
+      "requirement_status": "Confirmed",
+      "evidenced_behavior": "Answer user questions.",
+      "trigger_decision_handoff": "User prompt",
+      "gaps": "None evidenced",
+      "finding_ids": [
+        "REQ-AAAA000001"
+      ]
+    },
+    {
+      "behavior": "Autonomous",
+      "requirement_status": "Confirmed",
+      "evidenced_behavior": "Run a scheduled compliance check.",
+      "trigger_decision_handoff": "Schedule",
+      "gaps": "None evidenced",
+      "finding_ids": [
+        "REQ-BBBB000002"
+      ]
+    }
+  ],
+  "sections": {
+    "Goals": [
+      {
+        "type": "paragraph",
+        "text": "Provide grounded answers.",
+        "finding_ids": [
+          "REQ-AAAA000001"
+        ]
+      }
+    ],
+    "Metrics and Baselines": [],
+    "Data Sources": [],
+    "Data Types": [],
+    "Solution Components": [],
+    "Scope and Delivery Phases": []
+  }
+}

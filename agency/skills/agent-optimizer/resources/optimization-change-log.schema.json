@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://microsoft-scout.local/schemas/optimization-change-log.schema.json",
+  "title": "Agent optimization change log",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "runId", "generatedAt", "rounds"],
+  "properties": {
+    "schemaVersion": {"const": "1.0"},
+    "runId": {
+      "type": "string",
+      "pattern": "^OPT-[0-9]{8}-[0-9]{6}-[A-F0-9]{8}$"
+    },
+    "generatedAt": {"type": "string", "format": "date-time"},
+    "rounds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "roundId",
+          "roundNumber",
+          "appliedAt",
+          "findingIds",
+          "changes",
+          "constructionVerification",
+          "requiredRetestScope",
+          "evaluatorRunId",
+          "outcome"
+        ],
+        "properties": {
+          "roundId": {"type": "string", "pattern": "^round-[0-9]{3}$"},
+          "roundNumber": {"type": "integer", "minimum": 1},
+          "appliedAt": {"type": ["string", "null"], "format": "date-time"},
+          "findingIds": {"type": "array", "items": {"type": "string"}},
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["changeId", "surface", "action", "before", "after"],
+              "properties": {
+                "changeId": {"type": "string", "pattern": "^CHG-[0-9]{3,}$"},
+                "surface": {"type": "string", "minLength": 1},
+                "action": {"type": "string", "minLength": 1},
+                "before": {},
+                "after": {}
+              }
+            }
+          },
+          "constructionVerification": {"type": "object"},
+          "requiredRetestScope": {
+            "type": "array",
+            "items": {"type": "string", "pattern": "^EVAL-[0-9]{3,}$"}
+          },
+          "evaluatorRunId": {
+            "type": ["string", "null"],
+            "pattern": "^EVAL-[0-9]{8}-[0-9]{6}-[A-F0-9]{8}$"
+          },
+          "outcome": {
+            "enum": ["planned", "blocked", "awaiting-retest", "accepted", "rejected-and-rolled-back"]
+          }
+        }
+      }
+    }
+  }
+}

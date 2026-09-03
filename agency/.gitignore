@@ -1,0 +1,7 @@
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.venv/
+skills/solution-designer/renderer/node_modules/
+skills/solution-designer/layout-engine/bin/
+skills/solution-designer/layout-engine/obj/

@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "1.0",
+  "skill": "agent-builder",
+  "stage": "build",
+  "rootFolder": "build",
+  "producesArtifacts": true,
+  "inputs": [
+    {"relativePath": "lisa-config.json", "required": true, "kind": "config"},
+    {"relativePath": "output/classification/complexity-classification_<timestamp>.json", "required": true, "kind": "json"},
+    {"relativePath": "output/design/current-design.json", "required": true, "kind": "json"},
+    {"relativePath": "output/design/artifacts/SA_<scenario-slug>.png", "required": true, "kind": "image"},
+    {"relativePath": "output/design/artifacts/SD_<scenario-slug>.png", "required": true, "kind": "image"}
+  ],
+  "resultSchema": "lifecycle-artifact-manifest.schema.json",
+  "runIdPattern": "^BLD-[0-9]{8}-[0-9]{6}-[A-F0-9]{8}$",
+  "allowedStatuses": ["complete", "blocked"],
+  "manifest": "build-manifest.json",
+  "files": [
+    {"relativePath": "build-manifest.json", "required": true, "schema": "lifecycle-artifact-manifest.schema.json"},
+    {"relativePath": "agent-build-handoff.json", "required": true, "schema": "agent-build-handoff.schema.json"},
+    {"relativePath": "agent-build-report.md", "required": true, "schema": null},
+    {"relativePath": "agent-instructions.md", "required": true, "schema": null},
+    {"relativePath": "agent-live-state.json", "required": true, "schema": "agent-live-state.schema.json"},
+    {"relativePath": "agent-solution-manifest.json", "required": true, "schema": "agent-solution-manifest.schema.json"}
+  ],
+  "directories": [
+    {"relativePath": "packages", "required": true},
+    {"relativePath": "evidence", "required": true},
+    {"relativePath": "project", "required": false}
+  ],
+  "patterns": {
+    "package": "^packages/[a-z0-9]+(?:-[a-z0-9]+)*\\.zip$",
+    "evidence": "^evidence/[a-z0-9]+(?:-[a-z0-9]+)*(?:\\.[a-z0-9]+)$",
+    "project": "^project/[A-Za-z0-9_.-]+/"
+  },
+  "forbiddenPathPatterns": [
+    "(?i)(^|/)(storage-state|storageState|cookies?|tokens?|credentials?)\\.(json|txt)$"
+  ]
+}

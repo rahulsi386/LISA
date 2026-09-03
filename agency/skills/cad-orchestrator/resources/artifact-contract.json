@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0",
+  "skill": "cad-orchestrator",
+  "stage": "orchestration",
+  "rootFolder": null,
+  "producesArtifacts": false,
+  "inputs": [
+    {"relativePath": "lisa-config.json", "required": true, "kind": "config"},
+    {"relativePath": "requirements", "required": true, "kind": "directory"},
+    {"relativePath": "output", "required": true, "kind": "directory"}
+  ],
+  "runIdPattern": null,
+  "allowedStatuses": ["running", "paused", "completed", "failed"],
+  "manifest": null,
+  "resultSchema": null,
+  "files": [],
+  "directories": [],
+  "patterns": {},
+  "forbiddenPathPatterns": []
+}

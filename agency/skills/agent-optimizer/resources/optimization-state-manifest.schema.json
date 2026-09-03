@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://microsoft-scout.local/schemas/optimization-state-manifest.schema.json",
+  "title": "Optimization round state manifest",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schemaVersion", "runId", "roundId", "state", "capturedAt", "agentId", "harness", "environmentId", "instructionSha256", "settingsSha256", "snapshotRelativePath", "components", "package"],
+  "properties": {
+    "schemaVersion": {"const": "1.0"},
+    "runId": {"type": "string", "pattern": "^OPT-[0-9]{8}-[0-9]{6}-[A-F0-9]{8}$"},
+    "roundId": {"type": "string", "pattern": "^round-[0-9]{3}$"},
+    "state": {"enum": ["before", "after", "rolled-back"]},
+    "capturedAt": {"type": "string", "format": "date-time"},
+    "agentId": {"type": "string", "minLength": 1},
+    "harness": {"enum": ["GitHub Copilot", "Standard", "Copilot chat"]},
+    "environmentId": {"type": "string", "minLength": 1},
+    "instructionSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "settingsSha256": {
+      "type": ["string", "null"],
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "snapshotRelativePath": {
+      "type": "string",
+      "pattern": "^rounds/round-[0-9]{3}/snapshots/(before|after|rollback)$"
+    },
+    "components": {"type": "array"},
+    "package": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "required": ["relativePath", "sha256", "bytes"],
+          "properties": {
+            "relativePath": {
+              "type": "string",
+              "pattern": "^rounds/round-[0-9]{3}/snapshots/(before|after|rollback)/.+$"
+            },
+            "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+            "bytes": {"type": "integer", "minimum": 0}
+          }
+        }
+      ]
+    }
+  }
+}

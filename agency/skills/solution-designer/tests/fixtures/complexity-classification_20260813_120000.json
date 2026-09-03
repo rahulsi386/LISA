@@ -1,0 +1,110 @@
+{
+  "complexity": "High",
+  "agentic_platform": "Hybrid",
+  "harness": "Standard",
+  "code_tier": "Pro-code",
+  "counts": {
+    "knowledge_sources": 2,
+    "easily_integrable_tools": 0,
+    "skills": 0,
+    "connected_agents": 0
+  },
+  "components": {
+    "agents": [
+      {
+        "name": "Conversational procurement guidance agent",
+        "evidence_ids": [
+          "REQ-001"
+        ]
+      }
+    ],
+    "knowledge_sources": [
+      {
+        "name": "Procurement procedure",
+        "evidence_ids": [
+          "REQ-002"
+        ]
+      },
+      {
+        "name": "Exemption form",
+        "evidence_ids": [
+          "REQ-003"
+        ]
+      }
+    ],
+    "tools": [
+      {
+        "name": "Custom procurement analytics service",
+        "integrability": "custom",
+        "implementation_tier": "Pro-code",
+        "implementation": "Custom analytical processing for matching and anomaly detection.",
+        "evidence_ids": [
+          "REQ-004"
+        ]
+      }
+    ],
+    "skills": [],
+    "connected_agents": [],
+    "automation": [
+      {
+        "name": "Daily anomaly monitoring",
+        "implementation_tier": "Pro-code",
+        "evidence_ids": [
+          "REQ-005"
+        ]
+      }
+    ],
+    "integration": [],
+    "data": [
+      {
+        "name": "Procurement operational data",
+        "implementation_tier": "Pro-code",
+        "evidence_ids": [
+          "REQ-006"
+        ]
+      }
+    ],
+    "authentication": {
+      "text": "Authentication is not specified.",
+      "evidence_ids": [
+        "REQ-007"
+      ]
+    },
+    "authorization": {
+      "text": "Human approval remains mandatory.",
+      "evidence_ids": [
+        "REQ-008"
+      ]
+    },
+    "security": {
+      "text": "None evidenced",
+      "evidence_ids": []
+    },
+    "governance": {
+      "text": "Legal and executive approval boundaries apply.",
+      "evidence_ids": [
+        "REQ-008"
+      ]
+    },
+    "communication_channels": [
+      {
+        "name": "Microsoft Teams",
+        "evidence_ids": []
+      },
+      {
+        "name": "Microsoft 365 Copilot",
+        "evidence_ids": []
+      }
+    ]
+  },
+  "reference_sources": [],
+  "justification": "A hybrid architecture is required for grounded guidance and custom analytics.",
+  "harness_rationale": "The standard harness supports grounded guidance.",
+  "billing_implication": "Standard licensing plus Azure consumption.",
+  "decisive_reasons": [
+    "Custom analytics requires pro-code."
+  ],
+  "gaps": [],
+  "input_analysis": "requirement-analysis.json",
+  "output_markdown": "complexity-classification.md"
+}

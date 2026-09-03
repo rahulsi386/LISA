@@ -1,0 +1,51 @@
+{
+  "scenarioSlug": "Service_Request_Agent",
+  "title": "Service Request Agent",
+  "summary": "An authenticated Copilot Studio agent grounds answers in SharePoint and creates approved service requests through an agent flow.",
+  "complexity": "Medium",
+  "coverage": {"nativeBuildPercent": 100, "pocDemonstrationPercent": 100, "unsupportedPercent": 0, "unknownPercent": 0},
+  "referenceKeys": [
+    "architecture-diagrams",
+    "copilot-studio-overview",
+    "copilot-studio-harnesses",
+    "copilot-studio-orchestration",
+    "copilot-studio-knowledge",
+    "copilot-studio-tools",
+    "copilot-studio-agent-flows",
+    "copilot-studio-authentication",
+    "power-platform-data-policies",
+    "power-platform-alm"
+  ],
+  "components": [
+    {"id": "employee", "name": "Employee", "layer": "users", "kind": "actor", "status": "existing", "implementationStatus": "existing", "buildOwner": "customer", "pocScope": "included", "productionStatus": "ready", "iconKey": "users", "description": "Authenticated requester"},
+    {"id": "teams", "name": "Microsoft Teams", "layer": "channels", "kind": "channel", "status": "existing", "implementationStatus": "existing", "buildOwner": "customer", "pocScope": "included", "productionStatus": "ready", "iconKey": "generic-component", "description": "Conversation channel"},
+    {"id": "entra", "name": "Microsoft Entra ID", "layer": "governance", "kind": "security", "status": "existing", "implementationStatus": "existing", "buildOwner": "customer", "pocScope": "included", "productionStatus": "ready", "iconKey": "entra-id", "description": "User authentication"},
+    {"id": "agent", "name": "Service Request Agent", "layer": "agent-platform", "kind": "agent", "status": "to-create", "implementationStatus": "configure", "buildOwner": "agent-builder", "pocScope": "included", "productionStatus": "requires-hardening", "iconKey": "copilot-studio", "description": "Instructions and generative orchestration"},
+    {"id": "knowledge", "name": "SharePoint knowledge", "layer": "agent-platform", "kind": "knowledge", "status": "existing", "implementationStatus": "existing", "buildOwner": "customer", "pocScope": "included", "productionStatus": "ready", "iconKey": "generic-component", "description": "Grounded policy content"},
+    {"id": "flow", "name": "Service request flow", "layer": "data-integration", "kind": "flow", "status": "to-create", "implementationStatus": "build", "buildOwner": "agent-builder", "pocScope": "included", "productionStatus": "requires-hardening", "iconKey": "power-automate", "description": "Creates approved requests"},
+    {"id": "dataverse", "name": "Microsoft Dataverse", "layer": "data-integration", "kind": "data", "status": "existing", "implementationStatus": "existing", "buildOwner": "customer", "pocScope": "included", "productionStatus": "ready", "iconKey": "dataverse", "description": "Service request records"},
+    {"id": "approver", "name": "Service Approver", "layer": "agent-platform", "kind": "human", "status": "existing", "implementationStatus": "existing", "buildOwner": "customer", "pocScope": "included", "productionStatus": "ready", "iconKey": "users", "description": "Binding approval decision"}
+  ],
+  "relationships": [
+    {"from": "employee", "to": "teams", "label": "Conversation", "style": "call", "implementationMode": "real"},
+    {"from": "teams", "to": "agent", "label": "Authenticated request", "style": "call", "implementationMode": "real"},
+    {"from": "agent", "to": "knowledge", "label": "Grounded retrieval", "style": "call", "implementationMode": "real"},
+    {"from": "agent", "to": "approver", "label": "Approval request", "style": "optional", "implementationMode": "real"},
+    {"from": "agent", "to": "flow", "label": "Approved action", "style": "call", "implementationMode": "real"},
+    {"from": "flow", "to": "dataverse", "label": "Create record", "style": "call", "implementationMode": "real"}
+  ],
+  "sequence": [
+    {"from": "employee", "to": "entra", "label": "Sign in", "type": "call", "implementationMode": "real", "capabilityId": null, "fragment": null},
+    {"from": "entra", "to": "employee", "label": "Issue authenticated session", "type": "response", "implementationMode": "real", "capabilityId": null, "fragment": null},
+    {"from": "employee", "to": "agent", "label": "Submit service request", "type": "call", "implementationMode": "real", "capabilityId": null, "fragment": null},
+    {"from": "agent", "to": "agent", "label": "Select knowledge and tools", "type": "self", "implementationMode": "real", "capabilityId": null, "fragment": null},
+    {"from": "agent", "to": "knowledge", "label": "Retrieve applicable policy", "type": "call", "implementationMode": "real", "capabilityId": null, "fragment": null},
+    {"from": "knowledge", "to": "agent", "label": "Return grounded content", "type": "response", "implementationMode": "real", "capabilityId": null, "fragment": null},
+    {"from": "agent", "to": "approver", "label": "Request approval", "type": "approval", "implementationMode": "real", "capabilityId": null, "fragment": "alt [approval required]"},
+    {"from": "approver", "to": "agent", "label": "Approve request", "type": "response", "implementationMode": "real", "capabilityId": null, "fragment": null},
+    {"from": "agent", "to": "flow", "label": "Create approved request", "type": "call", "implementationMode": "real", "capabilityId": null, "fragment": null},
+    {"from": "flow", "to": "dataverse", "label": "Write request record", "type": "call", "implementationMode": "real", "capabilityId": null, "fragment": null},
+    {"from": "dataverse", "to": "flow", "label": "Return request ID", "type": "response", "implementationMode": "real", "capabilityId": null, "fragment": null},
+    {"from": "agent", "to": "employee", "label": "Confirm request and ID", "type": "response", "implementationMode": "real", "capabilityId": null, "fragment": null}
+  ]
+}

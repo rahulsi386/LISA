@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "1.0",
+  "skill": "requirement-analyzer",
+  "stage": "analysis",
+  "rootFolder": "analysis",
+  "producesArtifacts": true,
+  "inputs": [
+    {"relativePath": "lisa-config.json", "required": true, "kind": "config"},
+    {"relativePath": "requirements", "required": true, "kind": "directory"}
+  ],
+  "runIdPattern": "^RA-[0-9]{8}_[0-9]{6}(?:_[0-9]{3})?-[A-F0-9]{8}$",
+  "allowedStatuses": ["prepared", "rendered_pending_validation", "validated"],
+  "manifest": "requirement-analysis_<timestamp>-manifest.json",
+  "resultSchema": "evidence-ledger.schema.json",
+  "files": [
+    {"relativePath": "requirement-analysis_<timestamp>.md", "required": true, "schema": null, "kind": "markdown"},
+    {"relativePath": "requirement-analysis_<timestamp>.json", "required": true, "schema": "evidence-ledger.schema.json", "kind": "json"},
+    {"relativePath": "requirement-analysis_<timestamp>-manifest.json", "required": true, "schema": null, "kind": "json"}
+  ],
+  "directories": [
+    {"relativePath": ".requirement-analyzer", "required": true}
+  ],
+  "patterns": {
+    "markdown": "^requirement-analysis_[0-9]{8}_[0-9]{6}(?:_[0-9]{3})?\\.md$",
+    "ledger": "^requirement-analysis_[0-9]{8}_[0-9]{6}(?:_[0-9]{3})?\\.json$",
+    "manifest": "^requirement-analysis_[0-9]{8}_[0-9]{6}(?:_[0-9]{3})?-manifest\\.json$"
+  },
+  "forbiddenPathPatterns": [
+    "(?i)(^|/)(cookies?|tokens?|credentials?|secrets?)\\.(json|txt)$"
+  ]
+}
