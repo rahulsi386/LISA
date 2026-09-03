@@ -1,0 +1,1079 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Complexity Classifier Model",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "research_stage",
+    "platform_assessment",
+    "requirement_assessments",
+    "agentic_platform",
+    "code_tier",
+    "harness",
+    "harness_rationale",
+    "billing_implication",
+    "delivery_assessment",
+    "components",
+    "solution_topology",
+    "flags",
+    "justification_paragraphs",
+    "gaps"
+  ],
+  "properties": {
+    "schema_version": {"const": "3.0"},
+    "run_id": {"type": "string", "minLength": 1},
+    "research_stage": {
+      "enum": ["copilot", "foundry", "agent-framework"]
+    },
+    "platform_assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "copilot_studio_fit",
+        "cowork_fit",
+        "foundry_fit",
+        "agent_framework_fit",
+        "unmet_requirements",
+        "decision_summary"
+      ],
+      "properties": {
+        "copilot_studio_fit": {
+          "enum": ["full", "partial", "not-fit"]
+        },
+        "cowork_fit": {
+          "enum": ["not-assessed", "full", "partial", "not-fit"]
+        },
+        "foundry_fit": {
+          "enum": ["not-assessed", "full", "partial", "not-fit"]
+        },
+        "agent_framework_fit": {
+          "enum": ["not-assessed", "full", "partial", "not-fit"]
+        },
+        "unmet_requirements": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/groundedItem"}
+        },
+        "decision_summary": {"type": "string", "minLength": 1}
+      }
+    },
+    "requirement_assessments": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "finding_id",
+          "status",
+          "platform",
+          "capability",
+          "reference_ids"
+        ],
+        "properties": {
+          "finding_id": {"type": "string", "minLength": 1},
+          "status": {"enum": ["satisfied", "unmet"]},
+          "platform": {
+            "enum": [
+              "Copilot Studio",
+              "Microsoft Cowork",
+              "Azure AI Foundry",
+              "Microsoft Agent Framework"
+            ]
+          },
+          "capability": {"type": "string", "minLength": 1},
+          "reference_ids": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
+    "agentic_platform": {
+      "enum": [
+        "Copilot Studio",
+        "Microsoft Cowork",
+        "Azure AI Foundry",
+        "Pro-code (Microsoft Agent Framework)",
+        "Hybrid"
+      ]
+    },
+    "code_tier": {"enum": ["No-code", "Low-code", "Pro-code"]},
+    "harness": {
+      "type": ["string", "null"],
+      "enum": ["GitHub Copilot", "Standard", "Copilot chat", "Cowork", null]
+    },
+    "harness_rationale": {"type": "string", "minLength": 1},
+    "billing_implication": {"type": "string", "minLength": 1},
+    "delivery_assessment": {"$ref": "#/$defs/deliveryAssessment"},
+    "components": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "agents",
+        "platform_capabilities",
+        "knowledge_sources",
+        "tools",
+        "skills",
+        "connected_agents",
+        "triggers",
+        "automation",
+        "integration",
+        "data",
+        "authentication",
+        "authorization",
+        "security_controls",
+        "governance_controls",
+        "alm",
+        "communication_channels"
+      ],
+      "properties": {
+        "agents": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/agent"}
+        },
+        "platform_capabilities": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/tieredItem"}
+        },
+        "knowledge_sources": {"$ref": "#/$defs/groundedItems"},
+        "tools": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/tool"}
+        },
+        "skills": {"$ref": "#/$defs/groundedItems"},
+        "connected_agents": {"$ref": "#/$defs/groundedItems"},
+        "triggers": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/trigger"}
+        },
+        "automation": {"$ref": "#/$defs/tieredItems"},
+        "integration": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/integrationItem"}
+        },
+        "data": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/tieredItem"}
+        },
+        "authentication": {"$ref": "#/$defs/identityComponent"},
+        "authorization": {"$ref": "#/$defs/identityComponent"},
+        "security_controls": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/tieredItem"}
+        },
+        "governance_controls": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/tieredItem"}
+        },
+        "alm": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/tieredItem"}
+        },
+        "communication_channels": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/groundedItem"}
+        }
+      }
+    },
+    "solution_topology": {"$ref": "#/$defs/solutionTopology"},
+    "flags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requires_pro_code",
+        "requires_custom_or_gateway",
+        "uses_low_code",
+        "autonomous_multistep",
+        "uses_memory"
+      ],
+      "properties": {
+        "requires_pro_code": {"type": "boolean"},
+        "requires_custom_or_gateway": {"type": "boolean"},
+        "uses_low_code": {"type": "boolean"},
+        "autonomous_multistep": {"type": "boolean"},
+        "uses_memory": {"type": "boolean"}
+      }
+    },
+    "justification_paragraphs": {
+      "type": "array",
+      "minItems": 2,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "gaps": {"$ref": "#/$defs/groundedItems"}
+  },
+  "$defs": {
+    "deliveryAssessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_tools",
+        "platform_gates",
+        "candidate_scores",
+        "solution_complexity",
+        "capabilities",
+        "poc_scope",
+        "production_readiness_gaps"
+      ],
+      "properties": {
+        "allowed_tools": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "Microsoft Copilot Studio",
+              "Microsoft 365 Copilot Chat",
+              "Microsoft Cowork",
+              "Microsoft Teams"
+            ]
+          }
+        },
+        "platform_gates": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/platformGate"}
+        },
+        "candidate_scores": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/candidateScore"}
+        },
+        "solution_complexity": {
+          "enum": ["Low", "Medium", "High", "Very High"]
+        },
+        "capabilities": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/capabilityAssessment"}
+        },
+        "poc_scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["objective", "included_capability_ids", "excluded_capability_ids", "test_data_boundary"],
+          "properties": {
+            "objective": {"type": "string", "minLength": 1},
+            "included_capability_ids": {"$ref": "#/$defs/stringIds"},
+            "excluded_capability_ids": {"$ref": "#/$defs/stringIds"},
+            "test_data_boundary": {"type": "string", "minLength": 1}
+          }
+        },
+        "production_readiness_gaps": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/productionGap"}
+        }
+      }
+    },
+    "platformGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["product", "gate", "result", "scope", "evidence_refs", "exception_owner", "blocker_for_poc"],
+      "properties": {
+        "product": {
+          "enum": ["Microsoft Copilot Studio", "Microsoft 365 Copilot Chat", "Microsoft Cowork", "Microsoft Teams"]
+        },
+        "gate": {
+          "enum": ["product-availability", "allowed-tool-compliance", "authentication", "least-privilege", "test-data", "action-control", "simulation-disclosure", "auditability", "builder-path"]
+        },
+        "result": {"enum": ["pass", "fail", "exception-required", "not-applicable"]},
+        "scope": {"type": "string", "minLength": 1},
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "exception_owner": {"type": ["string", "null"]},
+        "blocker_for_poc": {"type": "boolean"}
+      }
+    },
+    "candidateScore": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["product", "categories"],
+      "properties": {
+        "product": {
+          "enum": ["Microsoft Copilot Studio", "Microsoft 365 Copilot Chat", "Microsoft Cowork", "Microsoft Teams"]
+        },
+        "categories": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["category", "weight", "score", "evidence_refs", "confidence"],
+            "properties": {
+              "category": {
+                "enum": [
+                  "security-data-control",
+                  "safety-action-control",
+                  "functional-reasoning-fit",
+                  "data-tools-channels-integration",
+                  "reliability-observability-support",
+                  "engineering-alm-portability",
+                  "cost-capacity-effort",
+                  "availability-maturity-risk"
+                ]
+              },
+              "weight": {"type": "integer", "minimum": 1, "maximum": 100},
+              "score": {"type": "integer", "minimum": 0, "maximum": 5},
+              "evidence_refs": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {"type": "string", "minLength": 1}
+              },
+              "confidence": {"enum": ["high", "medium", "low"]}
+            }
+          }
+        }
+      }
+    },
+    "capabilityAssessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "requirement_ids",
+        "business_priority",
+        "business_weight",
+        "work_type",
+        "action_impact",
+        "dependencies",
+        "component_ids",
+        "implementation_status",
+        "coverage_factor",
+        "demonstration_factor",
+        "allowed_product",
+        "harness",
+        "implementation_method",
+        "supported_portion",
+        "unsupported_portion",
+        "poc_treatment",
+        "build_owner",
+        "build_contract",
+        "verification_method",
+        "confidence"
+      ],
+      "properties": {
+        "id": {"type": "string", "pattern": "^CAP-[A-Z0-9-]{2,40}$"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 160},
+        "requirement_ids": {"$ref": "#/$defs/stringIds"},
+        "business_priority": {"enum": ["must", "should", "could"]},
+        "business_weight": {"enum": [1, 3, 5]},
+        "work_type": {
+          "enum": [
+            "conventional-software",
+            "knowledge-retrieval",
+            "deterministic-execution",
+            "adaptive-reasoning",
+            "delegated-personal-work",
+            "custom-agent-software"
+          ]
+        },
+        "action_impact": {
+          "enum": ["read-only", "draft", "reversible-write", "high-impact-write", "irreversible-or-safety-critical"]
+        },
+        "dependencies": {"$ref": "#/$defs/stringIds"},
+        "component_ids": {"$ref": "#/$defs/stringIds"},
+        "implementation_status": {
+          "enum": ["native", "configurable", "partial", "demonstrable-only", "unsupported", "unknown"]
+        },
+        "coverage_factor": {"type": "number", "minimum": 0, "maximum": 1},
+        "demonstration_factor": {"type": "number", "minimum": 0, "maximum": 1},
+        "allowed_product": {
+          "type": ["string", "null"],
+          "enum": [
+            "Microsoft Copilot Studio",
+            "Microsoft 365 Copilot Chat",
+            "Microsoft Cowork",
+            "Microsoft Teams",
+            null
+          ]
+        },
+        "harness": {
+          "type": ["string", "null"],
+          "enum": ["GitHub Copilot", "Standard", "Copilot chat", "Cowork", null]
+        },
+        "implementation_method": {"type": "string", "minLength": 1, "maxLength": 240},
+        "supported_portion": {"type": "string", "minLength": 1, "maxLength": 400},
+        "unsupported_portion": {"type": ["string", "null"], "maxLength": 400},
+        "poc_treatment": {"enum": ["build", "configure", "simulate", "static-sample-data", "manual-handoff", "defer", "block"]},
+        "build_owner": {"enum": ["agent-builder", "customer", "external-team", "unassigned"]},
+        "build_contract": {"$ref": "#/$defs/buildContract"},
+        "verification_method": {"type": "string", "minLength": 1, "maxLength": 300},
+        "confidence": {"enum": ["high", "medium", "low"]}
+      }
+    },
+    "buildContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inputs",
+        "outputs",
+        "authentication",
+        "authorization",
+        "approval_required",
+        "side_effects",
+        "success_result",
+        "partial_result",
+        "error_result",
+        "timeout_behavior",
+        "idempotency",
+        "configuration_refs",
+        "simulation_disclosure"
+      ],
+      "properties": {
+        "inputs": {"type": "array", "items": {"$ref": "#/$defs/contractField"}},
+        "outputs": {"type": "array", "items": {"$ref": "#/$defs/contractField"}},
+        "authentication": {"type": "string", "minLength": 1},
+        "authorization": {"type": "string", "minLength": 1},
+        "approval_required": {"type": "boolean"},
+        "side_effects": {"type": "string", "minLength": 1},
+        "success_result": {"type": "string", "minLength": 1},
+        "partial_result": {"type": "string", "minLength": 1},
+        "error_result": {"type": "string", "minLength": 1},
+        "timeout_behavior": {"type": "string", "minLength": 1},
+        "idempotency": {"type": "string", "minLength": 1},
+        "configuration_refs": {"$ref": "#/$defs/stringIds"},
+        "simulation_disclosure": {"type": ["string", "null"]}
+      }
+    },
+    "contractField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "type", "required", "description"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "type": {"enum": ["string", "number", "integer", "boolean", "object", "array"]},
+        "required": {"type": "boolean"},
+        "description": {"type": "string", "minLength": 1}
+      }
+    },
+    "productionGap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "capability_ids", "description", "poc_impact", "production_impact", "owner"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^PRG-[A-Z0-9-]{2,40}$"},
+        "capability_ids": {"$ref": "#/$defs/stringIds"},
+        "description": {"type": "string", "minLength": 1},
+        "poc_impact": {"type": "string", "minLength": 1},
+        "production_impact": {"type": "string", "minLength": 1},
+        "owner": {"type": "string", "minLength": 1}
+      }
+    },
+    "stringIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "groundedItem": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "name",
+        "selection_basis",
+        "evidence_ids",
+        "reference_ids",
+        "source_refs"
+      ],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "selection_basis": {
+          "enum": [
+            "evidenced",
+            "configured",
+            "recommended",
+            "default",
+            "mandatory-baseline"
+          ]
+        },
+        "evidence_ids": {"$ref": "#/$defs/stringIds"},
+        "reference_ids": {"$ref": "#/$defs/stringIds"},
+        "source_refs": {"$ref": "#/$defs/stringIds"}
+      },
+      "anyOf": [
+        {"properties": {"evidence_ids": {"minItems": 1}}},
+        {"properties": {"reference_ids": {"minItems": 1}}},
+        {"properties": {"source_refs": {"minItems": 1}}}
+      ]
+    },
+    "groundedItems": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/groundedItem"}
+    },
+    "agent": {
+      "allOf": [
+        {"$ref": "#/$defs/groundedItem"},
+        {
+          "type": "object",
+          "required": ["behaviors"],
+          "properties": {
+            "behaviors": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "Conversational",
+                  "Autonomous",
+                  "Child-Agent/Multi-Agent",
+                  "Human Handoff/oversight"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "tieredItem": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        {"$ref": "#/$defs/groundedItem"},
+        {
+          "type": "object",
+          "required": ["implementation_tier"],
+          "properties": {
+            "implementation_tier": {
+              "enum": ["No-code", "Low-code", "Pro-code"]
+            }
+          }
+        }
+      ]
+    },
+    "tieredItems": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/tieredItem"}
+    },
+    "tool": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        {"$ref": "#/$defs/tieredItem"},
+        {
+          "type": "object",
+          "required": [
+            "integrability",
+            "implementation",
+            "creation_method"
+          ],
+          "properties": {
+            "integrability": {
+              "enum": ["easily-integrable", "custom"]
+            },
+            "implementation": {"type": "string", "minLength": 1},
+            "creation_method": {
+              "enum": [
+                "Native action",
+                "Connector",
+                "Plugin",
+                "Agent flow",
+                "Power Automate workflow",
+                "MCP server",
+                "Custom connector",
+                "Custom API",
+                "Other"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "trigger": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        {"$ref": "#/$defs/tieredItem"},
+        {
+          "type": "object",
+          "required": ["trigger_type", "mechanism", "agent_names"],
+          "properties": {
+            "trigger_type": {
+              "enum": ["user", "scheduled", "event", "other"]
+            },
+            "mechanism": {"type": "string", "minLength": 1}
+            ,
+            "agent_names": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      ]
+    },
+    "integrationItem": {
+      "allOf": [
+        {"$ref": "#/$defs/tieredItem"},
+        {
+          "type": "object",
+          "required": ["method", "integrability"],
+          "properties": {
+            "method": {
+              "enum": [
+                "Native connector",
+                "Plugin",
+                "Microsoft Graph",
+                "Dataverse",
+                "Power Automate",
+                "Custom connector",
+                "Custom API",
+                "MCP",
+                "Gateway",
+                "Other"
+              ]
+            },
+            "integrability": {
+              "enum": ["easily-integrable", "custom"]
+            }
+          }
+        }
+      ]
+    },
+    "identityComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform",
+        "tool",
+        "configuration",
+        "selection_basis",
+        "evidence_ids",
+        "reference_ids",
+        "source_refs"
+      ],
+      "properties": {
+        "platform": {"type": "string", "minLength": 1},
+        "tool": {"type": "string", "minLength": 1},
+        "configuration": {"type": "string", "minLength": 1},
+        "selection_basis": {
+          "enum": [
+            "evidenced",
+            "configured",
+            "recommended",
+            "default",
+            "mandatory-baseline"
+          ]
+        },
+        "evidence_ids": {"$ref": "#/$defs/stringIds"},
+        "reference_ids": {"$ref": "#/$defs/stringIds"},
+        "source_refs": {"$ref": "#/$defs/stringIds"}
+      },
+      "anyOf": [
+        {"properties": {"evidence_ids": {"minItems": 1}}},
+        {"properties": {"reference_ids": {"minItems": 1}}},
+        {"properties": {"source_refs": {"minItems": 1}}}
+      ]
+    },
+    "architecturalPrinciple": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dimension", "decision", "implementation", "reference_ids"],
+      "properties": {
+        "dimension": {
+          "enum": ["reusable", "modular", "reliable", "secure", "scalable"]
+        },
+        "decision": {"type": "string", "minLength": 1},
+        "implementation": {"type": "string", "minLength": 1},
+        "reference_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "topologyGrounding": {
+      "type": "object",
+      "required": ["evidence_ids", "reference_ids", "source_refs"],
+      "properties": {
+        "evidence_ids": {"$ref": "#/$defs/stringIds"},
+        "reference_ids": {"$ref": "#/$defs/stringIds"},
+        "source_refs": {"$ref": "#/$defs/stringIds"}
+      },
+      "anyOf": [
+        {"properties": {"evidence_ids": {"minItems": 1}}},
+        {"properties": {"reference_ids": {"minItems": 1}}},
+        {"properties": {"source_refs": {"minItems": 1}}}
+      ]
+    },
+    "topologyComponent": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        {"$ref": "#/$defs/topologyGrounding"},
+        {
+          "type": "object",
+          "required": [
+            "id",
+            "name",
+            "category",
+            "component_type",
+            "product_service",
+            "role",
+            "hosting_runtime",
+            "deployment_boundary",
+            "lifecycle",
+            "environment_scope",
+            "inventory_names",
+            "reliability",
+            "scalability",
+            "security"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{1,62}$"
+            },
+            "name": {"type": "string", "minLength": 1, "maxLength": 120},
+            "category": {
+              "enum": [
+                "actor",
+                "channel",
+                "agent",
+                "agent-platform",
+                "knowledge-source",
+                "tool",
+                "automation",
+                "integration",
+                "data-source",
+                "data-store",
+                "external-system",
+                "identity",
+                "security",
+                "governance",
+                "alm",
+                "monitoring",
+                "human-approval"
+              ]
+            },
+            "component_type": {
+              "enum": [
+                "human",
+                "configurable",
+                "deployable",
+                "managed-service",
+                "external"
+              ]
+            },
+            "product_service": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 160
+            },
+            "role": {"type": "string", "minLength": 1, "maxLength": 300},
+            "hosting_runtime": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "deployment_boundary": {
+              "enum": [
+                "user",
+                "channel",
+                "microsoft-365-tenant",
+                "power-platform-environment",
+                "azure-subscription",
+                "external-system"
+              ]
+            },
+            "lifecycle": {
+              "enum": ["existing", "configure", "build", "recommended"]
+            },
+            "environment_scope": {
+              "enum": ["user", "shared", "dev-test-prod", "external"]
+            },
+            "inventory_names": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {"type": "string", "minLength": 1}
+            },
+            "reliability": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            "scalability": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            "security": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            }
+          }
+        }
+      ]
+    },
+    "topologyRelationship": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        {"$ref": "#/$defs/topologyGrounding"},
+        {
+          "type": "object",
+          "required": [
+            "id",
+            "source_id",
+            "target_id",
+            "relationship_type",
+            "interaction",
+            "direction",
+            "integration_method",
+            "protocol",
+            "data_flow",
+            "access",
+            "authentication",
+            "synchronous",
+            "failure_behavior"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^rel-[a-z0-9][a-z0-9-]{1,62}$"
+            },
+            "source_id": {"type": "string", "minLength": 1},
+            "target_id": {"type": "string", "minLength": 1},
+            "relationship_type": {
+              "enum": [
+                "communicates",
+                "publishes-to",
+                "hosts",
+                "authenticates",
+                "authorizes",
+                "retrieves",
+                "invokes",
+                "triggers",
+                "reads",
+                "writes",
+                "integrates",
+                "approves",
+                "protects",
+                "governs",
+                "deploys",
+                "monitors",
+                "responds"
+              ]
+            },
+            "interaction": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 42
+            },
+            "direction": {
+              "enum": ["unidirectional", "bidirectional"]
+            },
+            "integration_method": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "protocol": {"type": "string", "minLength": 1, "maxLength": 100},
+            "data_flow": {"type": "string", "minLength": 1, "maxLength": 240},
+            "access": {
+              "enum": ["none", "read", "write", "read-write", "execute"]
+            },
+            "authentication": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "synchronous": {"type": "boolean"},
+            "failure_behavior": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            }
+          }
+        }
+      ]
+    },
+    "trustBoundary": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        {"$ref": "#/$defs/topologyGrounding"},
+        {
+          "type": "object",
+          "required": [
+            "id",
+            "name",
+            "boundary_type",
+            "component_ids",
+            "controls"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^trust-[a-z0-9][a-z0-9-]{1,62}$"
+            },
+            "name": {"type": "string", "minLength": 1, "maxLength": 120},
+            "boundary_type": {
+              "enum": [
+                "tenant",
+                "environment",
+                "network",
+                "external",
+                "identity",
+                "data"
+              ]
+            },
+            "component_ids": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"type": "string", "minLength": 1}
+            },
+            "controls": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      ]
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "purpose",
+        "component_ids",
+        "promotion_via",
+        "reference_ids"
+      ],
+      "properties": {
+        "name": {"enum": ["Development", "Test", "Production"]},
+        "purpose": {"type": "string", "minLength": 1, "maxLength": 200},
+        "component_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "promotion_via": {"type": "string", "minLength": 1, "maxLength": 200},
+        "reference_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "sequenceFlow": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        {"$ref": "#/$defs/topologyGrounding"},
+        {
+          "type": "object",
+          "required": [
+            "id",
+            "order",
+            "phase",
+            "source_id",
+            "target_id",
+            "action",
+            "message_type",
+            "condition"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^seq-[a-z0-9][a-z0-9-]{1,62}$"
+            },
+            "order": {"type": "integer", "minimum": 1, "maximum": 99},
+            "phase": {
+              "enum": [
+                "Authentication",
+                "Request",
+                "Orchestration",
+                "Grounding",
+                "Action",
+                "Automation",
+                "Human decision",
+                "Response",
+                "Monitoring",
+                "Error handling"
+              ]
+            },
+            "source_id": {"type": "string", "minLength": 1},
+            "target_id": {"type": "string", "minLength": 1},
+            "action": {"type": "string", "minLength": 1, "maxLength": 56},
+            "message_type": {
+              "enum": ["call", "response", "self", "approval"]
+            },
+            "condition": {"type": ["string", "null"], "maxLength": 34}
+          }
+        }
+      ]
+    },
+    "solutionTopology": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "architecture_summary",
+        "architecture_principles",
+        "components",
+        "relationships",
+        "trust_boundaries",
+        "environments",
+        "sequence_flows"
+      ],
+      "properties": {
+        "architecture_summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "architecture_principles": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "items": {"$ref": "#/$defs/architecturalPrinciple"}
+        },
+        "components": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 30,
+          "items": {"$ref": "#/$defs/topologyComponent"}
+        },
+        "relationships": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 60,
+          "items": {"$ref": "#/$defs/topologyRelationship"}
+        },
+        "trust_boundaries": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "items": {"$ref": "#/$defs/trustBoundary"}
+        },
+        "environments": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {"$ref": "#/$defs/environment"}
+        },
+        "sequence_flows": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 30,
+          "items": {"$ref": "#/$defs/sequenceFlow"}
+        }
+      }
+    }
+  }
+}

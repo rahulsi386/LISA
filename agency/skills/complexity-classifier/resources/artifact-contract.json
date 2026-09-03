@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "1.0",
+  "skill": "complexity-classifier",
+  "stage": "classification",
+  "rootFolder": "classification",
+  "producesArtifacts": true,
+  "inputs": [
+    {"relativePath": "lisa-config.json", "required": true, "kind": "config"},
+    {"relativePath": "output/analysis/requirement-analysis_<timestamp>.json", "required": true, "kind": "json"}
+  ],
+  "runIdPattern": "^CC-[0-9]{8}_[0-9]{6}(?:_[0-9]{3})?-[A-F0-9]{8}$",
+  "allowedStatuses": ["prepared", "research-expanded", "validated"],
+  "manifest": "classification-manifest.json",
+  "resultSchema": "classification-output.schema.json",
+  "files": [
+    {"relativePath": "classification-manifest.json", "required": true, "schema": "classification-manifest.schema.json", "kind": "json"},
+    {"relativePath": "complexity-classification_<timestamp>.md", "required": true, "schema": null, "kind": "markdown"},
+    {"relativePath": "complexity-classification_<timestamp>.json", "required": true, "schema": "classification-output.schema.json", "kind": "json"}
+  ],
+  "directories": [
+    {"relativePath": ".complexity-classifier", "required": true}
+  ],
+  "patterns": {
+    "manifest": "^classification-manifest\\.json$",
+    "markdown": "^complexity-classification_[0-9]{8}_[0-9]{6}(?:_[0-9]{3})?\\.md$",
+    "json": "^complexity-classification_[0-9]{8}_[0-9]{6}(?:_[0-9]{3})?\\.json$"
+  },
+  "forbiddenPathPatterns": [
+    "(?i)(^|/)(cookies?|tokens?|credentials?|secrets?)\\.(json|txt)$"
+  ]
+}

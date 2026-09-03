@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://microsoft-scout.local/schemas/evaluation-rubric.schema.json",
+  "title": "Agent evaluation rubric",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schemaVersion", "scale", "gates", "overall"],
+  "properties": {
+    "schemaVersion": {"const": "1.0"},
+    "scale": {
+      "type": "object",
+      "required": ["0", "1", "2", "3", "4"],
+      "additionalProperties": {"type": "string", "minLength": 1}
+    },
+    "gates": {
+      "type": "object",
+      "required": ["LLM_AS_JUDGE", "TOOL_USE", "GROUNDEDNESS", "REGRESSION"],
+      "additionalProperties": {
+        "type": "object",
+        "required": ["criteria", "passThreshold"],
+        "properties": {
+          "criteria": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "passThreshold": {"type": "number", "minimum": 0, "maximum": 4}
+        }
+      }
+    },
+    "overall": {
+      "type": "object",
+      "required": ["minimumAverage", "criticalTestsMustPass", "blockedCriticalTestsFail", "notRunCriticalTestsFail", "automaticFailures"],
+      "properties": {
+        "minimumAverage": {"type": "number", "minimum": 0, "maximum": 4},
+        "criticalTestsMustPass": {"type": "boolean"},
+        "blockedCriticalTestsFail": {"type": "boolean"},
+        "notRunCriticalTestsFail": {"type": "boolean"},
+        "automaticFailures": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}

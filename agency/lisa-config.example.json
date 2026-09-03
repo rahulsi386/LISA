@@ -1,0 +1,18 @@
+{
+  "version": "1.0.0",
+  "custName": "<customer-name>",
+  "timeZone": "UTC",
+  "basePath": ".",
+  "knowledgeSources": [],
+  "copilotStudio": {
+    "envUrl": "https://<your-environment>.crm.dynamics.com",
+    "envId": "<environment-id>"
+  },
+  "agentRegistry": {
+    "sharepoint": {
+      "siteUrl": "https://<tenant>.sharepoint.com/sites/<site>/",
+      "deployableAgentLibraryName": "Agent Library",
+      "agentArtifactLibraryName": "Agent Artifact"
+    }
+  }
+}

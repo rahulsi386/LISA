@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin.json",
+  "name": "lisa",
+  "description": "LISA Copilot Agent Delivery lifecycle for analyzing requirements, designing, building, evaluating, optimizing, generating, and publishing Microsoft agent solutions.",
+  "keywords": [
+    "lisa",
+    "copilot-studio",
+    "agent-delivery",
+    "evaluation",
+    "microsoft-365"
+  ],
+  "skills": [
+    "./skills/cad-orchestrator/SKILL.md",
+    "./skills/requirement-analyzer/SKILL.md",
+    "./skills/complexity-classifier/SKILL.md",
+    "./skills/solution-designer/SKILL.md",
+    "./skills/agent-builder/SKILL.md",
+    "./skills/agent-evaluator/SKILL.md",
+    "./skills/agent-optimizer/SKILL.md",
+    "./skills/artifact-generator/SKILL.md",
+    "./skills/artifact-publisher/SKILL.md",
+    "./skills/postpublish-cleanup/SKILL.md"
+  ],
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@0.0.80",
+        "--browser",
+        "msedge",
+        "--allow-unrestricted-file-access"
+      ],
+      "description": "Authenticated browser automation for LISA build, evaluation, optimization, and SharePoint publication stages (requires unrestricted local file access; run only in trusted workspaces)."
+  }
+}

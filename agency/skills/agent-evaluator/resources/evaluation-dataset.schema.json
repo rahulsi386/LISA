@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://microsoft-scout.local/schemas/evaluation-dataset.schema.json",
+  "title": "Agent evaluation dataset",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schemaVersion", "generatedAt", "testSetId", "sources", "testCases"],
+  "properties": {
+    "schemaVersion": {"const": "1.0"},
+    "generatedAt": {"type": "string", "format": "date-time"},
+    "testSetId": {"type": "string", "minLength": 1},
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "type", "location", "authority"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "type": {"type": "string", "minLength": 1},
+          "location": {"type": "string", "minLength": 1},
+          "authority": {"enum": ["authoritative", "supplemental"]}
+        }
+      }
+    },
+    "testCases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "id",
+          "scenario",
+          "sourceType",
+          "sourceReferences",
+          "userPrompt",
+          "expectedResponse",
+          "expectedBehavior",
+          "responseAssertions",
+          "expectedKnowledgeSources",
+          "requiredTools",
+          "prohibitedBehavior",
+          "evaluationTypes",
+          "severity",
+          "passCriteria",
+          "failCriteria"
+        ],
+        "properties": {
+          "id": {"type": "string", "pattern": "^EVAL-[0-9]{3,}$"},
+          "scenario": {"type": "string", "minLength": 1},
+          "sourceType": {"type": "string", "minLength": 1},
+          "sourceReferences": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["source", "locator"],
+              "properties": {
+                "source": {"type": "string", "minLength": 1},
+                "locator": {"type": "string", "minLength": 1}
+              }
+            }
+          },
+          "userPrompt": {"type": "string", "minLength": 1},
+          "expectedResponse": {"type": "string", "minLength": 1},
+          "expectedBehavior": {"type": "string", "minLength": 1},
+          "responseAssertions": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "expectedKnowledgeSources": {"type": "array", "items": {"type": "string"}},
+          "requiredTools": {"type": "array", "items": {"type": "string"}},
+          "prohibitedBehavior": {"type": "array", "items": {"type": "string"}},
+          "evaluationTypes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "enum": ["LLM_AS_JUDGE", "TOOL_USE", "GROUNDEDNESS", "REGRESSION"]
+            }
+          },
+          "severity": {"enum": ["critical", "high", "medium", "low"]},
+          "passCriteria": {"type": "string", "minLength": 1},
+          "failCriteria": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "solution-designer-renderer",
+  "version": "1.0.0",
+  "description": "Deterministic offline SVG rasterizer for solution-designer.",
+  "main": "render.js",
+  "scripts": {
+    "test": "node render.js --self-test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "dependencies": {
+    "@resvg/resvg-js": "2.6.2",
+    "pngjs": "7.0.0"
+  }
+}

@@ -1,0 +1,288 @@
+{
+  "schema_version": "1.0",
+  "refresh_ttl_hours": 24,
+  "verified_at": "2026-08-13T16:00:00+05:30",
+  "verification_max_age_days": 30,
+  "references": [
+    {
+      "id": "copilot-studio-fundamentals",
+      "title": "What is Microsoft Copilot Studio?",
+      "url": "https://learn.microsoft.com/en-us/microsoft-copilot-studio/fundamentals-what-is-copilot-studio",
+      "domain": "copilot-studio",
+      "required": true
+    },
+    {
+      "id": "copilot-studio-harnesses",
+      "title": "Agent harnesses in Microsoft Copilot Studio",
+      "url": "https://learn.microsoft.com/en-us/microsoft-copilot-studio/harnesses-overview",
+      "domain": "harness",
+      "required": true
+    },
+    {
+      "id": "copilot-studio-orchestration",
+      "title": "Use generative orchestration",
+      "url": "https://learn.microsoft.com/en-us/microsoft-copilot-studio/advanced-generative-actions",
+      "domain": "orchestration",
+      "required": true
+    },
+    {
+      "id": "copilot-studio-knowledge",
+      "title": "Knowledge sources in Microsoft Copilot Studio",
+      "url": "https://learn.microsoft.com/en-us/microsoft-copilot-studio/knowledge-copilot-studio",
+      "domain": "knowledge",
+      "required": true
+    },
+    {
+      "id": "copilot-studio-tools",
+      "title": "Add tools to custom agents",
+      "url": "https://learn.microsoft.com/en-us/microsoft-copilot-studio/add-tools-custom-agent",
+      "domain": "tools",
+      "required": true
+    },
+    {
+      "id": "copilot-studio-connected-agents",
+      "title": "Connect and use other agents",
+      "url": "https://learn.microsoft.com/en-us/microsoft-copilot-studio/authoring-add-other-agents",
+      "domain": "connected-agents",
+      "required": true
+    },
+    {
+      "id": "copilot-studio-autonomous",
+      "title": "Autonomous agents in Copilot Studio",
+      "url": "https://learn.microsoft.com/en-us/microsoft-copilot-studio/guidance/autonomous-agents",
+      "domain": "autonomous",
+      "required": true
+    },
+    {
+      "id": "copilot-studio-authentication",
+      "title": "Configure user authentication",
+      "url": "https://learn.microsoft.com/en-us/microsoft-copilot-studio/configuration-end-user-authentication",
+      "domain": "authentication",
+      "required": true
+    },
+    {
+      "id": "copilot-studio-channels",
+      "title": "Publish agents to channels",
+      "url": "https://learn.microsoft.com/en-us/microsoft-copilot-studio/publication-fundamentals-publish-channels",
+      "domain": "channels",
+      "required": true
+    },
+    {
+      "id": "power-automate",
+      "title": "Get started with Power Automate",
+      "url": "https://learn.microsoft.com/en-us/power-automate/getting-started",
+      "domain": "automation",
+      "required": true
+    },
+    {
+      "id": "dataverse",
+      "title": "What is Microsoft Dataverse?",
+      "url": "https://learn.microsoft.com/en-us/power-apps/maker/data-platform/data-platform-intro",
+      "domain": "data",
+      "required": true
+    },
+    {
+      "id": "power-platform-dlp",
+      "title": "Data loss prevention policies",
+      "url": "https://learn.microsoft.com/en-us/power-platform/admin/wp-data-loss-prevention",
+      "domain": "governance",
+      "required": true
+    },
+    {
+      "id": "managed-environments",
+      "title": "Managed Environments overview",
+      "url": "https://learn.microsoft.com/en-us/power-platform/admin/managed-environment-overview",
+      "domain": "governance",
+      "required": true
+    },
+    {
+      "id": "copilot-studio-guidance",
+      "title": "Microsoft Copilot Studio guidance",
+      "url": "https://learn.microsoft.com/en-us/microsoft-copilot-studio/guidance/",
+      "domain": "best-practices",
+      "required": true
+    },
+    {
+      "id": "power-platform-well-architected",
+      "title": "Power Platform Well-Architected",
+      "url": "https://learn.microsoft.com/en-us/power-platform/well-architected/",
+      "domain": "reference-architecture",
+      "required": true
+    },
+    {
+      "id": "m365-declarative-agents",
+      "title": "Declarative agents for Microsoft 365 Copilot",
+      "url": "https://learn.microsoft.com/en-us/microsoft-365-copilot/extensibility/overview-declarative-agent",
+      "domain": "m365",
+      "required": true
+    },
+    {
+      "id": "copilot-studio-teams-channel",
+      "title": "Connect and configure an agent for Teams",
+      "url": "https://learn.microsoft.com/en-us/microsoft-copilot-studio/publication-add-bot-to-microsoft-teams",
+      "domain": "channels",
+      "required": true
+    },
+    {
+      "id": "cowork-overview",
+      "title": "Copilot Cowork overview",
+      "url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/cowork/",
+      "domain": "cowork",
+      "required": true
+    },
+    {
+      "id": "cowork-get-started",
+      "title": "Get started with Copilot Cowork",
+      "url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/cowork/get-started",
+      "domain": "cowork",
+      "required": true
+    },
+    {
+      "id": "cowork-customize",
+      "title": "Customize Copilot Cowork",
+      "url": "https://learn.microsoft.com/en-us/microsoft-365/copilot/cowork/cowork-customize",
+      "domain": "cowork",
+      "required": true
+    },
+    {
+      "id": "power-platform-alm",
+      "title": "Application lifecycle management overview",
+      "url": "https://learn.microsoft.com/en-us/power-platform/alm/overview-alm",
+      "domain": "governance",
+      "required": true
+    },
+    {
+      "id": "foundry-agent-service",
+      "title": "Azure AI Foundry Agent Service overview",
+      "url": "https://learn.microsoft.com/en-us/azure/ai-foundry/agents/overview",
+      "domain": "pro-code",
+      "required": true
+    },
+    {
+      "id": "azure-rbac",
+      "title": "What is Azure role-based access control?",
+      "url": "https://learn.microsoft.com/en-us/azure/role-based-access-control/overview",
+      "domain": "identity",
+      "required": true
+    },
+    {
+      "id": "azure-policy",
+      "title": "Azure Policy overview",
+      "url": "https://learn.microsoft.com/en-us/azure/governance/policy/overview",
+      "domain": "governance",
+      "required": true
+    },
+    {
+      "id": "azure-monitor",
+      "title": "Azure Monitor overview",
+      "url": "https://learn.microsoft.com/en-us/azure/azure-monitor/fundamentals/overview",
+      "domain": "reliability",
+      "required": true
+    },
+    {
+      "id": "azure-pipelines",
+      "title": "What is Azure Pipelines?",
+      "url": "https://learn.microsoft.com/en-us/azure/devops/pipelines/get-started/what-is-azure-pipelines",
+      "domain": "alm",
+      "required": true
+    },
+    {
+      "id": "agent-framework",
+      "title": "Microsoft Agent Framework overview",
+      "url": "https://learn.microsoft.com/en-us/agent-framework/overview/agent-framework-overview",
+      "domain": "pro-code",
+      "required": true
+    },
+    {
+      "id": "entra-id",
+      "title": "What is Microsoft Entra ID?",
+      "url": "https://learn.microsoft.com/en-us/entra/fundamentals/whatis",
+      "domain": "identity",
+      "required": true
+    },
+    {
+      "id": "microsoft-purview",
+      "title": "Learn about Microsoft Purview",
+      "url": "https://learn.microsoft.com/en-us/purview/purview",
+      "domain": "security",
+      "required": true
+    },
+    {
+      "id": "copilot-studio-sharepoint",
+      "title": "Add SharePoint as a knowledge source",
+      "url": "https://learn.microsoft.com/en-us/microsoft-copilot-studio/knowledge-add-sharepoint",
+      "domain": "knowledge",
+      "required": false
+    },
+    {
+      "id": "power-platform-custom-connectors",
+      "title": "Custom connectors overview",
+      "url": "https://learn.microsoft.com/en-us/connectors/custom-connectors/",
+      "domain": "integration",
+      "required": false
+    },
+    {
+      "id": "azure-functions",
+      "title": "Azure Functions overview",
+      "url": "https://learn.microsoft.com/en-us/azure/azure-functions/functions-overview",
+      "domain": "supporting-service",
+      "required": false
+    },
+    {
+      "id": "azure-api-management",
+      "title": "Azure API Management key concepts",
+      "url": "https://learn.microsoft.com/en-us/azure/api-management/api-management-key-concepts",
+      "domain": "integration",
+      "required": false
+    },
+    {
+      "id": "azure-key-vault",
+      "title": "Azure Key Vault overview",
+      "url": "https://learn.microsoft.com/en-us/azure/key-vault/general/overview",
+      "domain": "security",
+      "required": false
+    },
+    {
+      "id": "application-insights",
+      "title": "Application Insights overview",
+      "url": "https://learn.microsoft.com/en-us/azure/azure-monitor/app/app-insights-overview",
+      "domain": "reliability",
+      "required": false
+    },
+    {
+      "id": "copilot-studio-analytics",
+      "title": "Analyze agent performance and usage",
+      "url": "https://learn.microsoft.com/en-us/microsoft-copilot-studio/analytics-overview",
+      "domain": "reliability",
+      "required": false
+    },
+    {
+      "id": "power-platform-pipelines",
+      "title": "Pipelines in Power Platform",
+      "url": "https://learn.microsoft.com/en-us/power-platform/alm/pipelines",
+      "domain": "alm",
+      "required": false
+    },
+    {
+      "id": "azure-sql-database",
+      "title": "Azure SQL Database overview",
+      "url": "https://learn.microsoft.com/en-us/azure/azure-sql/database/sql-database-paas-overview",
+      "domain": "data",
+      "required": false
+    },
+    {
+      "id": "azure-storage",
+      "title": "Introduction to Azure Storage",
+      "url": "https://learn.microsoft.com/en-us/azure/storage/common/storage-introduction",
+      "domain": "data",
+      "required": false
+    },
+    {
+      "id": "azure-cosmos-db",
+      "title": "Azure Cosmos DB introduction",
+      "url": "https://learn.microsoft.com/en-us/azure/cosmos-db/introduction",
+      "domain": "data",
+      "required": false
+    }
+  ]
+}

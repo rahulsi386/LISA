@@ -1,0 +1,12 @@
+{
+  "engines": {
+    "agency": ">=1.0.0"
+  },
+  "category": "developer-tools",
+  "description": "LISA Copilot Agent Delivery lifecycle for Microsoft agent solutions.",
+  "governance": {
+    "layer": 4,
+    "certification": "draft",
+    "organization": "Microsoft"
+  }
+}

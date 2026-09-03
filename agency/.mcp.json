@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@0.0.80",
+        "--browser",
+        "msedge",
+        "--allow-unrestricted-file-access"
+      ],
+      "description": "Authenticated browser automation for LISA build, evaluation, optimization, and SharePoint publication stages (requires unrestricted local file access; run only in trusted workspaces)."
+    }
+  }
+}

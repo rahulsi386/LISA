@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "1.0",
+  "skill": "solution-designer",
+  "stage": "design",
+  "rootFolder": "design",
+  "producesArtifacts": true,
+  "inputs": [
+    {"relativePath": "lisa-config.json", "required": true, "kind": "config"},
+    {"relativePath": "output/classification/complexity-classification_<timestamp>.json", "required": true, "kind": "json"}
+  ],
+  "runIdPattern": "^SDR-[0-9]{8}_[0-9]{6}-[A-F0-9]{8}-[A-F0-9]{8}$",
+  "allowedStatuses": ["prepared", "awaiting_inspection", "validated"],
+  "manifest": "current-design.json",
+  "resultSchema": "design-model.schema.json",
+  "files": [
+    {"relativePath": "current-design.json", "required": true, "schema": null, "kind": "json"},
+    {"relativePath": "artifacts/design-model.json", "required": true, "schema": "design-model.schema.json", "kind": "json"},
+    {"relativePath": "artifacts/SA_<scenario-slug>.svg", "required": true, "schema": null, "kind": "image"},
+    {"relativePath": "artifacts/SA_<scenario-slug>.png", "required": true, "schema": null, "kind": "image"},
+    {"relativePath": "artifacts/SD_<scenario-slug>.svg", "required": true, "schema": null, "kind": "image"},
+    {"relativePath": "artifacts/SD_<scenario-slug>.png", "required": true, "schema": null, "kind": "image"}
+  ],
+  "directories": [
+    {"relativePath": ".solution-designer", "required": true},
+    {"relativePath": "artifacts", "required": true}
+  ],
+  "patterns": {
+    "architecture": "^SA_[A-Za-z0-9_]+\\.(svg|png)$",
+    "sequence": "^SD_[A-Za-z0-9_]+\\.(svg|png)$"
+  },
+  "forbiddenPathPatterns": [
+    "(?i)(^|/)(browser[-_ ]?storage|cookies?|tokens?|credentials?|secrets?)\\.(json|txt)$"
+  ]
+}
