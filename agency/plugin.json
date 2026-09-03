@@ -1,0 +1,14 @@
+{
+  "name": "lisa",
+  "description": "LISA Copilot Agent Delivery lifecycle for analyzing requirements, designing, building, evaluating, optimizing, generating, and publishing Microsoft agent solutions.",
+  "version": "1.0.0",
+  "keywords": [
+    "lisa",
+    "copilot-studio",
+    "agent-delivery",
+    "evaluation",
+    "microsoft-365"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
+}

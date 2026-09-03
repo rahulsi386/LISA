@@ -9,18 +9,7 @@
     "evaluation",
     "microsoft-365"
   ],
-  "skills": [
-    "./skills/cad-orchestrator/SKILL.md",
-    "./skills/requirement-analyzer/SKILL.md",
-    "./skills/complexity-classifier/SKILL.md",
-    "./skills/solution-designer/SKILL.md",
-    "./skills/agent-builder/SKILL.md",
-    "./skills/agent-evaluator/SKILL.md",
-    "./skills/agent-optimizer/SKILL.md",
-    "./skills/artifact-generator/SKILL.md",
-    "./skills/artifact-publisher/SKILL.md",
-    "./skills/postpublish-cleanup/SKILL.md"
-  ],
+  "skills": "./skills/",
   "mcpServers": {
     "playwright": {
       "command": "npx",

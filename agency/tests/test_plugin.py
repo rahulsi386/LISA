@@ -25,6 +25,7 @@ class AgencyPluginTests(unittest.TestCase):
     def test_manifests_parse(self) -> None:
         for relative_path in (
             "agency.json",
+            "plugin.json",
             ".mcp.json",
             ".claude-plugin/plugin.json",
             "lisa-config.example.json",
@@ -38,13 +39,18 @@ class AgencyPluginTests(unittest.TestCase):
         self.assertEqual(["copilot", "claude"], manifest["engines"])
 
     def test_all_skills_are_registered_and_present(self) -> None:
-        manifest = json.loads(
-            (PLUGIN_ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
-        )
-        registered = tuple(
-            Path(value).parent.name for value in manifest.get("skills", [])
-        )
-        self.assertEqual(EXPECTED_SKILLS, registered)
+        for relative_path in ("plugin.json", ".claude-plugin/plugin.json"):
+            with self.subTest(relative_path=relative_path):
+                manifest = json.loads(
+                    (PLUGIN_ROOT / relative_path).read_text(encoding="utf-8")
+                )
+                self.assertEqual("lisa", manifest["name"])
+                self.assertEqual("./skills/", manifest["skills"])
+
+        registered = {
+            path.parent.name for path in (PLUGIN_ROOT / "skills").glob("*/SKILL.md")
+        }
+        self.assertEqual(set(EXPECTED_SKILLS), registered)
         for name in EXPECTED_SKILLS:
             skill_path = PLUGIN_ROOT / "skills" / name / "SKILL.md"
             self.assertTrue(skill_path.is_file(), skill_path)

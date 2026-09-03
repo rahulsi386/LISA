@@ -7,7 +7,8 @@ unchanged.
 ## Included components
 
 - `agency.json`: Agency engine, category, and draft governance metadata.
-- `.claude-plugin/plugin.json`: Agency/Claude-format plugin manifest registering all ten skills.
+- `plugin.json`: Copilot plugin manifest registering the shared skills directory.
+- `.claude-plugin/plugin.json`: Claude-compatible manifest registering the same skills directory.
 - `.mcp.json`: Playwright MCP server used by browser-dependent stages.
 - `skills/`: all LISA skills, shared Python modules, contracts, resources, tests, renderer, fonts,
   icons, and the packaged Windows layout engine.
@@ -87,8 +88,9 @@ The equivalent Copilot engine can be used when supported by the installed Agency
 agency copilot --plugin local:.
 ```
 
-Ask Agency to run the `cad-orchestrator` skill for the complete workflow, or invoke an individual
-registered skill. A host may display the namespaced command as `/lisa:cad-orchestrator`. The
+Invoke `/cad-orchestrator` in Copilot or `/lisa:cad-orchestrator` in Claude for the complete
+workflow, and include the full path to `lisa-config.json` when it is outside the current project.
+Use `/skills info cad-orchestrator` in Copilot to verify discovery before starting. The
 orchestrator executes sibling skills in the current session and falls back to reading their
 packaged `SKILL.md` files when the engine does not expose direct skill invocation.
 
