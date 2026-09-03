@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://microsoft-scout.local/schemas/workflow-checkpoint.schema.json",
+  "$id": "urn:lisa:schemas:workflow-checkpoint:1.0",
   "title": "LISA workflow checkpoint",
   "type": "object",
   "additionalProperties": false,
