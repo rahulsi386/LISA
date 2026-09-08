@@ -9,7 +9,7 @@
     "evaluation",
     "microsoft-365"
   ],
-  "skills": "./skills/",
+  "skills": ["./skills/"],
   "mcpServers": {
     "playwright": {
       "command": "npx",
