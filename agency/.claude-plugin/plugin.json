@@ -21,6 +21,33 @@
         "--allow-unrestricted-file-access"
       ],
       "description": "Authenticated browser automation for LISA build, evaluation, optimization, and SharePoint publication stages (requires unrestricted local file access; run only in trusted workspaces)."
+    },
+    "azure-mcp": {
+      "type": "stdio",
+      "command": "dotnet",
+      "args": [
+        "dnx",
+        "Azure.Mcp@*",
+        "--no-http-cache",
+        "--verbosity",
+        "quiet",
+        "--",
+        "server",
+        "start",
+        "--mode",
+        "namespace"
+      ],
+      "env": {
+        "AZURE_MCP_COLLECT_TELEMETRY": "false",
+        "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
+        "DOTNET_NOLOGO": "true"
+      },
+      "description": "Full Azure MCP toolset for LISA. Use the intended Azure tenant and subscription, and obtain explicit approval before cloud changes."
+    },
+    "microsoft-learn": {
+      "type": "http",
+      "url": "https://learn.microsoft.com/api/mcp",
+      "description": "Official Microsoft Learn documentation search, article retrieval, and code samples through the remote HTTPS MCP endpoint."
     }
   }
 }

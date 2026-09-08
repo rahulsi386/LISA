@@ -2,7 +2,8 @@
 param(
     [Parameter(Mandatory = $true)][string]$ModelPath,
     [Parameter(Mandatory = $true)][Alias('OutputDirectory')][string]$TempOutputPath,
-    [ValidateRange(60, 7200)][int]$DeadlineSeconds = 3600
+    [ValidateRange(60, 7200)][int]$DeadlineSeconds = 3600,
+    [ValidateSet('Balanced', 'Spacious', 'Wide')][string]$LayoutProfile
 )
 
 Set-StrictMode -Version Latest
@@ -13,6 +14,7 @@ $phase = [ordered]@{ generate = 0; validate = 0; render = 0; total = 0 }
 $status = 'failed'
 $errors = New-Object System.Collections.Generic.List[string]
 $candidateFailures = New-Object System.Collections.Generic.List[string]
+$attemptedLayoutProfiles = New-Object System.Collections.Generic.List[string]
 $selectedLayoutProfile = ''
 $resourceRoot = Join-Path (Split-Path $PSScriptRoot -Parent) 'resources'
 $referenceManifestPath = Join-Path $resourceRoot 'reference-manifest.json'
@@ -54,6 +56,7 @@ $model = Get-Content -LiteralPath $ModelPath -Raw | ConvertFrom-Json
 $slug = [string]$model.scenarioSlug
 $saPath = Join-Path $designDirectory "SA_$slug.svg"
 $sdPath = Join-Path $designDirectory "SD_$slug.svg"
+$previewPath = Join-Path $designDirectory 'preview.html'
 $validationPath = Join-Path $designDirectory 'validation-report.json'
 $renderPath = Join-Path $designDirectory 'render-report.json'
 
@@ -62,13 +65,16 @@ $cacheAge = ([DateTimeOffset]::Now - [DateTimeOffset]::Parse([string]$referenceM
 $cacheStatus = if ($cacheAge -le [double]$referenceManifest.maxAgeDays) { 'packaged-fresh' } else { 'packaged-stale' }
 
 try {
-    $layoutProfiles = if (@($model.components).Count -gt 18) {
+    $layoutProfiles = if ($LayoutProfile) {
+        @($LayoutProfile)
+    } elseif (@($model.components).Count -gt 18) {
         @('Spacious', 'Wide', 'Balanced')
     } else {
         @('Balanced', 'Spacious', 'Wide')
     }
     foreach ($profile in $layoutProfiles) {
         Assert-Budget
+        $attemptedLayoutProfiles.Add($profile)
         try {
             $mark = $stopwatch.ElapsedMilliseconds
             & (Join-Path $PSScriptRoot 'New-Diagrams.ps1') -ModelPath $ModelPath -OutputDirectory $designDirectory -LayoutProfile $profile | Out-Null
@@ -113,6 +119,10 @@ if (-not (Test-Path -LiteralPath $pngSa -PathType Leaf) -or -not (Test-Path -Lit
     $status = 'failed'
     if (-not $errors.Contains('One or both PNG renders are missing.')) { $errors.Add('One or both PNG renders are missing.') }
 }
+if (-not (Test-Path -LiteralPath $previewPath -PathType Leaf) -or (Get-Item -LiteralPath $previewPath).Length -eq 0) {
+    $status = 'failed'
+    $errors.Add('The HTML preview is missing or empty.')
+}
 if ($stopwatch.Elapsed.TotalSeconds -ge $DeadlineSeconds) {
     $status = 'failed'
     $errors.Add("Run exceeded the $DeadlineSeconds-second generation deadline.")
@@ -125,6 +135,8 @@ $report = [ordered]@{
     validationIssues = @($errors)
     cacheStatus = $cacheStatus
     selectedLayoutProfile = $selectedLayoutProfile
+    attemptedLayoutProfiles = @($attemptedLayoutProfiles)
+    candidateSelection = 'Structural feasibility only; visual inspection is required before publication.'
     candidateFailures = @($candidateFailures)
     timingsMs = $phase
     completedUnderEightMinutes = ($stopwatch.Elapsed.TotalSeconds -lt 480)
@@ -136,6 +148,7 @@ $report = [ordered]@{
     sequenceDiagram = $sdPath
     solutionArchitecturePng = $pngSa
     sequenceDiagramPng = $pngSd
+    htmlPreview = $previewPath
     diagramManifest = (Join-Path $designDirectory 'diagram-manifest.json')
     validationReport = $validationPath
     renderReport = $renderPath

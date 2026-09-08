@@ -105,6 +105,60 @@ class AgencyPluginTests(unittest.TestCase):
         )
         self.assertEqual(".", config["basePath"])
 
+    def test_both_engines_register_matching_mcp_servers(self) -> None:
+        copilot = json.loads((PLUGIN_ROOT / "plugin.json").read_text(encoding="utf-8"))
+        self.assertEqual("./.mcp.json", copilot["mcpServers"])
+        shared = json.loads((PLUGIN_ROOT / ".mcp.json").read_text(encoding="utf-8"))["mcpServers"]
+        claude = json.loads(
+            (PLUGIN_ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
+        )["mcpServers"]
+        self.assertEqual({"playwright", "azure-mcp", "microsoft-learn"}, set(shared))
+        self.assertEqual(set(shared), set(claude))
+        for name in shared:
+            with self.subTest(server=name):
+                normalized = [{key: value for key, value in item.items() if key != "type"}
+                              for item in (shared[name], claude[name])]
+                self.assertEqual(normalized[0], normalized[1])
+                self.assertEqual(shared[name].get("type", "stdio"), claude[name].get("type", "stdio"))
+
+    def test_azure_mcp_uses_latest_stable_dotnet_and_keeps_confirmation(self) -> None:
+        servers = json.loads((PLUGIN_ROOT / ".mcp.json").read_text(encoding="utf-8"))["mcpServers"]
+        azure = servers["azure-mcp"]
+        self.assertEqual("stdio", azure["type"])
+        self.assertEqual("dotnet", azure["command"])
+        self.assertEqual(
+            ["dnx", "Azure.Mcp@*", "--no-http-cache", "--verbosity", "quiet",
+             "--", "server", "start", "--mode", "namespace"],
+            azure["args"],
+        )
+        for option in ("--prerelease", "--ignore-failed-sources", "--read-only", "--namespace",
+                       "--tool", "--disable-user-confirmation", "--enable-insecure-transports"):
+            self.assertNotIn(option, azure["args"])
+        self.assertFalse(any(value.startswith("--dangerously-") for value in azure["args"]))
+        self.assertEqual({
+            "AZURE_MCP_COLLECT_TELEMETRY": "false",
+            "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
+            "DOTNET_NOLOGO": "true",
+        }, azure["env"])
+
+    def test_learn_mcp_uses_the_official_anonymous_remote_endpoint(self) -> None:
+        servers = json.loads((PLUGIN_ROOT / ".mcp.json").read_text(encoding="utf-8"))["mcpServers"]
+        learn = servers["microsoft-learn"]
+        self.assertEqual("http", learn["type"])
+        self.assertEqual("https://learn.microsoft.com/api/mcp", learn["url"])
+        self.assertEqual({"type", "url", "description"}, set(learn))
+
+    def test_prerequisites_cover_bundled_mcp_runtime(self) -> None:
+        script = (PLUGIN_ROOT / "scripts" / "Test-LisaAgencyPrerequisites.ps1").read_text(encoding="utf-8")
+        self.assertIn("-Command 'node'", script)
+        self.assertIn("-Minimum ([version]'20.0.0')", script)
+        self.assertIn("-Command 'dotnet'", script)
+        self.assertIn("-Minimum ([version]'10.0.100')", script)
+        self.assertIn("foreach ($command in 'npm', 'npx')", script)
+        self.assertIn("[switch]$RequireAzureMcp", script)
+        self.assertIn("Get-Command 'az'", script)
+        self.assertNotIn("& az login", script)
+
 
 if __name__ == "__main__":
     unittest.main()

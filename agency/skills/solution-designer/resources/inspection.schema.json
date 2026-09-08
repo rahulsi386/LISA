@@ -14,6 +14,11 @@
     "summary"
   ],
   "properties": {
+    "revision": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2
+    },
     "run_id": {
       "type": "string",
       "minLength": 1
@@ -49,7 +54,8 @@
         "label_collisions",
         "sequence_phase_grouping",
         "truncation",
-        "overall_composition"
+        "overall_composition",
+        "html_preview"
       ],
       "properties": {
         "spelling": {
@@ -62,13 +68,16 @@
           "type": "boolean"
         },
         "connector_visibility": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Main-flow, supporting, and return paths are readable and unambiguous. Arrowheads meet the intended components; shared routes must not obscure opposing directions or suggest a false dependency."
         },
         "primary_agent_hierarchy": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "When an agent is evidenced, the primary agent has clear visual emphasis. When no agent is required, no agent or conversational channel has been invented."
         },
         "empty_space": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Canvas dimensions reflect the whole topology and measured content. No empty product/layer slots or full-width single control cards; intentional route clearance and whitespace remain balanced."
         },
         "label_collisions": {
           "type": "boolean"
@@ -80,7 +89,12 @@
           "type": "boolean"
         },
         "overall_composition": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "The architecture is an open, requirements-driven composition with an evidenced main path, nearby supporting branches, and compact controls where applicable. Stage and row counts suit the actual graph, not a mandatory set of layer containers or a four-stage template. The sequence remains professionally aligned and readable."
+        },
+        "html_preview": {
+          "type": "boolean",
+          "description": "The local HTML preview displays both matching PNGs, offers working SVG and PNG links, and supports fit-width and actual-size viewing without external assets or a web server."
         }
       }
     },
