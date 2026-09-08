@@ -41,11 +41,10 @@ class AgencyPluginTests(unittest.TestCase):
     def test_all_skills_are_registered_and_present(self) -> None:
         for relative_path in ("plugin.json", ".claude-plugin/plugin.json"):
             with self.subTest(relative_path=relative_path):
-                manifest = json.loads(
-                    (PLUGIN_ROOT / relative_path).read_text(encoding="utf-8")
-                )
+                manifest = json.loads((PLUGIN_ROOT / relative_path).read_text(encoding="utf-8"))
                 self.assertEqual("lisa", manifest["name"])
-                self.assertEqual("./skills/", manifest["skills"])
+                expected_skills = ["./skills/"] if relative_path.startswith(".claude-plugin/") else "./skills/"
+                self.assertEqual(expected_skills, manifest["skills"])
 
         registered = {
             path.parent.name for path in (PLUGIN_ROOT / "skills").glob("*/SKILL.md")
