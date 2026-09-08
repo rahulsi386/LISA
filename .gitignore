@@ -1,3 +1,6 @@
 # .NET build outputs
 **/bin/
 **/obj/
+
+# Local browser automation output
+**/.playwright-mcp/

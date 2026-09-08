@@ -7,6 +7,7 @@ import argparse
 import copy
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -38,7 +39,11 @@ FAST_PATH = SCRIPTS / "Invoke-FastPath.ps1"
 # Liveness guard only: terminates a hung diagram-generation subprocess.
 # This is not an execution budget and does not bound how long generation may legitimately take.
 GENERATION_TIMEOUT_SECONDS = 3600
+LAYOUT_PROFILES = ("Balanced", "Spacious", "Wide")
+DEFAULT_MAX_REPAIR_ATTEMPTS = 2
+INSPECTION_CLOCK_SKEW_SECONDS = 30
 FINAL_ARTIFACT_NAMES = {
+    "preview.html",
     "design-model.json",
     "diagram-manifest.json",
     "validation-report.json",
@@ -299,53 +304,31 @@ def _summary_text(classification: dict[str, Any], title: str) -> str:
     )[:300]
 
 
-def _primary_agent_name(value: str) -> str:
-    words = value.split()
-    if words and words[0].casefold() == "conversational":
-        words = words[1:]
-    shortened = " ".join(words).strip()
-    if len(shortened) <= 36:
-        return shortened.title() if shortened.islower() else shortened
-    essential = [
-        word
-        for word in words
-        if word.casefold() not in {"assistant", "conversational", "solution"}
-    ]
-    shortened = " ".join(essential[:4]).strip()
-    return (shortened or "Agentic Solution")[:36]
+def _diagram_title(value: str) -> str:
+    title = re.sub(r"^conversational\s+", "", value.strip(), flags=re.IGNORECASE)
+    return (title.title() if title.islower() else title)[:80] or "Agentic Solution"
 
 
-def _icon_for(name: str, kind: str, platform: str) -> str:
-    lower = name.casefold()
-    mappings = [
-        ("copilot studio", "copilot-studio"),
-        ("power automate", "power-automate"),
-        ("dataverse", "dataverse"),
-        ("entra", "entra-id"),
-        ("foundry", "foundry-agent-service"),
-        ("azure monitor", "azure-monitor"),
-        ("sql", "sql-database"),
-        ("storage", "storage-account"),
-        ("api management", "api-management"),
-        ("function", "function-apps"),
-        ("key vault", "key-vault"),
-        ("application insights", "azure-monitor"),
-        ("purview", "azure-information-protection"),
-        ("power platform", "power-platform"),
-        ("microsoft 365", "agent-365"),
-        ("custom connector", "custom-connector"),
-        ("user", "users"),
-        ("approver", "users"),
-    ]
-    for token, key in mappings:
-        if token in lower:
+def _product_identity(value: str) -> str:
+    # Exact aliases tolerate namespace separators, not arbitrary substring matches.
+    return re.sub(r"[\W_]+", "", value.casefold())
+
+
+def _icon_for(
+    name: str, kind: str, platform: str, product_service: str = ""
+) -> str:
+    manifest = _json_load(ICON_MANIFEST)
+    keys = {item["key"] for item in manifest["icons"]}
+    aliases: dict[str, str] = {}
+    for alias, key in manifest["aliases"].items():
+        normalized = _product_identity(alias)
+        if key not in keys or (normalized in aliases and aliases[normalized] != key):
+            raise DesignerError(f"Invalid or ambiguous product icon alias: {alias}")
+        aliases[normalized] = key
+    for identity in (product_service, name):
+        key = aliases.get(_product_identity(identity))
+        if key:
             return key
-    if kind == "agent":
-        if platform in {"Copilot Studio", "Hybrid"}:
-            return "copilot-studio"
-        if platform == "Azure AI Foundry":
-            return "foundry-agent-service"
-        return "generic-component"
     if kind in {"actor", "human"}:
         return "users"
     return "generic-component"
@@ -569,9 +552,10 @@ def _build_design_model_from_topology(
             "pocScope": poc_scope,
             "productionStatus": production_status,
             "iconKey": _icon_for(
-                f"{item['name']} {item['product_service']}",
+                item["name"],
                 category_kind[item["category"]],
                 platform,
+                product_service=item["product_service"],
             ),
             "description": (
                 f"{item['role']} Runtime: {item['hosting_runtime']}. "
@@ -726,8 +710,8 @@ def _build_design_model(
         if agent_items
         else "Agentic Solution"
     )
-    primary_name = _primary_agent_name(source_agent_name)
-    title = primary_name[:80]
+    primary_name = source_agent_name
+    title = _diagram_title(primary_name)
     platform = classification["agentic_platform"]
     existing_ids: set[str] = set()
     components: list[dict[str, Any]] = []
@@ -1204,7 +1188,17 @@ def _build_design_model(
 
 
 def _resource_hashes() -> dict[str, str]:
+    for icon in _json_load(ICON_MANIFEST)["icons"]:
+        icon_path = RESOURCES / icon["file"]
+        if not _is_within(icon_path, RESOURCES / "icons"):
+            raise DesignerError(f"Icon asset escapes the packaged icon directory: {icon['key']}")
+        _assert_no_links(icon_path)
+        if not icon_path.is_file():
+            raise DesignerError(f"Packaged icon is missing: {icon['key']}")
+        if icon.get("sha256") and _sha256_file(icon_path) != icon["sha256"]:
+            raise DesignerError(f"Packaged icon provenance hash mismatch: {icon['key']}")
     files = [
+        RESOURCES / "artifact-contract.json",
         MODEL_SCHEMA,
         INSPECTION_SCHEMA,
         REFERENCE_MANIFEST,
@@ -1262,9 +1256,41 @@ def _cache_valid(
         if not artifact.exists() or _sha256_file(artifact) != expected_hash:
             return False
     inspection = cache_dir / "inspection-report.json"
-    if not inspection.exists() or _json_load(inspection).get("status") != "passed":
+    if not inspection.exists():
+        return False
+    try:
+        value = _json_load(inspection)
+        _schema_validate(value, INSPECTION_SCHEMA, "Cached inspection")
+        if value["status"] != "passed" or value["issues"] or not all(value["checks"].values()):
+            return False
+        model = _json_load(cache_dir / "design-model.json")
+        slug = model["scenarioSlug"]
+        if (
+            value["solution_architecture_png_sha256"] != _sha256_file(cache_dir / f"SA_{slug}.png")
+            or value["sequence_png_sha256"] != _sha256_file(cache_dir / f"SD_{slug}.png")
+            or _json_load(cache_dir / "generation-report.json").get("structuralValidation") != "passed"
+        ):
+            return False
+    except (DesignerError, OSError, KeyError, TypeError):
         return False
     return True
+
+
+def _inspection_template(run_id: str, revision: int = 0) -> dict[str, Any]:
+    return {
+        "run_id": run_id,
+        "revision": revision,
+        "inspected_at": "",
+        "status": "failed",
+        "solution_architecture_png_sha256": "0" * 64,
+        "sequence_png_sha256": "0" * 64,
+        "checks": {
+            name: False
+            for name in _json_load(INSPECTION_SCHEMA)["properties"]["checks"]["required"]
+        },
+        "issues": ["Inspection not completed."],
+        "summary": "Inspect both rendered PNGs and the HTML preview before finalization.",
+    }
 
 
 def _prepare(args: argparse.Namespace) -> int:
@@ -1317,28 +1343,7 @@ def _prepare(args: argparse.Namespace) -> int:
     cache_hit = _cache_valid(
         cache_dir, cache_key, expected_cache_artifacts
     )
-    inspection_template = {
-        "run_id": run_id,
-        "inspected_at": "",
-        "status": "failed",
-        "solution_architecture_png_sha256": "0" * 64,
-        "sequence_png_sha256": "0" * 64,
-        "checks": {
-            "spelling": False,
-            "clipping": False,
-            "icon_correctness": False,
-            "connector_visibility": False,
-            "primary_agent_hierarchy": False,
-            "empty_space": False,
-            "label_collisions": False,
-            "sequence_phase_grouping": False,
-            "truncation": False,
-            "overall_composition": False,
-        },
-        "issues": ["Inspection not completed."],
-        "summary": "Inspect both rendered PNGs before finalization.",
-    }
-    _atomic_write_json(inspection_template_path, inspection_template)
+    _atomic_write_json(inspection_template_path, _inspection_template(run_id))
     run = {
         "schema_version": "1.0",
         "skill_version": VERSION,
@@ -1361,6 +1366,10 @@ def _prepare(args: argparse.Namespace) -> int:
         "expected_cache_artifacts": sorted(expected_cache_artifacts),
         "resource_hashes": _resource_hashes(),
         "model_ms": round((time.time() - started_epoch) * 1000),
+        "max_repair_attempts": getattr(args, "max_repair_attempts", DEFAULT_MAX_REPAIR_ATTEMPTS),
+        "repair_attempts": [],
+        "revision": 0,
+        "attempted_layout_profiles": [],
         "status": "prepared",
     }
     _atomic_write_json(run_path, run)
@@ -1383,6 +1392,70 @@ def _prepare(args: argparse.Namespace) -> int:
 
 def _load_run(path: Path, expected_status: set[str]) -> dict[str, Any]:
     run = _json_load(path)
+    required = {
+        "run_id", "started_epoch", "started_at_local", "temp_output_path",
+        "design_root", "run_directory", "stage_parent", "stage_design",
+        "model_path", "model_sha256", "classification_path", "classification_sha256",
+        "inspection_template_path", "cache_key", "cache_directory", "status",
+    }
+    missing = sorted(required - set(run))
+    if missing:
+        raise DesignerError("Run metadata is incomplete: " + ", ".join(missing))
+    path_keys = {
+        "temp_output_path", "design_root", "run_directory", "stage_parent",
+        "stage_design", "model_path", "classification_path",
+        "inspection_template_path", "cache_directory",
+    }
+    if any(not isinstance(run[key], str) or not run[key] for key in path_keys):
+        raise DesignerError("Run metadata contains an invalid path")
+    if (
+        not re.fullmatch(r"SDR-[0-9]{8}_[0-9]{6}-[A-F0-9]{8}-[A-F0-9]{8}", str(run["run_id"]))
+        or any(
+            not re.fullmatch(r"[a-f0-9]{64}", str(run[key]))
+            for key in ("cache_key", "classification_sha256", "model_sha256")
+        )
+    ):
+        raise DesignerError("Run identity or canonical hash metadata is invalid")
+    maximum = run.get("max_repair_attempts", DEFAULT_MAX_REPAIR_ATTEMPTS)
+    revision = run.get("revision", 0)
+    attempts = run.get("repair_attempts", [])
+    if (
+        type(maximum) is not int or not 0 <= maximum <= DEFAULT_MAX_REPAIR_ATTEMPTS
+        or type(revision) is not int or revision < 0
+        or not isinstance(attempts, list) or len(attempts) > maximum
+        or revision > len(attempts)
+    ):
+        raise DesignerError("Run repair bounds or revision metadata are invalid")
+    profiles = run.get("attempted_layout_profiles", [])
+    if (
+        not isinstance(profiles, list)
+        or any(profile not in LAYOUT_PROFILES for profile in profiles)
+        or len(profiles) != len(set(profiles))
+    ):
+        raise DesignerError("Run layout-profile history is invalid")
+    for number, attempt in enumerate(attempts, start=1):
+        if (
+            not isinstance(attempt, dict) or attempt.get("revision") != number
+            or attempt.get("profile") not in profiles
+            or attempt.get("status") not in {"running", "failed", "awaiting_inspection"}
+        ):
+            raise DesignerError("Run repair-attempt history is invalid")
+    successful_revisions = [
+        item["revision"] for item in attempts if item["status"] == "awaiting_inspection"
+    ]
+    if revision != max([0] + successful_revisions):
+        raise DesignerError("Active revision is not the latest successful generation")
+    if len({item["profile"] for item in attempts}) != len(attempts):
+        raise DesignerError("A repair layout profile was attempted more than once")
+    try:
+        if not isinstance(run["started_at_local"], str) or not run["started_at_local"]:
+            raise ValueError("Missing start time")
+        started_epoch = float(run["started_epoch"])
+        started_at = _local_time(run["started_at_local"])
+    except (TypeError, ValueError) as exc:
+        raise DesignerError("Run start timestamp is invalid") from exc
+    if not math.isfinite(started_epoch) or started_epoch <= 0 or started_epoch > time.time() + INSPECTION_CLOCK_SKEW_SECONDS:
+        raise DesignerError("Run start timestamp is invalid")
     temp_output = Path(run["temp_output_path"]).resolve()
     design_root = (temp_output / ARTIFACT_CONTRACT["rootFolder"]).resolve()
     run_id = str(run["run_id"])
@@ -1394,7 +1467,8 @@ def _load_run(path: Path, expected_status: set[str]) -> dict[str, Any]:
         / ".staging"
         / _sha256_bytes(run_id.encode("utf-8"))[:10]
     ).resolve()
-    stage_design = (stage_parent / "design").resolve()
+    revision_root = stage_parent / f"revision-{revision}" if revision else stage_parent
+    stage_design = (revision_root / "design").resolve()
     model_path = (stage_design / "design-model.json").resolve()
     cache_dir = (
         design_root
@@ -1404,6 +1478,20 @@ def _load_run(path: Path, expected_status: set[str]) -> dict[str, Any]:
         / str(run["cache_key"])
     ).resolve()
     inspection_template = (run_dir / "inspection-template.json").resolve()
+    for number, attempt in enumerate(attempts, start=1):
+        expected_evidence = stage_parent / f"revision-{number}" / "failed-inspection.json"
+        if (
+            Path(attempt.get("inspection_path", "")).resolve() != expected_evidence
+            or type(attempt.get("previous_revision")) is not int
+            or not 0 <= attempt["previous_revision"] < number
+        ):
+            raise DesignerError("Run repair evidence path or previous revision is invalid")
+        _safe_path(expected_evidence, design_root)
+        if (
+            not expected_evidence.is_file()
+            or _sha256_file(expected_evidence) != attempt.get("inspection_sha256")
+        ):
+            raise DesignerError("Failed inspection evidence changed after repair")
     if path.resolve().parent != run_dir or path.name != "run.json":
         raise DesignerError("Run path is not the expected run.json")
     if design_root.name != ARTIFACT_CONTRACT["rootFolder"]:
@@ -1448,11 +1536,44 @@ def _load_run(path: Path, expected_status: set[str]) -> dict[str, Any]:
         raise DesignerError("Run cache-artifact allowlist is inconsistent")
     if run.get("resource_hashes") != _resource_hashes():
         raise DesignerError("Designer resources changed after preparation")
+    expected_cache_key = _canonical_hash(
+        {
+            "version": CACHE_VERSION,
+            "classification": run["classification_sha256"],
+            "model": _canonical_hash(model),
+            "resources": run["resource_hashes"],
+        }
+    )
+    if run.get("cache_key") != expected_cache_key:
+        raise DesignerError("Run cache key does not match canonical model and resources")
+    if run["status"] == "awaiting_inspection":
+        slug = model["scenarioSlug"]
+        if run.get("scenario_slug") != slug:
+            raise DesignerError("Run scenario does not match the canonical model")
+        if run.get("selected_layout_profile") not in profiles:
+            raise DesignerError("Active layout profile is missing from run history")
+        for key, name in {
+            "solution_architecture_png": f"SA_{slug}.png",
+            "sequence_png": f"SD_{slug}.png",
+            "html_preview": "preview.html",
+            "generation_report_path": "run-report.json",
+        }.items():
+            if not isinstance(run.get(key), str) or Path(run[key]).resolve() != stage_design / name:
+                raise DesignerError(f"Run metadata path mismatch for {key}")
+        generated_at = _local_time(run.get("generated_at_local"))
+        if (
+            not run.get("generated_at_local")
+            or generated_at < started_at
+            or (generated_at - _local_time(_run_local_time(run))).total_seconds() > INSPECTION_CLOCK_SKEW_SECONDS
+        ):
+            raise DesignerError("Run generation timestamp is invalid")
     return run
 
 
-def _run_fast_path(run_path: Path) -> int:
-    run = _load_run(run_path, {"prepared"})
+def _generate_candidate(
+    run: dict[str, Any], stage_design: Path, profile: str | None = None
+) -> dict[str, Any]:
+    model_path = stage_design / "design-model.json"
     command = [
         "powershell",
         "-NoProfile",
@@ -1461,12 +1582,14 @@ def _run_fast_path(run_path: Path) -> int:
         "-File",
         str(FAST_PATH),
         "-ModelPath",
-        run["model_path"],
+        str(model_path),
         "-TempOutputPath",
-        run["stage_parent"],
+        str(stage_design.parent),
         "-DeadlineSeconds",
         str(GENERATION_TIMEOUT_SECONDS),
     ]
+    if profile:
+        command.extend(["-LayoutProfile", profile])
     try:
         completed = subprocess.run(
             command,
@@ -1480,42 +1603,89 @@ def _run_fast_path(run_path: Path) -> int:
             "Packaged fast path stopped responding and was terminated"
         ) from exc
     if completed.returncode:
+        details = completed.stderr.strip() or completed.stdout.strip()
+        failed_report = stage_design / "run-report.json"
+        if failed_report.is_file():
+            try:
+                failed = _json_load(failed_report)
+                issues = failed.get("validationIssues", []) + failed.get("candidateFailures", [])
+                if issues:
+                    details += "\nGeneration report: " + "; ".join(str(issue) for issue in issues)
+            except DesignerError:
+                pass
         raise DesignerError(
             "Packaged fast path failed:\n"
-            + (completed.stderr.strip() or completed.stdout.strip())
+            + details
         )
-    generation_report_path = Path(run["stage_design"]) / "run-report.json"
+    generation_report_path = stage_design / "run-report.json"
     report = _json_load(generation_report_path)
-    if report.get("structuralValidation") != "passed":
+    if (
+        report.get("structuralValidation") != "passed"
+        or report.get("validation") != "pending-inspection"
+        or report.get("renderedInspection") != "pending"
+    ):
         raise DesignerError(
             "Structural generation failed: "
             + "; ".join(report.get("validationIssues", []))
         )
+    selected = report.get("selectedLayoutProfile")
+    attempted = report.get("attemptedLayoutProfiles", [selected])
+    if (
+        selected not in LAYOUT_PROFILES or selected not in attempted
+        or any(value not in LAYOUT_PROFILES for value in attempted)
+        or len(attempted) != len(set(attempted))
+        or (profile and (selected != profile or attempted != [profile]))
+    ):
+        raise DesignerError("Generator returned an inconsistent layout-profile selection")
+    if _sha256_file(model_path) != run["model_sha256"]:
+        raise DesignerError("Generator changed the canonical design model")
+    preview = stage_design / "preview.html"
+    if (
+        not isinstance(report.get("htmlPreview"), str)
+        or Path(report["htmlPreview"]).resolve() != preview
+        or not preview.is_file()
+        or preview.stat().st_size == 0
+    ):
+        raise DesignerError("Generator did not produce the expected HTML preview")
+    report["attemptedLayoutProfiles"] = attempted
     report["modelMs"] = run["model_ms"]
     _atomic_write_json(generation_report_path, report)
-    slug = _json_load(Path(run["model_path"]))["scenarioSlug"]
-    sa_png = Path(run["stage_design"]) / f"SA_{slug}.png"
-    sd_png = Path(run["stage_design"]) / f"SD_{slug}.png"
-    template = _json_load(Path(run["inspection_template_path"]))
+    return report
+
+
+def _seal_candidate(
+    run_path: Path, run: dict[str, Any], stage_design: Path, report: dict[str, Any]
+) -> int:
+    slug = _json_load(stage_design / "design-model.json")["scenarioSlug"]
+    sa_png = stage_design / f"SA_{slug}.png"
+    sd_png = stage_design / f"SD_{slug}.png"
+    template = _inspection_template(run["run_id"], run.get("revision", 0))
     template["solution_architecture_png_sha256"] = _sha256_file(sa_png)
     template["sequence_png_sha256"] = _sha256_file(sd_png)
-    _atomic_write_json(Path(run["inspection_template_path"]), template)
-    staged_names = _artifact_names(Path(run["stage_design"]), slug) + [
+    staged_names = _artifact_names(stage_design, slug) + [
         "run-report.json"
     ]
     staged_hashes = {
-        name: _sha256_file(Path(run["stage_design"]) / name)
+        name: _sha256_file(stage_design / name)
         for name in staged_names
     }
+    _atomic_write_json(Path(run["inspection_template_path"]), template)
     run.update(
         {
             "status": "awaiting_inspection",
             "generated_at_local": _run_local_time(run),
             "scenario_slug": slug,
+            "stage_design": str(stage_design),
+            "model_path": str(stage_design / "design-model.json"),
             "solution_architecture_png": str(sa_png),
             "sequence_png": str(sd_png),
-            "generation_report_path": str(generation_report_path),
+            "html_preview": str(stage_design / "preview.html"),
+            "generation_report_path": str(stage_design / "run-report.json"),
             "staged_artifacts": staged_hashes,
+            "selected_layout_profile": report["selectedLayoutProfile"],
+            "attempted_layout_profiles": list(dict.fromkeys(
+                run.get("attempted_layout_profiles", []) + report["attemptedLayoutProfiles"]
+            )),
         }
     )
     _atomic_write_json(run_path, run)
@@ -1525,12 +1695,123 @@ def _run_fast_path(run_path: Path) -> int:
                 "status": "awaiting_inspection",
                 "solution_architecture_png": str(sa_png),
                 "sequence_png": str(sd_png),
+                "html_preview": str(stage_design / "preview.html"),
                 "inspection_template": run["inspection_template_path"],
+                "revision": run.get("revision", 0),
+                "layout_profile": report["selectedLayoutProfile"],
+                "remaining_repair_attempts": run.get("max_repair_attempts", DEFAULT_MAX_REPAIR_ATTEMPTS) - len(run.get("repair_attempts", [])),
             },
             indent=2,
         )
     )
     return 0
+
+
+def _run_fast_path(run_path: Path) -> int:
+    run = _load_run(run_path, {"prepared"})
+    report = _generate_candidate(run, Path(run["stage_design"]))
+    _load_run(run_path, {"prepared"})
+    return _seal_candidate(run_path, run, Path(run["stage_design"]), report)
+
+
+def _validate_staged(run: dict[str, Any]) -> None:
+    stage_design = Path(run["stage_design"])
+    expected_names = set(_artifact_names(stage_design, run["scenario_slug"]) + ["run-report.json"])
+    hashes = run.get("staged_artifacts", {})
+    if not isinstance(hashes, dict) or set(hashes) != expected_names:
+        raise DesignerError("Run does not contain a complete sealed staged-artifact allowlist")
+    for name, expected_hash in hashes.items():
+        artifact = _safe_path(stage_design / name, Path(run["design_root"]))
+        if not artifact.is_file() or _sha256_file(artifact) != expected_hash:
+            raise DesignerError(f"Staged artifact changed after generation: {name}")
+    report = _json_load(stage_design / "run-report.json")
+    if (
+        report.get("structuralValidation") != "passed"
+        or report.get("validation") != "pending-inspection"
+        or report.get("renderedInspection") != "pending"
+        or report.get("selectedLayoutProfile") != run.get("selected_layout_profile")
+    ):
+        raise DesignerError("Sealed generation report is not a candidate awaiting inspection")
+
+
+def _validate_inspection(run: dict[str, Any], inspection: dict[str, Any]) -> None:
+    _schema_validate(inspection, INSPECTION_SCHEMA, "Inspection")
+    if inspection["run_id"] != run["run_id"]:
+        raise DesignerError("Inspection run_id does not match the active run")
+    if inspection.get("revision", 0) != run.get("revision", 0):
+        raise DesignerError("Inspection revision does not match the active rendered candidate")
+    if not inspection["inspected_at"]:
+        raise DesignerError("Inspection inspected_at must record an actual inspection time")
+    inspected_at = _local_time(inspection["inspected_at"])
+    generated_at = _local_time(run["generated_at_local"])
+    # One second permits ISO timestamps recorded without fractional seconds.
+    if inspected_at < generated_at - timedelta(seconds=1):
+        raise DesignerError("Inspection predates the active rendered candidate")
+    if inspected_at > _local_time(_run_local_time(run)) + timedelta(seconds=INSPECTION_CLOCK_SKEW_SECONDS):
+        raise DesignerError("Inspection timestamp is in the future")
+    for key, path_key, label in (
+        ("solution_architecture_png_sha256", "solution_architecture_png", "Solution Architecture"),
+        ("sequence_png_sha256", "sequence_png", "Sequence"),
+    ):
+        if _sha256_file(Path(run[path_key])) != inspection[key]:
+            raise DesignerError(f"{label} PNG changed after inspection")
+
+
+def _repair(run_path: Path, inspection_path: Path, profile: str | None = None) -> int:
+    run = _load_run(run_path, {"awaiting_inspection"})
+    _validate_staged(run)
+    inspection = _json_load(inspection_path)
+    _validate_inspection(run, inspection)
+    if inspection["status"] != "failed":
+        raise DesignerError("Repair requires a failed rendered inspection")
+    if not inspection["issues"] and all(inspection["checks"].values()):
+        raise DesignerError("Failed inspection must identify an issue or failed check")
+    attempts = run.get("repair_attempts", [])
+    if any(attempt["status"] == "running" for attempt in attempts):
+        raise DesignerError("A repair is already in progress; do not modify its sealed state")
+    if len(attempts) >= run.get("max_repair_attempts", DEFAULT_MAX_REPAIR_ATTEMPTS):
+        raise DesignerError("Bounded repair attempts exhausted; prepare a new run")
+    model = _json_load(Path(run["model_path"]))
+    profiles = ("Spacious", "Wide", "Balanced") if len(model["components"]) > 18 else LAYOUT_PROFILES
+    available = [value for value in profiles if value not in run.get("attempted_layout_profiles", [])]
+    if not available:
+        raise DesignerError("No unattempted deterministic layout profiles remain")
+    selected = profile or available[0]
+    if selected not in available:
+        raise DesignerError("Repair must select an unattempted layout profile")
+    revision = len(attempts) + 1
+    revision_root = _safe_path(Path(run["stage_parent"]) / f"revision-{revision}", Path(run["design_root"]))
+    if revision_root.exists():
+        raise DesignerError("Repair revision already exists; refusing to overwrite evidence")
+    stage_design = revision_root / "design"
+    stage_design.mkdir(parents=True)
+    shutil.copy2(run["model_path"], stage_design / "design-model.json")
+    evidence_path = revision_root / "failed-inspection.json"
+    _atomic_write_json(evidence_path, inspection)
+    attempt = {
+        "revision": revision,
+        "previous_revision": run.get("revision", 0),
+        "profile": selected,
+        "status": "running",
+        "started_at_local": _run_local_time(run),
+        "inspection_path": str(evidence_path),
+        "inspection_sha256": _sha256_file(evidence_path),
+        "previous_staged_artifacts": copy.deepcopy(run["staged_artifacts"]),
+    }
+    run["repair_attempts"] = attempts + [attempt]
+    run["attempted_layout_profiles"] = run.get("attempted_layout_profiles", []) + [selected]
+    _atomic_write_json(run_path, run)
+    try:
+        report = _generate_candidate(run, stage_design, selected)
+        _load_run(run_path, {"awaiting_inspection"})
+        _validate_staged(run)
+    except (DesignerError, OSError) as exc:
+        attempt.update(status="failed", error=str(exc), completed_at_local=_run_local_time(run))
+        _atomic_write_json(run_path, run)
+        raise
+    attempt.update(status="awaiting_inspection", completed_at_local=_run_local_time(run))
+    run["revision"] = revision
+    return _seal_candidate(run_path, run, stage_design, report)
 
 
 def _artifact_names(stage_design: Path, slug: str) -> list[str]:
@@ -1540,6 +1821,7 @@ def _artifact_names(stage_design: Path, slug: str) -> list[str]:
         f"SD_{slug}.svg",
         f"SA_{slug}.png",
         f"SD_{slug}.png",
+        "preview.html",
         "diagram-manifest.json",
         "validation-report.json",
         "render-report.json",
@@ -1638,6 +1920,7 @@ def _final_result(
     return {
         "solution_architecture_diagram": str(artifact_root / f"SA_{slug}.svg"),
         "sequence_diagram": str(artifact_root / f"SD_{slug}.svg"),
+        "html_preview": str(artifact_root / "preview.html"),
         "renders": {
             "solution_architecture_png": str(artifact_root / f"SA_{slug}.png"),
             "sequence_png": str(artifact_root / f"SD_{slug}.png"),
@@ -1829,6 +2112,7 @@ def _write_current_pointer(
         result["solution_architecture_diagram"]
     )
     pointer_result["sequence_diagram"] = relative(result["sequence_diagram"])
+    pointer_result["html_preview"] = relative(result["html_preview"])
     pointer_result["renders"]["solution_architecture_png"] = relative(
         result["renders"]["solution_architecture_png"]
     )
@@ -1852,6 +2136,8 @@ def _write_current_pointer(
 
 def _finalize(run_path: Path, inspection_path: Path) -> int:
     run = _load_run(run_path, {"awaiting_inspection"})
+    if any(attempt["status"] == "running" for attempt in run.get("repair_attempts", [])):
+        raise DesignerError("Cannot finalize while a repair is in progress")
     inspection = _json_load(inspection_path)
     _schema_validate(inspection, INSPECTION_SCHEMA, "Inspection")
     if inspection["run_id"] != run["run_id"]:
@@ -1860,18 +2146,8 @@ def _finalize(run_path: Path, inspection_path: Path) -> int:
         raise DesignerError(
             "Rendered inspection failed: " + "; ".join(inspection["issues"])
         )
-    try:
-        inspected_at = datetime.fromisoformat(
-            inspection["inspected_at"].replace("Z", "+00:00")
-        )
-    except ValueError as exc:
-        raise DesignerError("Inspection inspected_at is not valid ISO 8601") from exc
-    run_started = datetime.fromisoformat(run["started_at_local"])
-    elapsed_inspection = (inspected_at - run_started).total_seconds()
-    if elapsed_inspection < 0 or elapsed_inspection > 420:
-        raise DesignerError(
-            "Rendered inspection was not completed inside the bounded work budget"
-        )
+    _validate_staged(run)
+    _validate_inspection(run, inspection)
     failed_checks = [
         name for name, passed in inspection["checks"].items() if not passed
     ]
@@ -1881,26 +2157,10 @@ def _finalize(run_path: Path, inspection_path: Path) -> int:
         )
     if inspection["issues"]:
         raise DesignerError("Passed inspection cannot contain issues")
-    sa_png = Path(run["solution_architecture_png"])
-    sd_png = Path(run["sequence_png"])
-    if _sha256_file(sa_png) != inspection["solution_architecture_png_sha256"]:
-        raise DesignerError("Solution Architecture PNG changed after inspection")
-    if _sha256_file(sd_png) != inspection["sequence_png_sha256"]:
-        raise DesignerError("Sequence PNG changed after inspection")
     generation = _json_load(Path(run["generation_report_path"]))
     stage_design = Path(run["stage_design"])
-    design_root = Path(run["design_root"])
     slug = run["scenario_slug"]
     artifacts = _artifact_names(stage_design, slug)
-    expected_staged = run.get("staged_artifacts", {})
-    for name, expected_hash in expected_staged.items():
-        artifact = stage_design / name
-        if not artifact.exists() or _sha256_file(artifact) != expected_hash:
-            raise DesignerError(
-                f"Staged artifact changed after generation: {name}"
-            )
-    if not expected_staged:
-        raise DesignerError("Run does not contain sealed staged-artifact hashes")
     generation["inspectionMs"] = max(
         0,
         round(
@@ -2007,14 +2267,31 @@ def _build_parser() -> argparse.ArgumentParser:
         help="lisa-config.json; classification and output resolve from relative basePath",
     )
     prepare.add_argument("--local-time")
+    prepare.add_argument(
+        "--max-repair-attempts", type=int, choices=range(DEFAULT_MAX_REPAIR_ATTEMPTS + 1),
+        default=DEFAULT_MAX_REPAIR_ATTEMPTS,
+        help="Maximum visual repair generations (0-2); no wall-clock inspection deadline",
+    )
     prepare.set_defaults(handler=lambda args: _prepare(args))
 
     generate = commands.add_parser(
         "generate", help="Generate, validate, and render staged diagrams"
     )
-    generate.add_argument("--run", required=True)
+    generate.add_argument("--run", "--run-state", dest="run", required=True)
     generate.set_defaults(
         handler=lambda args: _run_fast_path(Path(args.run).resolve())
+    )
+
+    repair = commands.add_parser(
+        "repair", help="Regenerate a failed visual candidate using an unattempted layout profile"
+    )
+    repair.add_argument("--run", "--run-state", dest="run", required=True)
+    repair.add_argument("--inspection", required=True)
+    repair.add_argument("--layout-profile", choices=LAYOUT_PROFILES)
+    repair.set_defaults(
+        handler=lambda args: _repair(
+            Path(args.run).resolve(), Path(args.inspection).resolve(), args.layout_profile
+        )
     )
 
     finalize = commands.add_parser(

@@ -18,7 +18,8 @@
     {"relativePath": "artifacts/SA_<scenario-slug>.svg", "required": true, "schema": null, "kind": "image"},
     {"relativePath": "artifacts/SA_<scenario-slug>.png", "required": true, "schema": null, "kind": "image"},
     {"relativePath": "artifacts/SD_<scenario-slug>.svg", "required": true, "schema": null, "kind": "image"},
-    {"relativePath": "artifacts/SD_<scenario-slug>.png", "required": true, "schema": null, "kind": "image"}
+    {"relativePath": "artifacts/SD_<scenario-slug>.png", "required": true, "schema": null, "kind": "image"},
+    {"relativePath": "artifacts/preview.html", "required": true, "schema": null, "kind": "html"}
   ],
   "directories": [
     {"relativePath": ".solution-designer", "required": true},
@@ -26,7 +27,8 @@
   ],
   "patterns": {
     "architecture": "^SA_[A-Za-z0-9_]+\\.(svg|png)$",
-    "sequence": "^SD_[A-Za-z0-9_]+\\.(svg|png)$"
+    "sequence": "^SD_[A-Za-z0-9_]+\\.(svg|png)$",
+    "preview": "^preview\\.html$"
   },
   "forbiddenPathPatterns": [
     "(?i)(^|/)(browser[-_ ]?storage|cookies?|tokens?|credentials?|secrets?)\\.(json|txt)$"

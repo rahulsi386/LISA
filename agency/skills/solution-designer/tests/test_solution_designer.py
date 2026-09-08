@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
 
 
@@ -21,6 +22,12 @@ FIXTURE = (
 
 class SolutionDesignerTests(unittest.TestCase):
     maxDiff = None
+
+    def inspection_time(self, run_path: str) -> str:
+        run = json.loads(Path(run_path).read_text(encoding="utf-8"))
+        return (
+            datetime.fromisoformat(run["generated_at_local"]) + timedelta(seconds=1)
+        ).isoformat()
 
     def run_cli(self, *arguments: str, expected: int = 0) -> dict:
         completed = subprocess.run(
@@ -358,7 +365,7 @@ class SolutionDesignerTests(unittest.TestCase):
                 Path(generated["inspection_template"]).read_text(encoding="utf-8")
             )
             inspection["status"] = "passed"
-            inspection["inspected_at"] = "2026-08-13T12:30:10+05:30"
+            inspection["inspected_at"] = self.inspection_time(prepared["run"])
             inspection["checks"] = {key: True for key in inspection["checks"]}
             inspection["issues"] = []
             inspection["summary"] = "Both rendered diagrams passed visual inspection."
@@ -375,6 +382,7 @@ class SolutionDesignerTests(unittest.TestCase):
             for path in (
                 result["solution_architecture_diagram"],
                 result["sequence_diagram"],
+                result["html_preview"],
                 result["renders"]["solution_architecture_png"],
                 result["renders"]["sequence_png"],
             ):
@@ -396,6 +404,17 @@ class SolutionDesignerTests(unittest.TestCase):
             )
             artifact_root = temporary / "output" / "design" / "artifacts"
             self.assertEqual(artifact_root.resolve(), Path(result["solution_architecture_diagram"]).parent)
+            self.assertEqual(artifact_root / "preview.html", Path(result["html_preview"]))
+            preview_bytes = Path(result["html_preview"]).read_bytes()
+            self.assertIn("preview.html", pointer["artifacts"])
+            self.assertEqual("output/design/artifacts/preview.html", pointer["result"]["html_preview"])
+            from test_html_preview import PreviewParser
+            references = PreviewParser(preview_bytes.decode("utf-8")).resources()
+            self.assertEqual(references, {
+                f"{kind}_{result['scenario_slug']}.{extension}"
+                for kind in ("SA", "SD") for extension in ("svg", "png")
+            })
+            self.assertTrue(all((artifact_root / name).is_file() for name in references))
             self.assertFalse(any(path.is_dir() for path in artifact_root.iterdir()))
 
             second, second_run = self.prepare(
@@ -404,6 +423,7 @@ class SolutionDesignerTests(unittest.TestCase):
             self.assertTrue(second["cache_hit"])
             reused = self.run_cli("reuse", "--run", second["run"])
             self.assertEqual("validated-cache-hit", reused["cache_status"])
+            self.assertEqual(preview_bytes, Path(reused["html_preview"]).read_bytes())
             self.assertLess(reused["timings_ms"]["total"], 30000)
             self.assertEqual("validated", json.loads(Path(second["run"]).read_text())["status"])
 
@@ -429,7 +449,7 @@ class SolutionDesignerTests(unittest.TestCase):
                 Path(generated["inspection_template"]).read_text(encoding="utf-8")
             )
             inspection["status"] = "passed"
-            inspection["inspected_at"] = "2026-08-13T12:30:10+05:30"
+            inspection["inspected_at"] = self.inspection_time(prepared["run"])
             inspection["checks"] = {key: True for key in inspection["checks"]}
             inspection["issues"] = []
             inspection["summary"] = "Inspection passed."

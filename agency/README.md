@@ -7,8 +7,11 @@ unchanged.
 ## Included components
 
 - `agency.json`: Agency engine, category, and draft governance metadata.
-- `.claude-plugin/plugin.json`: Agency/Claude-format plugin manifest registering all ten skills.
-- `.mcp.json`: Playwright MCP server used by browser-dependent stages.
+- `plugin.json`: Copilot plugin manifest registering the shared skills directory.
+- `.claude-plugin/plugin.json`: Claude-compatible manifest registering the same skills directory.
+- `.mcp.json`: Playwright, local Azure MCP, and remote Microsoft Learn MCP registrations for the
+  Copilot engine.
+- `.claude-plugin/plugin.json` also embeds the same MCP registrations for the Claude engine.
 - `skills/`: all LISA skills, shared Python modules, contracts, resources, tests, renderer, fonts,
   icons, and the packaged Windows layout engine.
 - `scripts/Test-LisaAgencyPrerequisites.ps1`: prerequisite validation and optional dependency
@@ -25,11 +28,17 @@ otherwise preserved.
 - Agency 1.0 or newer
 - Python 3.11 or newer
 - PowerShell 7 or newer
-- Node.js 18 or newer and npm
+- .NET 10 SDK (10.0.100 or newer) for the Azure MCP `dotnet dnx` launcher
+- Node.js 20 or newer, npm, and npx (use a currently supported Node.js LTS release)
 - Microsoft Edge for the bundled Playwright MCP configuration
-- Internet access to PyPI and npm during dependency restoration
+- Internet access to PyPI and the configured npm registry during dependency restoration and
+  initial Playwright setup
+- Access to the configured NuGet feeds on every Azure MCP startup and to
+  `https://learn.microsoft.com/api/mcp` when using Microsoft Learn MCP
 - Modern Power Platform CLI (`pac`) for Copilot Studio build, evaluation, and optimization stages
 - Valid Microsoft tenant, Copilot Studio, SharePoint, and browser authentication for cloud stages
+- An authenticated Azure identity with the appropriate Azure RBAC permissions for Azure MCP
+  operations; Azure CLI is the recommended local sign-in method
 
 Run the prerequisite checker from the repository root:
 
@@ -41,8 +50,9 @@ pwsh -File .\agency\scripts\Test-LisaAgencyPrerequisites.ps1 `
 ```
 
 Omit `-RequireCloudStages` when using only local analysis, classification, design, artifact, and
-cleanup capabilities. The script does not authenticate Agency, PAC, Microsoft 365, Copilot Studio,
-or SharePoint.
+cleanup capabilities. Add `-RequireAzureMcp` to require Azure CLI for the recommended Azure MCP
+sign-in flow; it is independent of the PAC-dependent `-RequireCloudStages` switch. The script
+does not authenticate Agency, PAC, Azure, Microsoft 365, Copilot Studio, or SharePoint.
 
 ## Project configuration
 
@@ -87,8 +97,9 @@ The equivalent Copilot engine can be used when supported by the installed Agency
 agency copilot --plugin local:.
 ```
 
-Ask Agency to run the `cad-orchestrator` skill for the complete workflow, or invoke an individual
-registered skill. A host may display the namespaced command as `/lisa:cad-orchestrator`. The
+Invoke `/cad-orchestrator` in Copilot or `/lisa:cad-orchestrator` in Claude for the complete
+workflow, and include the full path to `lisa-config.json` when it is outside the current project.
+Use `/skills info cad-orchestrator` in Copilot to verify discovery before starting. The
 orchestrator executes sibling skills in the current session and falls back to reading their
 packaged `SKILL.md` files when the engine does not expose direct skill invocation.
 
@@ -113,6 +124,99 @@ review changes to the runner and MCP configuration before updating it.
 
 The publisher still requires explicit manifest validation, checkpointed remote intents, fresh
 SharePoint read-back, and the existing publication guard before it can report `PUBLISHED`.
+
+## Bundled Azure MCP server
+
+Both engines register `azure-mcp` as a local stdio server using the official `Azure.Mcp` NuGet
+package and the .NET launcher:
+
+```powershell
+dotnet dnx "Azure.Mcp@*" --no-http-cache --verbosity quiet -- server start --mode namespace
+```
+
+This bundles the launch configuration, not platform binaries. The engine starts the server over
+stdio. `Azure.Mcp@*` explicitly resolves the **latest stable release** from the configured NuGet
+feeds on each startup, rather than selecting a version pinned by a project's local tool manifest.
+`--no-http-cache` bypasses NuGet's HTTP metadata cache. A newly selected version is downloaded;
+already-current package binaries can be reused without downloading the same bytes again.
+
+Prerelease/beta packages are excluded. There is no fixed Azure MCP version, global tool
+installation, or fallback that deliberately ignores failed feeds. NuGet access is required to
+resolve the current version. Updates take effect when the MCP process restarts, not while it is
+running; automatic updates can introduce behavior changes or require a newer .NET runtime/SDK.
+The configured feed must publish or mirror the desired stable release.
+
+The existing Copilot manifest points to `.mcp.json`; the Claude-compatible manifest embeds the
+matching registration. No separate per-user MCP configuration is required for this plugin
+registration. Updating the plugin does not modify an existing global Azure MCP entry.
+
+Azure MCP and .NET CLI telemetry are disabled in the server environment. Quiet launcher output
+and `DOTNET_NOLOGO=true` keep setup chatter out of the stdio protocol. These settings do not
+disable user confirmation or suppress server failures.
+
+The **full toolset** is exposed through namespace-based discovery: there is no read-only,
+namespace, or individual-tool restriction. This includes operations that can create, update, or
+delete Azure resources, subject to your Azure permissions. Full tool exposure is **not**
+permission to perform those operations. Obtain explicit approval and confirm the tenant,
+subscription, target resources, and expected effects before cloud changes. Do not disable the
+server's user-confirmation prompts or the client's approval controls.
+
+Authenticate outside the plugin before using Azure resources, for example:
+
+```powershell
+az login --tenant "<tenant-id>"
+az account show --query "{tenantId:tenantId,subscriptionId:id,name:name}" -o json
+```
+
+Azure MCP uses Azure Identity and can also authenticate through supported developer credentials,
+such as Visual Studio, Azure PowerShell, or Azure Developer CLI. PAC and browser sign-in do not
+replace Azure authentication. Never put client secrets, access tokens, connection strings, or
+tenant-specific credentials in the plugin manifests. Specify the intended subscription in
+requests instead of assuming that the current default is correct.
+
+Restart the Agency session after updating a local plugin; update or reinstall a marketplace
+copy before restarting it. The bundled server supplements PAC and Playwright rather than
+replacing them. Local skills retain their offline execution and approval requirements.
+
+To resolve and check the current stable runtime without invoking an Azure operation:
+
+```powershell
+dotnet dnx "Azure.Mcp@*" --no-http-cache --verbosity quiet -- server start --help
+```
+
+Use the organization's configured NuGet feeds, npm registry, and trust settings. Resolve feed
+access or certificate errors without disabling TLS verification. Node.js/npm remain required
+for Playwright and the diagram renderer, but Azure MCP no longer uses npx.
+
+Official references:
+
+- Azure MCP package: `https://www.nuget.org/packages/Azure.Mcp`
+- .NET one-shot execution and cache controls: `https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-tool-exec`
+- Local configuration and authentication: `https://learn.microsoft.com/en-us/azure/developer/azure-mcp-server/how-to/github-copilot-cli`
+- Server modes, permissions, and confirmation: `https://learn.microsoft.com/en-us/azure/developer/azure-mcp-server/tools/`
+- Telemetry configuration: `https://github.com/microsoft/mcp/blob/main/servers/Azure.Mcp.Server/README.md#telemetry-configuration`
+
+## Bundled Microsoft Learn MCP server
+
+Both engines also register `microsoft-learn` using the official remote Streamable HTTP endpoint:
+
+```json
+{
+  "type": "http",
+  "url": "https://learn.microsoft.com/api/mcp"
+}
+```
+
+This is a remote HTTPS service, not another local executable. No npm/.NET package, Azure login,
+API key, or authorization header is needed for this server. It provides official documentation
+search, complete article retrieval, and code sample search. Network access to the endpoint is
+required; use an MCP client rather than opening it as a normal browser page.
+
+The Azure MCP `documentation` router and the direct `microsoft-learn` server may expose similar
+documentation capabilities. They remain separately named registrations. Their availability does
+not override any skill's offline execution rules.
+
+Official reference: `https://learn.microsoft.com/en-us/training/support/mcp`
 
 ## Validation
 
