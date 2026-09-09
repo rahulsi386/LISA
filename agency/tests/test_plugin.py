@@ -66,6 +66,8 @@ class AgencyPluginTests(unittest.TestCase):
             "workflow-checkpoint.schema.json",
             "workflow-checkpointing.md",
             "lifecycle_artifacts.py",
+            "analysis_handoff.py",
+            "review_batches.py",
             "artifact-contract.schema.json",
             "validate_artifact_contracts.py",
             "Platform-Decision.md",
@@ -120,14 +122,13 @@ class AgencyPluginTests(unittest.TestCase):
                 self.assertEqual(normalized[0], normalized[1])
                 self.assertEqual(shared[name].get("type", "stdio"), claude[name].get("type", "stdio"))
 
-    def test_azure_mcp_uses_latest_stable_dotnet_and_keeps_confirmation(self) -> None:
+    def test_azure_mcp_uses_npx_latest_and_keeps_confirmation(self) -> None:
         servers = json.loads((PLUGIN_ROOT / ".mcp.json").read_text(encoding="utf-8"))["mcpServers"]
         azure = servers["azure-mcp"]
         self.assertEqual("stdio", azure["type"])
-        self.assertEqual("dotnet", azure["command"])
+        self.assertEqual("npx", azure["command"])
         self.assertEqual(
-            ["dnx", "Azure.Mcp@*", "--no-http-cache", "--verbosity", "quiet",
-             "--", "server", "start", "--mode", "namespace"],
+            ["-y", "@azure/mcp@latest", "server", "start", "--mode", "namespace"],
             azure["args"],
         )
         for option in ("--prerelease", "--ignore-failed-sources", "--read-only", "--namespace",
@@ -136,8 +137,6 @@ class AgencyPluginTests(unittest.TestCase):
         self.assertFalse(any(value.startswith("--dangerously-") for value in azure["args"]))
         self.assertEqual({
             "AZURE_MCP_COLLECT_TELEMETRY": "false",
-            "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
-            "DOTNET_NOLOGO": "true",
         }, azure["env"])
 
     def test_learn_mcp_uses_the_official_anonymous_remote_endpoint(self) -> None:
@@ -151,8 +150,7 @@ class AgencyPluginTests(unittest.TestCase):
         script = (PLUGIN_ROOT / "scripts" / "Test-LisaAgencyPrerequisites.ps1").read_text(encoding="utf-8")
         self.assertIn("-Command 'node'", script)
         self.assertIn("-Minimum ([version]'20.0.0')", script)
-        self.assertIn("-Command 'dotnet'", script)
-        self.assertIn("-Minimum ([version]'10.0.100')", script)
+        self.assertNotIn("-Command 'dotnet'", script)
         self.assertIn("foreach ($command in 'npm', 'npx')", script)
         self.assertIn("[switch]$RequireAzureMcp", script)
         self.assertIn("Get-Command 'az'", script)

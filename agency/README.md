@@ -28,13 +28,11 @@ otherwise preserved.
 - Agency 1.0 or newer
 - Python 3.11 or newer
 - PowerShell 7 or newer
-- .NET 10 SDK (10.0.100 or newer) for the Azure MCP `dotnet dnx` launcher
 - Node.js 20 or newer, npm, and npx (use a currently supported Node.js LTS release)
 - Microsoft Edge for the bundled Playwright MCP configuration
 - Internet access to PyPI and the configured npm registry during dependency restoration and
-  initial Playwright setup
-- Access to the configured NuGet feeds on every Azure MCP startup and to
-  `https://learn.microsoft.com/api/mcp` when using Microsoft Learn MCP
+  MCP package resolution and setup
+- Access to `https://learn.microsoft.com/api/mcp` when using Microsoft Learn MCP
 - Modern Power Platform CLI (`pac`) for Copilot Studio build, evaluation, and optimization stages
 - Valid Microsoft tenant, Copilot Studio, SharePoint, and browser authentication for cloud stages
 - An authenticated Azure identity with the appropriate Azure RBAC permissions for Azure MCP
@@ -127,32 +125,29 @@ SharePoint read-back, and the existing publication guard before it can report `P
 
 ## Bundled Azure MCP server
 
-Both engines register `azure-mcp` as a local stdio server using the official `Azure.Mcp` NuGet
-package and the .NET launcher:
+Both engines register `azure-mcp` as a local stdio server using the official `@azure/mcp` npm
+package and the `npx` launcher:
 
 ```powershell
-dotnet dnx "Azure.Mcp@*" --no-http-cache --verbosity quiet -- server start --mode namespace
+npx -y @azure/mcp@latest server start --mode namespace
 ```
 
 This bundles the launch configuration, not platform binaries. The engine starts the server over
-stdio. `Azure.Mcp@*` explicitly resolves the **latest stable release** from the configured NuGet
-feeds on each startup, rather than selecting a version pinned by a project's local tool manifest.
-`--no-http-cache` bypasses NuGet's HTTP metadata cache. A newly selected version is downloaded;
-already-current package binaries can be reused without downloading the same bytes again.
+stdio. `@azure/mcp@latest` selects the version assigned to the configured npm registry's `latest`
+tag. npm can reuse cached packages and metadata according to its normal cache settings.
+`-y` accepts npm's package-install prompt; it does not disable Azure MCP user confirmation.
 
-Prerelease/beta packages are excluded. There is no fixed Azure MCP version, global tool
-installation, or fallback that deliberately ignores failed feeds. NuGet access is required to
-resolve the current version. Updates take effect when the MCP process restarts, not while it is
-running; automatic updates can introduce behavior changes or require a newer .NET runtime/SDK.
-The configured feed must publish or mirror the desired stable release.
+There is no fixed Azure MCP version or global tool installation. Registry access is needed to
+resolve and download packages that are not cached. Updates take effect when the MCP process
+restarts, not while it is running; automatic updates can introduce behavior changes or newer
+runtime requirements. A separate .NET SDK is not required for this npm launcher.
 
 The existing Copilot manifest points to `.mcp.json`; the Claude-compatible manifest embeds the
 matching registration. No separate per-user MCP configuration is required for this plugin
 registration. Updating the plugin does not modify an existing global Azure MCP entry.
 
-Azure MCP and .NET CLI telemetry are disabled in the server environment. Quiet launcher output
-and `DOTNET_NOLOGO=true` keep setup chatter out of the stdio protocol. These settings do not
-disable user confirmation or suppress server failures.
+Azure MCP telemetry is disabled through `AZURE_MCP_COLLECT_TELEMETRY=false` in the server
+environment. This does not disable user confirmation or suppress server failures.
 
 The **full toolset** is exposed through namespace-based discovery: there is no read-only,
 namespace, or individual-tool restriction. This includes operations that can create, update, or
@@ -178,20 +173,19 @@ Restart the Agency session after updating a local plugin; update or reinstall a 
 copy before restarting it. The bundled server supplements PAC and Playwright rather than
 replacing them. Local skills retain their offline execution and approval requirements.
 
-To resolve and check the current stable runtime without invoking an Azure operation:
+To resolve and check the runtime selected by the `latest` tag without invoking an Azure operation:
 
 ```powershell
-dotnet dnx "Azure.Mcp@*" --no-http-cache --verbosity quiet -- server start --help
+npx -y @azure/mcp@latest server start --help
 ```
 
-Use the organization's configured NuGet feeds, npm registry, and trust settings. Resolve feed
-access or certificate errors without disabling TLS verification. Node.js/npm remain required
-for Playwright and the diagram renderer, but Azure MCP no longer uses npx.
+Use the organization's configured npm registry and trust settings. Resolve registry access or
+certificate errors without disabling TLS verification. Node.js/npm are shared prerequisites
+for Azure MCP, Playwright, and the diagram renderer.
 
 Official references:
 
-- Azure MCP package: `https://www.nuget.org/packages/Azure.Mcp`
-- .NET one-shot execution and cache controls: `https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-tool-exec`
+- Azure MCP package: `https://www.npmjs.com/package/@azure/mcp`
 - Local configuration and authentication: `https://learn.microsoft.com/en-us/azure/developer/azure-mcp-server/how-to/github-copilot-cli`
 - Server modes, permissions, and confirmation: `https://learn.microsoft.com/en-us/azure/developer/azure-mcp-server/tools/`
 - Telemetry configuration: `https://github.com/microsoft/mcp/blob/main/servers/Azure.Mcp.Server/README.md#telemetry-configuration`
@@ -218,12 +212,27 @@ not override any skill's offline execution rules.
 
 Official reference: `https://learn.microsoft.com/en-us/training/support/mcp`
 
+## Evidence accuracy and bounded review
+
+Requirement analysis and classification share a hash-linked publication boundary. The analyzer
+publishes its validated manifest last; classification and the shared input resolver reject
+missing, pending, mismatched, or modified handoffs rather than silently selecting older evidence.
+For existing analyses without this marker, prepare a new run and publish it through the updated
+analyzer; do not manufacture a validation marker by editing the files.
+
+Model-facing evidence is provided in lossless JSON batches, with a compact overview and paginated
+index. Review every required batch and every fragment of a split record. Full machine inventories
+remain available on disk, but should not be pasted into the model alongside the same evidence
+again. Batch limits are measured in UTF-8 bytes, not assumed tokenizer-specific token counts.
+Content hashes permit unchanged processing artifacts to be reused without treating earlier
+analysis prose as fresh source evidence.
+
 ## Validation
 
-Run the plugin structural tests:
+Run the plugin and shared evidence-contract tests:
 
 ```powershell
-python .\tests\test_plugin.py -v
+python -m unittest discover -s .\tests -p "test_*.py" -v
 ```
 
 Run all copied Python tests from the plugin root:
@@ -259,6 +268,7 @@ npm --prefix .\skills\solution-designer\renderer test
 
 Treat `m-skills` as the implementation source. When refreshing this distribution, copy maintained
 files while excluding generated `node_modules`, `bin`, `obj`, cache, and virtual-environment
-directories; then reapply the Agency adaptations in `cad-orchestrator`, `agent-builder`,
-`artifact-publisher`, and `postpublish-cleanup`. Run the full validation commands above before
-publishing.
+directories; then reapply the Agency adaptations in `cad-orchestrator`, `requirement-analyzer`,
+`complexity-classifier`, `agent-builder`, `artifact-publisher`, and `postpublish-cleanup`, including
+the shared `analysis_handoff.py`, `review_batches.py`, and input resolver changes. Run the full
+validation commands above before publishing.

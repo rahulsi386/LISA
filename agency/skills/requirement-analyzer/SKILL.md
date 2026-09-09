@@ -75,7 +75,10 @@ The command creates beneath `analysis`:
 - `manifest.json`
 - one extraction JSON file per physical source
 - `review-targets.json`
-- `review-pack.md`
+- `review-pack.md` (small navigation entry point, never the complete evidence prompt)
+- `review-sources\overview.json` and bounded navigation pages
+- `review-batches\<source-id>\overview.json`, bounded navigation pages, and bounded evidence JSON files
+- `review-index.json` (machine integrity/coverage index)
 - `evidence-ledger.draft.json`
 - reserved timestamped output paths
 - an analysis-cache hit and reusable normalized ledger when the identical source corpus was validated previously
@@ -99,14 +102,36 @@ This is reuse of a verified processing artifact, not use of a prior analysis as 
 
 ### 2. Review extraction coverage
 
-On a cache miss, read `review-pack.md`. It contains every nonblank extracted unit, duplicate-locator aliases, embedded-item provenance, and every visual-review target. Consult an individual extraction JSON only when the review pack identifies ambiguity.
+On a cache miss, read the small `review-pack.md` entry point, then follow `review-sources\overview.json` and its bounded navigation pages. Each source record points to a source-local overview and evidence batches. Do not load the complete machine-facing `review-index.json` into a model prompt.
+
+Read every bounded evidence batch. The complete serialized UTF-8 batch is limited to 16,384 bytes (a byte bound, not a tokenizer-specific token claim). Records longer than a batch are split losslessly: reassemble all parts of the same `record_id` in increasing `part` order through `final_part: true` before interpreting them. Do not summarize a fragment as if it were a complete assertion.
+
+Every extracted unit, including blank units, retains its owner, exact locator, source hash, and embedded-container provenance. Exact duplicate text is represented once per owner; `duplicate_of` records preserve all other locator aliases. Maintain the alias-to-record mapping across batches and keep all applicable citations. Repeated table values, blank positions, whitespace, and cell references are evidence; never collapse them. Consult the extraction JSON for structured cell row/column/type/formula details when needed.
+
+After actually reviewing an entire batch, add a receipt to the ledger:
+
+```json
+{
+  "batch_reviews": [
+    {
+      "source_id": "SRC-0123456789AB",
+      "batch_id": "<exact batch_id from the source index>",
+      "sha256": "<exact SHA-256 of the reviewed batch>",
+      "status": "complete"
+    }
+  ]
+}
+```
+
+Persist observations and candidate atomic findings between batches. Reconcile equivalent assertions after all batches; preserve every supporting citation. The validator requires exactly one current receipt for every prepared batch before **any semantic publication**, including corpus-wide absence claims. A receipt is an accountable review declaration, not an automatic proof that the model understood the evidence.
 
 - Process source files in bounded batches when the corpus is large.
 - Read every extracted page, line, paragraph, table row, sheet cell, slide, note, email body, and embedded item.
 - Do not infer content, authority, role, purpose, owner, or scope from a filename.
 - The native pipeline extracts text, PDF text, DOCX, XLSX, PPTX, EML, HTML, images, and safe ZIP contents.
-- XLSX files use a streaming profiler that scans every worksheet row and cell without materializing the workbook. The review pack retains sheet dimensions, complete row and cell counts, formula counts, headers, and bounded representative rows.
-- Large transactional spreadsheets are operational-data evidence. Use their complete profiles, schemas, and representative rows; do not turn every transaction into a requirement finding.
+- XLSX files use a namespace-aware streaming XML reader, releasing completed rows rather than materializing worksheet trees. It retains **all** cell/row evidence, including late rows, repeated values, blanks, formulas and cached values, explicit cell locators, hidden sheets, and merged-range metadata. A missing cell coordinate is blank; a merged range never authorizes guessed or duplicated values.
+- Profiles retain complete row/cell/formula counts and dimensions, but are not substitutes for reviewing all cell evidence. Do not heuristically discard “transactional” rows: requirements can appear anywhere. Reviewing every row does not mean classifying every transaction as a requirement.
+- Extraction and package limits remain enforced. Omitted rows, unresolved shared strings, omitted merged metadata, annotations, or visuals create explicit manual-review targets and incomplete native coverage, never a false claim of 100% extraction.
 - A `manual-review-required` or `failed` status is not complete evidence review.
 - Batch independent visual inspections in one parallel tool call. Do not probe for renderers repeatedly; use the packaged local parsers and available Office/PDF renderer directly.
 
@@ -137,6 +162,8 @@ Set `coverage` to the exact target locator from `review-targets.json`. Use `evid
 
 If a target cannot be reviewed, record `failed`, stop before rendering, and report the exact source and reason. Never mark incomplete extraction as complete to pass validation.
 
+After corpus or configuration changes, preparation may prepopulate complete source-local manual observations from a previously **validated** publication. Reuse is keyed by unchanged physical-source SHA-256, exact target hash, root, and processing/review-policy fingerprints, not by the number of other files that changed. `run.json` records the originating validated ledger and hashes. These are verified processing artifacts, not independent evidence. Review all changed/new targets and all current evidence batches. Global findings, conflicts, corpus absence claims, and completed corpus-batch receipts are **not** carried forward across corpus changes.
+
 For an Office file presented as a protected compound container:
 
 1. Do not decrypt, relabel, unzip, or create an unprotected local copy.
@@ -163,6 +190,10 @@ Each finding must contain:
 - one or more evidence entries with source ID, precise locator, and evidence type
 
 Use an exact locator emitted by extraction, a validated line/page/paragraph/slide range, or an exact locator recorded in a completed manual-review observation.
+Include a short exact quote for source-text assertions. A quote must occur at its cited locator
+or within its cited range, not elsewhere in the same document. Preserve case and significant
+values; a cell citation cannot borrow another cell's value. Quotes do not replace the need to
+check that the assertion is actually supported by the cited text.
 
 Permitted finding kinds are:
 
@@ -185,12 +216,13 @@ Use `CORPUS` only with `absence_check`, and only for `Analyst-identified gap` or
 
 Do not aggregate unrelated requirements into one finding. Do not use “complete review” as a locator for explicit evidence.
 
-Right-size the ledger for speed and downstream readability:
+Preserve recall while avoiding redundant assertions:
 
-- Target 40-60 atomic findings for a ProjectLISA-sized corpus.
+- There is no minimum, maximum, or target findings count. Let the evidence determine the number.
 - Keep independently testable requirements separate.
 - Keep one finding for a tightly coupled metric series or one coherent requirement clause from the same locator.
 - Do not create separate findings that merely paraphrase the same source statement.
+- Normalization merges only matching assertion text, kind, status, and confidence, unions all distinct evidence entries, and rewrites references. Do not merge statements with different conditions, actors, scope, or polarity merely because they share a topic.
 
 #### Source annotations
 
@@ -312,7 +344,7 @@ Run:
   --ledger "<completed-draft-ledger.json>"
 ```
 
-The command normalizes stable IDs, validates semantics, renders atomically, independently validates published content and sidecars, records timing, and writes the validated-analysis cache. It produces:
+The command normalizes stable IDs, validates semantics, renders timestamped candidates **inside `run_directory`**, and independently rechecks candidate bytes and current source integrity. Only then does it write final Markdown and JSON and commit the enriched final manifest **last**. It records timing and writes the validated-analysis cache. It produces:
 
 1. `requirement-analysis_<timestamp>.md`
 2. `requirement-analysis_<timestamp>.json`
@@ -320,13 +352,15 @@ The command normalizes stable IDs, validates semantics, renders atomically, inde
 
 The Markdown must begin with `# Requirement Analysis`. Its top-level sections are fixed by the packaged template.
 
-Do not manually modify published output. Rebuild from the ledger instead.
+The final manifest contains a `publication` marker with `status: validated`, run ID, validation timestamp, and SHA-256-linked ledger/Markdown siblings. Pending candidates and failed validation are not eligible handoffs. A validated run cannot be overwritten: prepare a new run to change or republish an analysis.
+
+The standalone CLI remains supported: `normalize --run ... --ledger ...`, then `render --run ... --ledger ...`, then `validate --run ... --ledger ... --markdown ...`. **Use the actual staged Markdown path returned by `render` for `validate`**, not the final path reserved by `prepare`. `render` does not publish final artifacts; `validate` returns their final paths after committing the validated marker.
 
 Independent validation must pass before completion. It checks:
 
 - exact source root and path containment
 - complete physical-source annotations
-- extraction and manual-review coverage
+- extraction, every evidence batch, and manual-review coverage
 - schema conformance
 - atomic stable finding IDs
 - evidence-source validity
@@ -343,11 +377,13 @@ Independent validation must pass before completion. It checks:
 
 - Extraction is parallelized with bounded workers.
 - Cache entries are keyed by source SHA-256, media type, extension, and extractor version.
-- A cache hit reuses extraction only when the content hash and extraction format match.
+- Inventory hashes every source. Before reopening any binary, an extraction-cache hit verifies that inventory hash, extraction payload hash, format, and implementation/dependency fingerprints. Cold extraction verifies the bytes again.
 - Derived cache files are processing artifacts, never independent evidence.
 - Changed files are re-extracted automatically.
-- A fully validated analysis is cached only when source hashes, root, extractor dependencies, schema, vocabulary, and template all match.
+- A fully validated analysis is cached only when source hashes, root, extractor dependencies, schema, vocabulary, template, artifact contract, review policy, and shared batching/handoff helper fingerprints all match. The prior published handoff and batch hashes are verified before reuse.
 - An unchanged corpus uses the validated-analysis fast path and bypasses visual review and ledger reconstruction.
+- The validated-ledger cache is checked before creating model-facing review artifacts; exact hits copy verified bounded batches rather than rebuilding or rereading evidence prompts.
+- A single `publish` invocation shares parsed immutable evidence indexes and validates identical ledger semantics once, while retaining independent final source/artifact integrity checks. No persisted flag bypasses validation.
 - Use extraction artifacts instead of repeatedly reopening unchanged binaries.
 - For large corpora, process source extraction files sequentially or in bounded batches and persist findings to the draft ledger between batches.
 
@@ -360,6 +396,7 @@ Stop without claiming completion when:
 - a source escapes the root
 - a source or embedded item is unreadable
 - extraction or manual review is incomplete
+- any evidence batch is unreviewed, stale, missing, duplicated, or tampered
 - the evidence ledger violates its schema
 - a knowledge-source location is not verified
 - findings are unused, uncited, duplicated, or unstable

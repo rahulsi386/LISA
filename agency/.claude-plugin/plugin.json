@@ -24,25 +24,19 @@
     },
     "azure-mcp": {
       "type": "stdio",
-      "command": "dotnet",
+      "command": "npx",
       "args": [
-        "dnx",
-        "Azure.Mcp@*",
-        "--no-http-cache",
-        "--verbosity",
-        "quiet",
-        "--",
+        "-y",
+        "@azure/mcp@latest",
         "server",
         "start",
         "--mode",
         "namespace"
       ],
       "env": {
-        "AZURE_MCP_COLLECT_TELEMETRY": "false",
-        "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
-        "DOTNET_NOLOGO": "true"
+        "AZURE_MCP_COLLECT_TELEMETRY": "false"
       },
-      "description": "Full Azure MCP toolset for LISA. Use the intended Azure tenant and subscription, and obtain explicit approval before cloud changes."
+      "description": "Full Azure MCP toolset for LISA. Use for the best practices, architectural guidance, and azure-specific service deployment."
     },
     "microsoft-learn": {
       "type": "http",

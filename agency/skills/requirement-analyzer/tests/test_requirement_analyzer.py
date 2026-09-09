@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import importlib.util
+import argparse
+import contextlib
 import io
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -12,6 +15,7 @@ import warnings
 import zipfile
 from email.message import EmailMessage
 from pathlib import Path
+from unittest.mock import patch
 
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
@@ -24,8 +28,33 @@ analyzer = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(analyzer)
 
 
+def project_directory():
+    return tempfile.TemporaryDirectory(dir=SKILL_ROOT / "tests")
+
+
 class RequirementAnalyzerTests(unittest.TestCase):
     maxDiff = None
+
+    @staticmethod
+    def call_in_process(function, **arguments):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            result = function(argparse.Namespace(**arguments))
+        if result:
+            raise AssertionError(output.getvalue())
+        return json.loads(output.getvalue())
+
+    @staticmethod
+    def read_run(prepared):
+        run = json.loads(Path(prepared["run"]).read_text(encoding="utf-8"))
+        manifest = json.loads(Path(prepared["manifest"]).read_text(encoding="utf-8"))
+        return run, manifest
+
+    def publish_draft(self, run, manifest):
+        draft = self.make_draft_ledger(run, manifest)
+        path = Path(run["run_directory"]) / "completed.json"
+        path.write_text(json.dumps(draft), encoding="utf-8")
+        return self.call_in_process(analyzer._publish, run=str(path.parent / "run.json"), ledger=str(path))
 
     def run_cli(self, *arguments: str, expected: int = 0) -> dict:
         completed = subprocess.run(
@@ -63,7 +92,9 @@ class RequirementAnalyzerTests(unittest.TestCase):
             subtype="plain",
             filename="attachment.txt",
         )
-        (requirements / "example.eml").write_bytes(message.as_bytes())
+        analyzer._atomic_write_text(requirements / "example.eml", message.as_string())
+        os.utime(requirements / "example.eml", (946684800, 946684800))
+        (requirements / "example.eml").chmod(0o444)
 
         output = source_base / "output"
         prepared = self.run_cli(
@@ -238,6 +269,9 @@ class RequirementAnalyzerTests(unittest.TestCase):
             "source_annotations": source_annotations,
             "referred_artifacts": [],
             "manual_reviews": [],
+            "batch_reviews": analyzer._batch_reviews(
+                json.loads(Path(run["review_index_path"]).read_text(encoding="utf-8"))
+            ),
             "knowledge_sources": [],
             "knowledge_source_notes": [
                 {
@@ -314,13 +348,13 @@ class RequirementAnalyzerTests(unittest.TestCase):
         return normalized_path
 
     def test_resolves_only_exact_configured_root(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with project_directory() as directory:
             base = Path(directory)
             exact = base / "requirements"
             exact.mkdir()
             self.assertEqual(exact.resolve(), analyzer.resolve_requirements_root(exact))
 
-        with tempfile.TemporaryDirectory() as directory:
+        with project_directory() as directory:
             base = Path(directory)
             with self.assertRaises(analyzer.AnalyzerError):
                 analyzer.resolve_requirements_root(base)
@@ -353,12 +387,12 @@ class RequirementAnalyzerTests(unittest.TestCase):
             xlsx.getvalue(),
         )
         self.assertEqual("complete", result["status"])
-        self.assertEqual("xlsx-stream-profile", result["method"])
+        self.assertEqual("xlsx-stream-lossless", result["method"])
         self.assertEqual(0, len(result["review_targets"]))
         self.assertEqual(1, result["metadata"]["rows_scanned"])
         self.assertIn("Spreadsheet requirement", analyzer._collect_extracted_text(result))
         row_number, values = analyzer._parse_xlsx_sample_row(
-            b'<row r="1" x14ac:dyDescent="0.25"><c r="A1" t="inlineStr">'
+            b'<row xmlns:x14ac="urn:test" r="1" x14ac:dyDescent="0.25"><c r="A1" t="inlineStr">'
             b"<is><t>Header</t></is></c></row>"
         )
         self.assertEqual("1", row_number)
@@ -377,6 +411,326 @@ class RequirementAnalyzerTests(unittest.TestCase):
         self.assertEqual("manual-review-required", result["status"])
         self.assertEqual(1, len(result["review_targets"]))
         self.assertIn("Presentation requirement", analyzer._collect_extracted_text(result))
+
+    def test_xlsx_retains_late_rows_namespaces_positions_and_formulas(self):
+        from openpyxl import Workbook
+
+        book = Workbook()
+        sheet = book.active
+        sheet.title = "Controls"
+        for row in range(1, 8):
+            sheet.append(["HR system", "No", "No", None, "Yes"])
+        sheet["A7"] = "Finance approval is mandatory."
+        sheet["F7"] = "=1+1"
+        sheet.merge_cells("A9:B9")
+        sheet["A9"] = "Merged header"
+        stream = io.BytesIO()
+        book.save(stream)
+        # Prefix every SpreadsheetML element, retaining namespace declarations.
+        rewritten = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(stream.getvalue())) as original:
+            with zipfile.ZipFile(rewritten, "w") as archive:
+                for info in original.infolist():
+                    payload = original.read(info.filename)
+                    if info.filename.startswith("xl/worksheets/") and info.filename.endswith(".xml"):
+                        root = analyzer.ET.fromstring(payload)
+                        analyzer.ET.register_namespace("x", "http://schemas.openxmlformats.org/spreadsheetml/2006/main")
+                        payload = analyzer.ET.tostring(root)
+                        self.assertIn(b"<x:row", payload)
+                    archive.writestr(info, payload)
+        result = analyzer._extract_bytes("requirements.xlsx", "application/octet-stream", rewritten.getvalue())
+        self.assertEqual("complete", result["status"])
+        self.assertTrue(result["metadata"]["all_cell_evidence_retained"])
+        self.assertEqual(8, result["metadata"]["rows_scanned"])
+        self.assertEqual(1, result["metadata"]["formula_cells"])
+        late = next(unit for unit in result["content_units"] if unit["locator"] == "sheet 'Controls' row 7")
+        self.assertIn("Finance approval is mandatory.", late["text"])
+        self.assertIn("B7=No | C7=No | E7=Yes", late["text"])
+        self.assertEqual([1, 2, 3, 5, 6], [cell["column"] for cell in late["cells"]])
+        self.assertEqual("=1+1".lstrip("="), late["cells"][-1]["formula"])
+        locators, _, _ = analyzer._build_evidence_indexes({"SRC-000000000000": result})
+        self.assertIn("sheet 'Controls' cell A7", locators["SRC-000000000000"])
+        self.assertIn("merged_ranges=A9:B9", analyzer._collect_extracted_text(result))
+
+    def test_xlsx_limit_is_incomplete_but_profiles_all_rows(self):
+        from openpyxl import Workbook
+
+        book = Workbook()
+        for index in range(100):
+            book.active.append([f"Requirement {index}", "No", "No"])
+        stream = io.BytesIO()
+        book.save(stream)
+        with patch.object(analyzer, "MAX_EXTRACTED_TEXT_CHARS", 1500):
+            result = analyzer._extract_xlsx(stream.getvalue(), analyzer.ExtractionBudget())
+        self.assertEqual("manual-review-required", result["status"])
+        self.assertLess(result["coverage_percent"], 100)
+        self.assertEqual(100, result["metadata"]["rows_scanned"])
+        self.assertGreater(result["metadata"]["rows_omitted"], 0)
+        self.assertFalse(result["metadata"]["all_cell_evidence_retained"])
+        self.assertTrue(result["review_targets"])
+
+    def test_xlsx_shared_strings_preserve_late_requirement(self):
+        namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+        data = io.BytesIO()
+        with zipfile.ZipFile(data, "w") as archive:
+            archive.writestr("xl/workbook.xml",
+                f'<workbook xmlns="{namespace}" xmlns:r="urn:relationships"><sheets>'
+                '<sheet name="Requirements" r:id="rId1"/></sheets></workbook>')
+            archive.writestr("xl/_rels/workbook.xml.rels",
+                '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>')
+            archive.writestr("xl/sharedStrings.xml",
+                f'<x:sst xmlns:x="{namespace}">'
+                + "".join(f"<x:si><x:t>Operational row {index}</x:t></x:si>" for index in range(6))
+                + "<x:si><x:r><x:t>Finance approval </x:t></x:r>"
+                  "<x:r><x:t>is mandatory.</x:t></x:r></x:si></x:sst>")
+            archive.writestr("xl/worksheets/sheet1.xml",
+                f'<x:worksheet xmlns:x="{namespace}"><x:sheetData>'
+                + "".join(f'<x:row r="{row}"><x:c r="A{row}" t="s"><x:v>{row-1}</x:v></x:c></x:row>'
+                          for row in range(1, 8))
+                + "</x:sheetData></x:worksheet>")
+        result = analyzer._extract_xlsx(data.getvalue(), analyzer.ExtractionBudget())
+        self.assertEqual("complete", result["status"])
+        row = next(unit for unit in result["content_units"] if unit["locator"] == "sheet 'Requirements' row 7")
+        self.assertEqual("Finance approval is mandatory.", row["cells"][0]["value"])
+        self.assertEqual("sheet 'Requirements' cell A7", row["cells"][0]["locator"])
+
+    def test_review_batches_are_lossless_bounded_and_preserve_aliases(self):
+        text = "HR system | No | No |  | Yes\n  Keep positional whitespace.  "
+        self.assertEqual(text, analyzer._compact_review_text(text))
+        long_text = ("Finance approval 必須 🧭\n" * 1800)
+        extraction = analyzer._base_extraction("test")
+        extraction["content_units"] = [
+            {"locator": "row 1", "text": text},
+            {"locator": "row 2", "text": text},
+            {"locator": "row 3", "text": ""},
+            {"locator": "row 7", "text": long_text},
+        ]
+        source = {"source_id": "SRC-000000000000", "sha256": "a" * 64}
+        with project_directory() as directory:
+            index = analyzer._write_source_review_batches(Path(directory), [source], {source["source_id"]: extraction})
+            source_index = index["sources"][0]
+            directory = Path(source_index["index_path"]).parent
+            records = []
+            for batch in source_index["batches"]:
+                self.assertLessEqual(batch["byte_count"], analyzer.REVIEW_BATCH_BYTES)
+                records.extend(json.loads((directory / batch["path"]).read_text(encoding="utf-8"))["records"])
+            recovered = {}
+            for record in records:
+                recovered.setdefault(record["record_id"], "")
+                recovered[record["record_id"]] += record["text"]
+            self.assertEqual(text, recovered[source["source_id"] + ":unit:1"])
+            self.assertEqual(long_text, recovered[source["source_id"] + ":unit:4"])
+            alias = next(record for record in records if record["locator"] == "row 2")
+            self.assertEqual(source["source_id"] + ":unit:1", alias["duplicate_of"])
+            self.assertIn(source["source_id"] + ":unit:3", recovered)
+            self.assertEqual([], analyzer._batch_integrity_errors(index, directory.parent.parent))
+
+    def test_verified_extraction_cache_avoids_reading_source_again(self):
+        with project_directory() as directory:
+            run, manifest = self.prepare_fixture(Path(directory))
+            source = manifest["sources"][0]
+            cache_root = Path(run["output_root"]) / ".requirement-analyzer" / "cache" / f"v{analyzer.EXTRACTION_FORMAT_VERSION}"
+            with patch.object(Path, "read_bytes", side_effect=AssertionError("source reread")):
+                _, hit = analyzer._extract_record(source, cache_root, run["extractor_fingerprint"])
+            self.assertTrue(hit)
+
+    def test_batch_review_gate_rejects_absence_claims_before_complete_review(self):
+        with project_directory() as directory:
+            run, manifest = self.prepare_fixture(Path(directory))
+            draft = self.make_draft_ledger(run, manifest)
+            draft["batch_reviews"].pop()
+            path = self.normalize_draft(run, draft, "incomplete-batches")
+            failed = self.run_cli("render", "--run", str(Path(run["run_directory"]) / "run.json"),
+                                  "--ledger", str(path), expected=2)
+            self.assertIn("batch review is incomplete", failed["error"])
+            self.assertFalse(Path(run["target_manifest_path"]).exists())
+
+    def test_publish_shares_indexes_and_retains_independent_final_integrity(self):
+        with project_directory() as directory:
+            run, manifest = self.prepare_fixture(Path(directory))
+            with patch.object(analyzer, "_inventory", wraps=analyzer._inventory) as inventory:
+                with patch.object(analyzer, "_build_evidence_indexes", wraps=analyzer._build_evidence_indexes) as indexes:
+                    published = self.publish_draft(run, manifest)
+            self.assertEqual(2, inventory.call_count)
+            self.assertEqual(1, indexes.call_count)
+            marker = json.loads(Path(published["manifest"]).read_text(encoding="utf-8"))
+            self.assertEqual("validated", marker["publication"]["status"])
+            with self.assertRaisesRegex(analyzer.AnalyzerError, "already has a publication marker"):
+                self.publish_draft(run, manifest)
+
+    def test_warm_analysis_cache_precedes_model_facing_review_creation(self):
+        with project_directory() as directory:
+            run, manifest = self.prepare_fixture(Path(directory))
+            published = self.publish_draft(run, manifest)
+            with patch.object(analyzer, "_build_review_pack", side_effect=AssertionError("review pack rebuilt")):
+                with patch.object(analyzer, "_write_source_review_batches", side_effect=AssertionError("batches rebuilt")):
+                    prepared = self.call_in_process(analyzer._prepare, config=run["config_path"], workers=2, local_time=None)
+            self.assertTrue(prepared["analysis_cache_hit"])
+            Path(published["manifest"]).unlink()
+            prepared = self.call_in_process(analyzer._prepare, config=run["config_path"], workers=2, local_time=None)
+            self.assertFalse(prepared["analysis_cache_hit"])
+
+    def test_final_integrity_check_blocks_source_change_during_publish(self):
+        with project_directory() as directory:
+            run, manifest = self.prepare_fixture(Path(directory))
+            original_render = analyzer._render_markdown
+            calls = 0
+
+            def render_then_change(*arguments):
+                nonlocal calls
+                rendered = original_render(*arguments)
+                calls += 1
+                if calls == 2:
+                    Path(manifest["sources"][0]["absolute_path"]).write_text(
+                        "Changed after semantic validation.", encoding="utf-8"
+                    )
+                return rendered
+
+            with patch.object(analyzer, "_render_markdown", side_effect=render_then_change):
+                with self.assertRaisesRegex(analyzer.AnalyzerError, "Requirements files changed"):
+                    self.publish_draft(run, manifest)
+            self.assertFalse(Path(run["target_markdown_path"]).exists())
+            self.assertFalse(Path(run["target_ledger_path"]).exists())
+            self.assertFalse(Path(run["target_manifest_path"]).exists())
+            self.assertTrue(analyzer._staged_paths(run)[0].exists())
+
+    def test_batch_tampering_blocks_publication(self):
+        with project_directory() as directory:
+            run, manifest = self.prepare_fixture(Path(directory))
+            index = json.loads(Path(run["review_index_path"]).read_text(encoding="utf-8"))
+            source = index["sources"][0]
+            batch_path = Path(source["index_path"]).parent / source["batches"][0]["path"]
+            batch_path.write_text('{"records":[]}', encoding="utf-8")
+            with self.assertRaisesRegex(analyzer.AnalyzerError, "Review batch content changed"):
+                self.publish_draft(run, manifest)
+            self.assertFalse(Path(run["target_manifest_path"]).exists())
+
+    def test_navigation_tampering_blocks_publication(self):
+        with project_directory() as directory:
+            run, manifest = self.prepare_fixture(Path(directory))
+            index = json.loads(Path(run["review_index_path"]).read_text(encoding="utf-8"))
+            source = index["sources"][0]
+            navigation = index["navigation"]
+            targets = [
+                Path(source["index_path"]).with_name("overview.json"),
+                Path(source["index_path"]).with_name("index-page-000001.json"),
+                Path(navigation["index_path"]).parent / navigation["batches"][0]["path"],
+            ]
+            for target in targets:
+                with self.subTest(target=target.name):
+                    original = target.read_bytes()
+                    target.write_text('{"batches":[]}', encoding="utf-8")
+                    with self.assertRaisesRegex(analyzer.AnalyzerError, "Review batch content changed"):
+                        self.publish_draft(run, manifest)
+                    self.assertFalse(Path(run["target_manifest_path"]).exists())
+                    target.write_bytes(original)
+            self.assertEqual([], analyzer._prepared_integrity_errors(run, manifest))
+
+    def test_configured_project_change_blocks_old_run_publication(self):
+        with project_directory() as directory:
+            run, manifest = self.prepare_fixture(Path(directory))
+            other = Path(directory) / "other-project"
+            other.mkdir()
+            config = Path(run["config_path"])
+            changed = json.loads(config.read_text(encoding="utf-8"))
+            changed["basePath"] = str(other.resolve())
+            config.write_text(json.dumps(changed), encoding="utf-8")
+            with self.assertRaisesRegex(analyzer.AnalyzerError, "basePath changed"):
+                self.publish_draft(run, manifest)
+            self.assertFalse(Path(run["target_manifest_path"]).exists())
+
+    def test_quotes_are_bound_to_the_cited_locator_or_range(self):
+        scoped = {}
+        analyzer._build_evidence_indexes({
+            "SRC-A": {"content_units": [
+                {"locator": "line 1", "text": "Submit a request."},
+                {"locator": "line 2", "text": "Finance approval is required."},
+            ]},
+        }, scoped_texts=scoped)
+        texts = scoped["SRC-A"]
+        self.assertTrue(analyzer._quote_at_locator("Finance approval", "line 2", texts))
+        self.assertFalse(analyzer._quote_at_locator("Finance approval", "line 1", texts))
+        self.assertFalse(analyzer._quote_at_locator("finance approval", "line 2", texts))
+        self.assertTrue(analyzer._quote_at_locator(
+            "a request. Finance approval", "lines 1-2", texts,
+        ))
+        self.assertFalse(analyzer._quote_at_locator(" \n ", "line 2", texts))
+
+    def test_cell_quotes_cannot_borrow_another_cells_value(self):
+        scoped = {}
+        analyzer._build_evidence_indexes({
+            "SRC-A": {"content_units": [{
+                "locator": "sheet 'Permissions' row 1",
+                "text": "A1=No | B1=Yes",
+                "cells": [
+                    {"locator": "sheet 'Permissions' cell A1", "value": "No", "formula": None},
+                    {"locator": "sheet 'Permissions' cell B1", "value": "Yes", "formula": None},
+                ],
+            }]},
+        }, scoped_texts=scoped)
+        self.assertFalse(analyzer._quote_at_locator("Yes", "sheet 'Permissions' cell A1", scoped["SRC-A"]))
+        self.assertTrue(analyzer._quote_at_locator("Yes", "sheet 'Permissions' cell B1", scoped["SRC-A"]))
+
+    def test_source_local_complete_visual_observations_survive_one_source_change(self):
+        from PIL import Image
+
+        with project_directory() as directory:
+            initial, _ = self.prepare_fixture(Path(directory))
+            image_path = Path(initial["requirements_root"]) / "diagram.png"
+            Image.new("RGB", (20, 20), "white").save(image_path)
+            prepared = self.call_in_process(analyzer._prepare, config=initial["config_path"], workers=2, local_time=None)
+            run, manifest = self.read_run(prepared)
+            target = json.loads(Path(run["review_targets_path"]).read_text(encoding="utf-8"))[0]
+            draft = self.make_draft_ledger(run, manifest)
+            draft["manual_reviews"] = [{
+                "target_id": target["target_id"], "status": "complete", "method": "complete local visual inspection",
+                "coverage": target["locator"], "notes": "All visible nodes reviewed.",
+                "result": "evidence-observed", "observations": [
+                    {"locator": "finance node", "text": "Finance approval is mandatory."}
+                ],
+            }]
+            path = Path(run["run_directory"]) / "reviewed.json"
+            path.write_text(json.dumps(draft), encoding="utf-8")
+            self.call_in_process(analyzer._publish, run=str(path.parent / "run.json"), ledger=str(path))
+            brief = Path(run["requirements_root"]) / "brief.txt"
+            original = brief.read_bytes()
+            brief.write_bytes(original + b"\nNew unrelated requirement.")
+            changed = self.call_in_process(analyzer._prepare, config=run["config_path"], workers=2, local_time=None)
+            self.assertFalse(changed["analysis_cache_hit"])
+            changed_draft = json.loads(Path(changed["ledger_draft"]).read_text(encoding="utf-8"))
+            self.assertEqual(draft["manual_reviews"], changed_draft["manual_reviews"])
+            self.assertEqual([], changed_draft["findings"])
+            self.assertEqual([], changed_draft["batch_reviews"])
+            changed_run, _ = self.read_run(changed)
+            self.assertEqual(manifest["sources"][1]["sha256"], changed_run["reused_observations"][0]["source_sha256"])
+            (Path(run["requirements_root"]) / "additional.txt").write_text(
+                "A second independent corpus change.", encoding="utf-8",
+            )
+            multiple = self.call_in_process(analyzer._prepare, config=run["config_path"], workers=2, local_time=None)
+            multiple_draft = json.loads(Path(multiple["ledger_draft"]).read_text(encoding="utf-8"))
+            self.assertEqual(draft["manual_reviews"], multiple_draft["manual_reviews"])
+            self.assertEqual([], multiple_draft["findings"])
+            self.assertEqual([], multiple_draft["batch_reviews"])
+            brief.write_bytes(original)
+            Image.new("RGB", (20, 20), "black").save(image_path)
+            changed_target = self.call_in_process(analyzer._prepare, config=run["config_path"], workers=2, local_time=None)
+            changed_draft = json.loads(Path(changed_target["ledger_draft"]).read_text(encoding="utf-8"))
+            self.assertEqual([], changed_draft["manual_reviews"])
+
+    def test_equivalent_assertion_dedup_preserves_all_citations(self):
+        with project_directory() as directory:
+            run, manifest = self.prepare_fixture(Path(directory))
+            draft = self.make_draft_ledger(run, manifest)
+            finding = draft["findings"][0]
+            duplicate = json.loads(json.dumps(finding))
+            duplicate["finding_id"] = "D-999"
+            duplicate["evidence"][0]["locator"] = "document metadata"
+            draft["findings"].append(duplicate)
+            draft["sections"]["Executive Summary"][0]["finding_ids"].append("D-999")
+            normalized = json.loads(self.normalize_draft(run, draft, "dedup").read_text(encoding="utf-8"))
+            merged = next(item for item in normalized["findings"] if item["statement"] == finding["statement"])
+            self.assertEqual(2, len(merged["evidence"]))
+            self.assertEqual(len(draft["findings"]) - 1, len(normalized["findings"]))
 
     def test_visual_and_unsafe_archive_require_review(self) -> None:
         from PIL import Image
@@ -430,7 +784,7 @@ class RequirementAnalyzerTests(unittest.TestCase):
         self.assertEqual("render:page:1", pdf["review_targets"][0]["target_key"])
 
     def test_prepare_uses_cache_and_records_embedded_content(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with project_directory() as directory:
             temporary = Path(directory)
             run, manifest = self.prepare_fixture(temporary)
             self.assertEqual(2, manifest["source_count"])
@@ -447,7 +801,7 @@ class RequirementAnalyzerTests(unittest.TestCase):
             self.assertEqual(2, second["cache_hits"])
 
     def test_normalize_render_and_validate_end_to_end(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with project_directory() as directory:
             temporary = Path(directory)
             run, manifest = self.prepare_fixture(temporary)
             draft = self.make_draft_ledger(run, manifest)
@@ -471,6 +825,9 @@ class RequirementAnalyzerTests(unittest.TestCase):
             self.assertTrue(markdown.exists())
             self.assertTrue(Path(rendered["ledger"]).exists())
             self.assertTrue(Path(rendered["manifest"]).exists())
+            self.assertEqual(Path(run["run_directory"]), markdown.parent)
+            self.assertFalse(Path(run["target_markdown_path"]).exists())
+            self.assertFalse(Path(run["target_manifest_path"]).exists())
             rendered_run = json.loads(
                 (Path(run["run_directory"]) / "run.json").read_text(encoding="utf-8")
             )
@@ -510,7 +867,7 @@ class RequirementAnalyzerTests(unittest.TestCase):
             self.assertLess(fast["duration_seconds"], 30)
 
     def test_render_rejects_source_changes_after_prepare(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with project_directory() as directory:
             temporary = Path(directory)
             run, manifest = self.prepare_fixture(temporary)
             draft = self.make_draft_ledger(run, manifest)
@@ -529,7 +886,7 @@ class RequirementAnalyzerTests(unittest.TestCase):
             self.assertIn("changed after preparation", result["error"])
 
     def test_validation_rejects_tampered_published_artifacts(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with project_directory() as directory:
             temporary = Path(directory)
             run, manifest = self.prepare_fixture(temporary)
             draft = self.make_draft_ledger(run, manifest)
@@ -562,7 +919,7 @@ class RequirementAnalyzerTests(unittest.TestCase):
             )
 
     def test_knowledge_source_provenance_is_source_specific(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with project_directory() as directory:
             temporary = Path(directory)
             run, manifest = self.prepare_fixture(temporary)
             draft = self.make_draft_ledger(run, manifest)
@@ -618,7 +975,7 @@ class RequirementAnalyzerTests(unittest.TestCase):
             self.assertIn("different source", result["error"])
 
     def test_schema_rejects_unknown_finding_status(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with project_directory() as directory:
             temporary = Path(directory)
             run, manifest = self.prepare_fixture(temporary)
             draft = self.make_draft_ledger(run, manifest)
@@ -636,7 +993,7 @@ class RequirementAnalyzerTests(unittest.TestCase):
             self.assertIn("Evidence ledger schema error", result["error"])
 
     def test_schema_requires_observed_visual_evidence_details(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with project_directory() as directory:
             temporary = Path(directory)
             run, manifest = self.prepare_fixture(temporary)
             draft = self.make_draft_ledger(run, manifest)
@@ -664,7 +1021,7 @@ class RequirementAnalyzerTests(unittest.TestCase):
             self.assertIn("Evidence ledger schema error", result["error"])
 
     def test_absence_claims_require_corpus_gap_findings(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with project_directory() as directory:
             temporary = Path(directory)
             run, manifest = self.prepare_fixture(temporary)
             draft = self.make_draft_ledger(run, manifest)
@@ -683,7 +1040,7 @@ class RequirementAnalyzerTests(unittest.TestCase):
             self.assertIn("Platform absence must cite", result["error"])
 
     def test_configured_knowledge_sources_are_prepopulated(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with project_directory() as directory:
             base = Path(directory)
             requirements = base / "requirements"
             requirements.mkdir()
@@ -720,7 +1077,7 @@ class RequirementAnalyzerTests(unittest.TestCase):
             )
 
     def test_absolute_base_path_is_supported(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with project_directory() as directory:
             base = Path(directory)
             requirements = base / "requirements"
             requirements.mkdir()
@@ -739,7 +1096,7 @@ class RequirementAnalyzerTests(unittest.TestCase):
             self.assertTrue((base / "output" / "analysis").is_dir())
 
     def test_default_temp_output_uses_analysis_child(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with project_directory() as directory:
             base = Path(directory)
             requirements = base / "requirements"
             requirements.mkdir()

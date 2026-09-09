@@ -11,6 +11,7 @@
     "source_annotations",
     "referred_artifacts",
     "manual_reviews",
+    "batch_reviews",
     "knowledge_sources",
     "platforms",
     "platform_absence_finding_ids",
@@ -20,6 +21,20 @@
     "sections"
   ],
   "properties": {
+    "batch_reviews": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_id", "batch_id", "sha256", "status"],
+        "properties": {
+          "source_id": {"type": "string", "pattern": "^SRC-[A-F0-9]{12}$"},
+          "batch_id": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "status": {"const": "complete"}
+        }
+      }
+    },
     "schema_version": {
       "const": "1.0"
     },

@@ -45,11 +45,10 @@ if (-not $IsWindows) {
 Test-CommandVersion -Command 'python' -Arguments @('--version') -Pattern 'Python\s+(?<version>\d+\.\d+\.\d+)' -Minimum ([version]'3.11.0')
 Test-CommandVersion -Command 'node' -Arguments @('--version') -Pattern 'v(?<version>\d+\.\d+\.\d+)' -Minimum ([version]'20.0.0')
 Test-CommandVersion -Command 'pwsh' -Arguments @('--version') -Pattern 'PowerShell\s+(?<version>\d+\.\d+\.\d+)' -Minimum ([version]'7.0.0')
-Test-CommandVersion -Command 'dotnet' -Arguments @('--version') -Pattern '(?m)^(?<version>\d+\.\d+\.\d+)' -Minimum ([version]'10.0.100')
 
 foreach ($command in 'npm', 'npx') {
     if ($null -eq (Get-Command $command -ErrorAction SilentlyContinue)) {
-        $failures.Add("$command is required for Playwright MCP and renderer restoration but was not found on PATH.")
+        $failures.Add("$command is required for Azure MCP, Playwright MCP, and renderer restoration but was not found on PATH.")
     }
 }
 

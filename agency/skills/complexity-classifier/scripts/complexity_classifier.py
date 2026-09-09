@@ -24,11 +24,17 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from validate_artifact_contracts import canonical_stage_root, validate_contract
-from lisa_path_resolver import LisaConfigError, latest_file, resolve_lisa_config
+from lisa_path_resolver import LisaConfigError, resolve_lisa_config
+from analysis_handoff import (
+    AnalysisHandoffError,
+    load_validated_analysis,
+    select_latest_validated_analysis,
+)
+from review_batches import ReviewBatchError, write_review_batches
 
 
-VERSION = "2.0.0"
-CACHE_VERSION = "2"
+VERSION = "2.2.0"
+CACHE_VERSION = "4"
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 RESOURCES = SKILL_ROOT / "resources"
 ARTIFACT_CONTRACT = validate_contract(SKILL_ROOT)
@@ -40,6 +46,8 @@ ASSESSMENT_SCHEMA_PATH = RESOURCES / "research-assessment.schema.json"
 CLASSIFICATION_MANIFEST_SCHEMA_PATH = RESOURCES / "classification-manifest.schema.json"
 TEMPLATE_PATH = RESOURCES / "classification.template.md"
 PLATFORM_DECISION_PATH = SKILL_ROOT.parent / "Platform-Decision.md"
+COMPLETION_CONTRACT_PATH = RESOURCES / "completion-contract.json"
+REVIEW_BATCH_MAX_BYTES = 16384
 
 CLASSIFICATION_FILENAME = re.compile(
     r"^complexity-classification_[0-9]{8}_[0-9]{6}(_[0-9]{3})?\.(md|json)$"
@@ -323,9 +331,22 @@ def _validate_requirement_analysis(
             f"Requirement analysis is missing fields: {', '.join(missing)}"
         )
     findings = data["findings"]
+    if not isinstance(findings, list) or not all(
+        isinstance(item, dict)
+        and isinstance(item.get("finding_id"), str)
+        and item["finding_id"].strip()
+        and all(isinstance(item.get(key), str) for key in ("kind", "status", "statement"))
+        for item in findings
+    ):
+        raise ClassifierError("Requirement findings require IDs, kinds, statuses, and statements")
     identifiers = [item.get("finding_id") for item in findings]
     if not findings or len(identifiers) != len(set(identifiers)):
         raise ClassifierError("Requirement findings must be nonempty and uniquely identified")
+    if not isinstance(data["sections"], dict) or not all(
+        isinstance(data[key], list)
+        for key in ("source_annotations", "knowledge_sources", "integrations", "agentic_behaviors")
+    ):
+        raise ClassifierError("Requirement analysis has invalid structured evidence collections")
 
 
 def _section_items(
@@ -461,6 +482,188 @@ def _build_evidence_summary(
 
 def _reference_cache_path(root: Path, reference_id: str) -> Path:
     return root / f"{reference_id}.json"
+
+
+def _compact_json(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _review_records(
+    data: dict[str, Any], summary: dict[str, Any]
+) -> list[dict[str, Any]]:
+    in_scope = {item["finding_id"] for item in summary["in_scope_findings"]}
+    records = [
+        {
+            "record_id": f"finding:{item['finding_id']}",
+            # Put ALL finding attributes inside splittable text, including long provenance.
+            "text": _compact_json(item),
+            "provenance": {
+                "ledger_pointer": f"/findings/{index}",
+                "in_scope": item["finding_id"] in in_scope,
+            },
+        }
+        for index, item in enumerate(data["findings"])
+    ]
+    for key in (
+        "source_annotations", "knowledge_sources", "integrations", "agentic_behaviors",
+        "goals", "metrics", "data_sources", "data_types", "solution_components", "scope",
+    ):
+        for index, item in enumerate(summary[key]):
+            records.append({
+                "record_id": f"summary:{key}:{index}",
+                "text": _compact_json(item),
+                "provenance": {"summary_pointer": f"/{key}/{index}"},
+            })
+    for key in ("lisa_config", "evidenced_channels"):
+        records.append({
+            "record_id": f"summary:{key}",
+            "text": _compact_json(summary[key]),
+            "provenance": {"summary_pointer": f"/{key}"},
+        })
+    return records
+
+
+def _write_model_context(
+    run: dict[str, Any],
+    data: dict[str, Any],
+    summary: dict[str, Any],
+    references: list[dict[str, Any]],
+) -> None:
+    root = Path(run["run_directory"])
+    evidence_root = root / "evidence-batches"
+    _safe_write_path(evidence_root, Path(run["classification_root"]))
+    index = write_review_batches(
+        evidence_root, _review_records(data, summary), max_bytes=REVIEW_BATCH_MAX_BYTES
+    )
+    reference_root = root / "reference-excerpts"
+    _safe_write_path(reference_root, Path(run["classification_root"]))
+    reference_root.mkdir(parents=True, exist_ok=True)
+    reference_index = []
+    for reference in references:
+        reference_id = reference["id"]
+        if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", reference_id):
+            raise ClassifierError(f"Unsafe reference ID: {reference_id}")
+        reference_path = reference_root / f"{reference_id}.json"
+        payload = _compact_json(reference) + "\n"
+        if len(payload.encode("utf-8")) <= REVIEW_BATCH_MAX_BYTES:
+            _safe_write_path(reference_path, Path(run["classification_root"]))
+            _atomic_write_text(reference_path, payload)
+            entry_path = reference_path
+            entry_format = "reference-json"
+        else:
+            reference_batches = write_review_batches(
+                reference_root / reference_id,
+                [{"record_id": reference_id, "text": _compact_json(reference)}],
+                max_bytes=REVIEW_BATCH_MAX_BYTES,
+            )
+            entry_path = Path(reference_batches["overview_path"])
+            entry_format = "review-batches"
+        reference_index.append({
+            "id": reference_id,
+            "title": reference["title"],
+            "url": reference["url"],
+            "stage": _reference_stage(reference_id),
+            "required": reference["required"],
+            "status": reference["status"],
+            "path": str(entry_path.relative_to(root)),
+            "format": entry_format,
+        })
+    reference_index_path = root / "reference-index.json"
+    _atomic_write_text(reference_index_path, _compact_json({
+        "schema_version": "1.0",
+        "research_stage": run["research_stage"],
+        "usage": (
+            "Titles/excerpts are navigation aids, not capability evidence. Read applicable "
+            "official documentation sections in full; record their IDs in the assessments "
+            "and architecture. Refresh/escalation rules still apply."
+        ),
+        "references": reference_index,
+    }) + "\n")
+    context_path = root / "model-context.json"
+    context = {
+        "schema_version": "1.0",
+        "run_id": run["run_id"],
+        "research_stage": run["research_stage"],
+        "analysis_handoff": run["analysis_handoff"],
+        "analysis_semantic_snapshot": run["analysis_semantic_snapshot"],
+        "completion_contract": str(COMPLETION_CONTRACT_PATH),
+        "model_schema": str(MODEL_SCHEMA_PATH),
+        "platform_decision": str(PLATFORM_DECISION_PATH),
+        "evidence_overview": str(Path(index["overview_path"]).relative_to(root)),
+        "evidence_first_page": str(Path("evidence-batches") / index["first_page"]),
+        "evidence_index": str(Path(index["index_path"]).relative_to(root)),
+        "reference_index": reference_index_path.name,
+        "model_draft": Path(run["model_draft_path"]).name,
+        "authoritative_ledger": run["input_path"],
+        "authoritative_evidence_summary": Path(run["evidence_summary_path"]).name,
+        "in_scope_finding_count": len(summary["in_scope_findings"]),
+        "all_finding_count": len(data["findings"]),
+        "configuration_record": "summary:lisa_config",
+        "evidenced_channels_record": "summary:evidenced_channels",
+        "reconciliation": (
+            "All evidence batches are mandatory, including excluded findings for scope context. "
+            "Reassemble each record's text in part order before parsing its JSON. Preserve the "
+            "generated draft metadata; edit targeted fields programmatically, not by re-emitting "
+            "the populated draft into model context. Reconcile ALL findings, capabilities, "
+            "dependencies, gates, topology, channels, ownership, and coverage on every run, "
+            "including a one-finding change. No delta-only publication."
+        ),
+    }
+    _atomic_write_text(context_path, _compact_json(context) + "\n")
+    tracked = [
+        context_path, reference_index_path,
+        *sorted(evidence_root.glob("*.json")),
+        *sorted(reference_root.glob("*.json")),
+        *sorted(reference_root.glob("*\\*.json")),
+    ]
+    run["model_context_path"] = str(context_path)
+    run["evidence_index_path"] = index["index_path"]
+    run["evidence_overview_path"] = index["overview_path"]
+    run["reference_index_path"] = str(reference_index_path)
+    run["review_artifacts"] = {
+        str(path.relative_to(root)): _sha256_file(path) for path in tracked
+    }
+    run["input_size_counters"] = {
+        "unit": "UTF-8 bytes, not tokenizer-dependent token estimates",
+        "ledger_bytes": Path(run["input_path"]).stat().st_size,
+        "authoritative_summary_bytes": Path(run["evidence_summary_path"]).stat().st_size,
+        "populated_draft_bytes": Path(run["model_draft_path"]).stat().st_size,
+        "full_references_bytes": Path(run["references_path"]).stat().st_size,
+        "model_context_bytes": context_path.stat().st_size,
+        "reference_index_bytes": reference_index_path.stat().st_size,
+        "completion_contract_bytes": COMPLETION_CONTRACT_PATH.stat().st_size,
+        "evidence_batch_bytes": sum(item["byte_count"] for item in index["batches"]),
+        "evidence_navigation_bytes": sum(
+            path.stat().st_size for path in evidence_root.glob("index-page-*.json")
+        ) + Path(index["overview_path"]).stat().st_size,
+        "evidence_batch_count": len(index["batches"]),
+        "evidence_record_count": index["record_count"],
+        "evidence_fragment_count": index["fragment_count"],
+        "max_batch_bytes": REVIEW_BATCH_MAX_BYTES,
+        "on_demand_reference_bytes": sum(
+            path.stat().st_size for path in (
+                *reference_root.glob("*.json"), *reference_root.glob("*\\B-*.json"),
+            )
+        ),
+    }
+    counters = run["input_size_counters"]
+    counters["duplicated_input_baseline_bytes"] = sum(
+        counters[key] for key in (
+            "ledger_bytes", "authoritative_summary_bytes", "populated_draft_bytes",
+            "full_references_bytes",
+        )
+    )
+    counters["mandatory_review_bytes"] = sum(
+        counters[key] for key in (
+            "model_context_bytes", "reference_index_bytes", "completion_contract_bytes",
+            "evidence_batch_bytes", "evidence_navigation_bytes",
+        )
+    )
+    counters["measurement_scope"] = (
+        "Mandatory review excludes applicable detailed guidance, schema slices, official "
+        "documentation, and selected reference excerpts; those reads add input. No fixed "
+        "token savings or reduction for every input size is claimed."
+    )
 
 
 def _strip_html_excerpt(content: str) -> str:
@@ -1033,11 +1236,60 @@ def _schema_validate(model: dict[str, Any]) -> None:
     )
 
 
+def _semantic_ledger(value: dict[str, Any]) -> dict[str, Any]:
+    # Only the top-level publication identity is volatile; nested IDs/dates remain evidence.
+    return {key: item for key, item in value.items() if key != "run_id"}
+
+
+def _semantic_analysis_snapshot(
+    data: dict[str, Any], manifest: dict[str, Any]
+) -> dict[str, Any]:
+    root = Path(manifest["requirements_root"])
+    extraction_root = (
+        root.parent / "output" / "analysis" / ".requirement-analyzer"
+        / "runs" / manifest["run_id"] / "extractions"
+    )
+    sources = []
+    for source in manifest["sources"]:
+        normalized = copy.deepcopy(source)
+        identifier = source.get("source_id")
+        extraction_hash = source.get("extraction_sha256", "")
+        if (
+            isinstance(identifier, str)
+            and re.fullmatch(r"[A-Za-z0-9_-]+", identifier)
+            and isinstance(extraction_hash, str)
+            and re.fullmatch(r"[a-f0-9]{64}", extraction_hash)
+            and source.get("extraction_path") == str(extraction_root / f"{identifier}.json")
+        ):
+            # Rebind only the recognized generated artifact location, not source provenance.
+            normalized["extraction_path"] = f"analyzer-extraction:{identifier}:{extraction_hash}"
+            if isinstance(source.get("cache_hit"), bool):
+                normalized.pop("cache_hit")
+        sources.append(normalized)
+    manifest_metadata = {
+        key: value for key, value in manifest.items()
+        if key not in {
+            "run_id", "created_at_local", "publication", "manifest_sha256", "sources",
+        }
+    }
+    return {
+        "schema_version": "1.0",
+        "ledger_sha256": _canonical_hash(_semantic_ledger(data)),
+        "requirements_root": manifest["requirements_root"],
+        "source_count": manifest["source_count"],
+        "sources_sha256": _canonical_hash(sources),
+        "source_metadata_sha256": _canonical_hash(manifest_metadata),
+    }
+
+
 def _cache_key(
     input_path: Path,
     references: list[dict[str, Any]],
     lisa_config_sha256: str = "",
     research_assessment_hashes: list[str] | None = None,
+    *,
+    analysis_snapshot: dict[str, Any],
+    evidence_summary: dict[str, Any],
 ) -> str:
     reference_signature = [
         {
@@ -1058,18 +1310,11 @@ def _cache_key(
         {
             "version": CACHE_VERSION,
             "skill_version": VERSION,
-            "script_sha256": _sha256_file(Path(__file__).resolve()),
-            "input_path": str(input_path).casefold(),
-            "input_sha256": _sha256_file(input_path),
+            "resource_hashes": _resource_hashes(),
+            "analysis_snapshot": analysis_snapshot,
+            "evidence_summary_sha256": _canonical_hash(_semantic_ledger(evidence_summary)),
             "lisa_config_sha256": lisa_config_sha256,
             "research_assessment_hashes": research_assessment_hashes or [],
-            "rules_sha256": _sha256_file(RULES_PATH),
-            "model_schema_sha256": _sha256_file(MODEL_SCHEMA_PATH),
-            "output_schema_sha256": _sha256_file(OUTPUT_SCHEMA_PATH),
-            "assessment_schema_sha256": _sha256_file(ASSESSMENT_SCHEMA_PATH),
-            "template_sha256": _sha256_file(TEMPLATE_PATH),
-            "reference_manifest_sha256": _sha256_file(REFERENCE_MANIFEST_PATH),
-                        "platform_decision_sha256": _sha256_file(PLATFORM_DECISION_PATH),
             "references": reference_signature,
         }
     )
@@ -1078,35 +1323,141 @@ def _cache_key(
 def _resource_hashes() -> dict[str, str]:
     return {
         "script": _sha256_file(Path(__file__).resolve()),
+        "runner": _sha256_file(SKILL_ROOT / "scripts" / "Invoke-ComplexityClassifier.ps1"),
         "reference_manifest": _sha256_file(REFERENCE_MANIFEST_PATH),
         "rules": _sha256_file(RULES_PATH),
         "model_schema": _sha256_file(MODEL_SCHEMA_PATH),
         "output_schema": _sha256_file(OUTPUT_SCHEMA_PATH),
+        "classification_manifest_schema": _sha256_file(CLASSIFICATION_MANIFEST_SCHEMA_PATH),
+        "artifact_contract": _sha256_file(RESOURCES / "artifact-contract.json"),
+        "artifact_contract_schema": _sha256_file(SKILL_ROOT.parent / "artifact-contract.schema.json"),
+        "artifact_contract_validator": _sha256_file(SKILL_ROOT.parent / "validate_artifact_contracts.py"),
+        "path_resolver": _sha256_file(SKILL_ROOT.parent / "lisa_path_resolver.py"),
+        "analysis_handoff": _sha256_file(SKILL_ROOT.parent / "analysis_handoff.py"),
+        "review_batches": _sha256_file(SKILL_ROOT.parent / "review_batches.py"),
+        "skill_instructions": _sha256_file(SKILL_ROOT / "SKILL.md"),
+        "design_guidance": _sha256_file(RESOURCES / "design-guidance.md"),
+        "completion_contract": _sha256_file(COMPLETION_CONTRACT_PATH),
         "assessment_schema": _sha256_file(ASSESSMENT_SCHEMA_PATH),
         "template": _sha256_file(TEMPLATE_PATH),
         "platform_decision": _sha256_file(PLATFORM_DECISION_PATH),
     }
 
 
-def _load_model_cache(path: Path, key: str, run_id: str) -> dict[str, Any] | None:
+def _validation_summary(
+    summary: dict[str, Any],
+    run_id: str,
+    stage: str,
+    references: list[dict[str, Any]],
+    assessments: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    return {
+        **summary,
+        "classifier_run_id": run_id,
+        "research_stage": stage,
+        "research_assessments": assessments or [],
+        "consulted_reference_ids": [
+            item["id"] for item in references
+            if item["status"] in {
+                "retrieved", "not-modified", "fresh-cache", "cached-after-error",
+                "packaged-verified",
+            } and item.get("content_sha256")
+        ],
+    }
+
+
+def _load_model_cache(
+    path: Path, key: str, run_id: str, validation_summary: dict[str, Any],
+    analysis_handoff: dict[str, Any], analysis_snapshot: dict[str, Any],
+    decision: dict[str, Any],
+) -> dict[str, Any] | None:
+    decision["reason"] = "No matching validated semantic-evidence cache."
     if not path.exists():
         return None
-    cached = _json_load(path)
+    try:
+        cached = _json_load(path)
+    except ClassifierError:
+        return None
     model = cached.get("model")
     if (
         cached.get("version") != CACHE_VERSION
+        or cached.get("status") != "validated"
         or cached.get("cache_key") != key
+        or cached.get("analysis_semantic_snapshot") != analysis_snapshot
+        or not isinstance(cached.get("analysis_handoff"), dict)
         or not isinstance(model, dict)
         or cached.get("model_sha256") != _canonical_hash(model)
     ):
         return None
     reused = copy.deepcopy(model)
     reused["run_id"] = run_id
+    prior_handoff = cached["analysis_handoff"]
+    if prior_handoff != analysis_handoff:
+        stale_reference = _publication_specific_reference(reused, prior_handoff, analysis_handoff)
+        if stale_reference:
+            decision["reason"] = (
+                "Cached model contains an upstream publication-specific reference at "
+                f"{stale_reference}; complete the model for the current handoff. "
+                "Arbitrary provenance/prose is not automatically rebound."
+            )
+            return None
     try:
-        _schema_validate(reused)
+        _score_model(reused, validation_summary)
     except ClassifierError:
+        decision["reason"] = "Cached model failed complete current-evidence validation."
         return None
+    decision.update({
+        "reason": "",
+        "reuse_kind": "same-publication" if prior_handoff == analysis_handoff else "semantic-republication",
+        "source_analysis_handoff": prior_handoff,
+    })
     return reused
+
+
+def _publication_specific_reference(
+    model: dict[str, Any], prior: dict[str, Any], current: dict[str, Any]
+) -> str:
+    tokens = set()
+    for key in ("analysis_run_id", "ledger_sha256", "markdown_sha256", "manifest_sha256", "sources_sha256"):
+        if prior.get(key) and prior.get(key) != current.get(key):
+            tokens.add(str(prior[key]).casefold())
+    if prior.get("manifest_path") != current.get("manifest_path"):
+        name = Path(prior.get("manifest_path", "")).name
+        if not name.endswith("-manifest.json"):
+            return "<cache provenance>"
+        stem = name.removesuffix("-manifest.json")
+        tokens.update(f"{stem}{suffix}".casefold() for suffix in (".json", ".md", "-manifest.json"))
+
+    def find(value: Any, location: str) -> str:
+        if isinstance(value, str):
+            normalized = urllib.parse.unquote(value).casefold()
+            return location if any(token in normalized for token in tokens) else ""
+        if isinstance(value, dict):
+            for key, item in value.items():
+                found = find(key, location) or find(item, f"{location}.{key}")
+                if found:
+                    return found
+        elif isinstance(value, list):
+            for index, item in enumerate(value):
+                found = find(item, f"{location}[{index}]")
+                if found:
+                    return found
+        return ""
+
+    return find(model, "$")
+
+
+def _handoff_snapshot(input_path: Path, manifest: dict[str, Any]) -> dict[str, Any]:
+    publication = manifest["publication"]
+    return {
+        "manifest_path": str(input_path.with_name(f"{input_path.stem}-manifest.json")),
+        "manifest_sha256": _canonical_hash(manifest),
+        "analysis_run_id": manifest["run_id"],
+        "requirements_root": manifest["requirements_root"],
+        "sources_sha256": manifest["manifest_sha256"],
+        "ledger_sha256": publication["ledger"]["sha256"],
+        "markdown_sha256": publication["markdown"]["sha256"],
+    }
 
 
 def _prepare(args: argparse.Namespace) -> int:
@@ -1114,16 +1465,15 @@ def _prepare(args: argparse.Namespace) -> int:
     started_at = _authoritative_local_time(args.local_time)
     try:
         paths = resolve_lisa_config(Path(args.config))
-        input_path = latest_file(
+        input_path, data, source_manifest = select_latest_validated_analysis(
             paths.analysis,
-            "requirement-analysis_*.json",
-            "requirement-analysis JSON",
-            r"requirement-analysis_[0-9]{8}_[0-9]{6}(?:_[0-9]{3})?\.json",
+            expected_requirements_root=paths.requirements,
         )
-    except LisaConfigError as exc:
+    except (LisaConfigError, AnalysisHandoffError) as exc:
         raise ClassifierError(str(exc)) from exc
-    data = _json_load(input_path)
     _validate_requirement_analysis(input_path, data)
+    handoff = _handoff_snapshot(input_path, source_manifest)
+    semantic_snapshot = _semantic_analysis_snapshot(data, source_manifest)
 
     temp_output = paths.output.resolve()
     _assert_no_link_components(temp_output)
@@ -1137,7 +1487,7 @@ def _prepare(args: argparse.Namespace) -> int:
         )
 
     timestamp = _timestamp_for_output(classification_root, started_at)
-    input_hash = _sha256_file(input_path)
+    input_hash = handoff["ledger_sha256"]
     run_id = f"CC-{timestamp}-{input_hash[:8].upper()}"
     internal = classification_root / ".complexity-classifier"
     run_dir = internal / "runs" / run_id
@@ -1147,8 +1497,8 @@ def _prepare(args: argparse.Namespace) -> int:
         _safe_write_path(directory, classification_root)
         directory.mkdir(parents=True, exist_ok=True)
 
-    lisa_config_path = _find_lisa_config(input_path, temp_output)
-    lisa_config = _json_load(lisa_config_path) if lisa_config_path else None
+    lisa_config_path = paths.config_path
+    lisa_config = paths.config
     research_stage = "copilot"
     references = _refresh_references(
         reference_cache,
@@ -1163,10 +1513,16 @@ def _prepare(args: argparse.Namespace) -> int:
         _sha256_file(lisa_config_path) if lisa_config_path else ""
     )
     cache_key = _cache_key(
-        input_path, references, lisa_config_sha256
+        input_path, references, lisa_config_sha256,
+        analysis_snapshot=semantic_snapshot, evidence_summary=evidence_summary,
     )
     cache_path = model_cache_root / f"{cache_key}.json"
-    reused_model = _load_model_cache(cache_path, cache_key, run_id)
+    cache_decision: dict[str, Any] = {}
+    reused_model = _load_model_cache(
+        cache_path, cache_key, run_id,
+        _validation_summary(evidence_summary, run_id, research_stage, references),
+        handoff, semantic_snapshot, cache_decision,
+    )
 
     run_path = run_dir / "run.json"
     summary_path = run_dir / "evidence-summary.json"
@@ -1188,6 +1544,8 @@ def _prepare(args: argparse.Namespace) -> int:
         "started_epoch": started_epoch,
         "input_path": str(input_path),
         "input_sha256": input_hash,
+        "analysis_handoff": handoff,
+        "analysis_semantic_snapshot": semantic_snapshot,
         "temp_output_path": str(temp_output.resolve()),
         "classification_root": str(classification_root),
         "run_directory": str(run_dir),
@@ -1201,6 +1559,7 @@ def _prepare(args: argparse.Namespace) -> int:
         "cache_key": cache_key,
         "cache_path": str(cache_path),
         "classification_cache_hit": reused_model is not None,
+        "classification_cache_decision": cache_decision,
         "research_stage": research_stage,
         "lisa_config_path": str(lisa_config_path) if lisa_config_path else "",
         "lisa_config_sha256": lisa_config_sha256,
@@ -1222,7 +1581,9 @@ def _prepare(args: argparse.Namespace) -> int:
         _atomic_write_json(reused_path, reused_model)
     run["evidence_summary_sha256"] = _sha256_file(summary_path)
     run["references_sha256"] = _sha256_file(references_path)
+    _write_model_context(run, data, evidence_summary, references)
     _atomic_write_json(run_path, run)
+    _load_run(run_path)
     print(
         json.dumps(
             {
@@ -1232,11 +1593,18 @@ def _prepare(args: argparse.Namespace) -> int:
                 "references": str(references_path),
                 "model_draft": str(draft_path),
                 "classification_cache_hit": run["classification_cache_hit"],
+                "classification_cache_decision": cache_decision,
                 "reused_model": run["reused_model_path"],
                 "target_markdown": str(target_markdown),
                 "reference_failures": run["reference_failures"],
                 "research_stage": research_stage,
                 "lisa_config": run["lisa_config_path"],
+                "model_context": run["model_context_path"],
+                "evidence_index": run["evidence_index_path"],
+                "evidence_overview": run["evidence_overview_path"],
+                "reference_index": run["reference_index_path"],
+                "completion_contract": str(COMPLETION_CONTRACT_PATH),
+                "input_size_counters": run["input_size_counters"],
             },
             indent=2,
         )
@@ -1245,6 +1613,7 @@ def _prepare(args: argparse.Namespace) -> int:
 
 
 def _load_run(path: Path) -> dict[str, Any]:
+    _assert_no_link_components(path)
     run = _json_load(path)
     run_dir = Path(run.get("run_directory", "")).resolve()
     if path.resolve().parent != run_dir or path.name != "run.json":
@@ -1284,18 +1653,53 @@ def _load_run(path: Path) -> dict[str, Any]:
             raise ClassifierError(f"Prepared artifact is missing: {artifact}")
         if hash_key and _sha256_file(artifact) != run.get(hash_key):
             raise ClassifierError(f"Prepared artifact changed after preparation: {artifact}")
-    input_path = Path(run["input_path"])
-    if not input_path.exists() or _sha256_file(input_path) != run["input_sha256"]:
-        raise ClassifierError(
-            "Requirement analysis changed after preparation; start a new run"
-        )
     config_path = run.get("lisa_config_path", "")
-    if config_path:
-        config = Path(config_path)
-        if not config.exists() or _sha256_file(config) != run.get("lisa_config_sha256"):
-            raise ClassifierError(
-                "lisa-config.json changed after preparation; start a new run"
-            )
+    if not config_path:
+        raise ClassifierError("Prepared run requires its authoritative lisa-config.json")
+    config = Path(config_path)
+    if not config.exists() or _sha256_file(config) != run.get("lisa_config_sha256"):
+        raise ClassifierError(
+            "lisa-config.json changed after preparation; start a new run"
+        )
+    try:
+        paths = resolve_lisa_config(config)
+        input_path, data, manifest = select_latest_validated_analysis(
+            paths.analysis, expected_requirements_root=paths.requirements,
+        )
+    except (LisaConfigError, AnalysisHandoffError) as exc:
+        raise ClassifierError(str(exc)) from exc
+    if paths.classification.resolve() != classification_root:
+        raise ClassifierError("Run classification root differs from lisa-config.json")
+    if (
+        input_path != Path(run["input_path"])
+        or _handoff_snapshot(input_path, manifest) != run.get("analysis_handoff")
+        or manifest["publication"]["ledger"]["sha256"] != run.get("input_sha256")
+    ):
+        raise ClassifierError(
+            "Validated analysis handoff changed after preparation; start a new run"
+        )
+    _validate_requirement_analysis(input_path, data)
+    if _semantic_analysis_snapshot(data, manifest) != run.get("analysis_semantic_snapshot"):
+        raise ClassifierError("Prepared semantic evidence snapshot does not match the validated handoff")
+    review_artifacts = run.get("review_artifacts")
+    if not isinstance(review_artifacts, dict) or not review_artifacts:
+        raise ClassifierError("Prepared run is missing its complete evidence review context")
+    for relative, digest in review_artifacts.items():
+        artifact = _safe_write_path(run_dir / relative, classification_root)
+        if (
+            not _is_within(artifact, run_dir)
+            or not artifact.is_file()
+            or _sha256_file(artifact) != digest
+        ):
+            raise ClassifierError(f"Prepared review artifact changed: {relative}")
+    for key, expected in (
+        ("model_context_path", run_dir / "model-context.json"),
+        ("evidence_index_path", run_dir / "evidence-batches" / "index.json"),
+        ("evidence_overview_path", run_dir / "evidence-batches" / "overview.json"),
+        ("reference_index_path", run_dir / "reference-index.json"),
+    ):
+        if Path(run.get(key, "")) != expected or str(expected.relative_to(run_dir)) not in review_artifacts:
+            raise ClassifierError(f"Prepared review context path is inconsistent: {key}")
     for assessment in run.get("research_assessments", []):
         assessment_path = Path(assessment["path"]).resolve()
         if not _is_within(assessment_path, run_dir):
@@ -1393,14 +1797,12 @@ def _expand_research(args: argparse.Namespace) -> int:
         references,
         run.get("lisa_config_sha256", ""),
         [
-            item["sha256"]
+            _canonical_hash(_semantic_ledger(_json_load(Path(item["path"]))))
             for item in list(run.get("research_assessments", []))
-            + [
-                {
-                    "sha256": _sha256_file(persisted_assessment)
-                }
-            ]
+            + [{"path": str(persisted_assessment)}]
         ],
+        analysis_snapshot=run["analysis_semantic_snapshot"],
+        evidence_summary=summary,
     )
     cache_root = (
         Path(run["classification_root"])
@@ -1410,9 +1812,6 @@ def _expand_research(args: argparse.Namespace) -> int:
     )
     cache_path = cache_root / f"{cache_key}.json"
     reused_path = Path(run["run_directory"]) / "classification-model.reused.json"
-    reused_model = _load_model_cache(
-        cache_path, cache_key, run["run_id"]
-    )
     draft_path = Path(run["model_draft_path"])
     assessments = list(run.get("research_assessments", []))
     assessments.append(
@@ -1424,6 +1823,12 @@ def _expand_research(args: argparse.Namespace) -> int:
             "unmet_requirements": assessment["unmet_requirements"],
             "summary": assessment["summary"],
         }
+    )
+    cache_decision: dict[str, Any] = {}
+    reused_model = _load_model_cache(
+        cache_path, cache_key, run["run_id"],
+        _validation_summary(summary, run["run_id"], target, references, assessments),
+        run["analysis_handoff"], run["analysis_semantic_snapshot"], cache_decision,
     )
     draft = _model_template(run["run_id"], summary, target)
     copilot_assessment = next(
@@ -1468,6 +1873,7 @@ def _expand_research(args: argparse.Namespace) -> int:
             "cache_key": cache_key,
             "cache_path": str(cache_path),
             "classification_cache_hit": reused_model is not None,
+            "classification_cache_decision": cache_decision,
             "reused_model_path": str(reused_path) if reused_model else "",
             "references_sha256": _sha256_file(references_path),
             "reference_failures": sum(
@@ -1476,7 +1882,13 @@ def _expand_research(args: argparse.Namespace) -> int:
             "research_assessments": assessments,
         }
     )
+    data, _ = load_validated_analysis(
+        input_path,
+        expected_requirements_root=Path(run["analysis_handoff"]["requirements_root"]),
+    )
+    _write_model_context(run, data, summary, references)
     _atomic_write_json(run_path, run)
+    _load_run(run_path)
     print(
         json.dumps(
             {
@@ -1485,8 +1897,15 @@ def _expand_research(args: argparse.Namespace) -> int:
                 "references": str(references_path),
                 "model_draft": str(draft_path),
                 "classification_cache_hit": run["classification_cache_hit"],
+                "classification_cache_decision": cache_decision,
                 "reused_model": run["reused_model_path"],
                 "reference_failures": run["reference_failures"],
+                "model_context": run["model_context_path"],
+                "evidence_index": run["evidence_index_path"],
+                "evidence_overview": run["evidence_overview_path"],
+                "reference_index": run["reference_index_path"],
+                "completion_contract": str(COMPLETION_CONTRACT_PATH),
+                "input_size_counters": run["input_size_counters"],
             },
             indent=2,
         )
@@ -3729,10 +4148,13 @@ def _write_model_cache(run: dict[str, Any], model: dict[str, Any]) -> None:
     cached_model["run_id"] = "CACHE"
     payload = {
         "version": CACHE_VERSION,
+        "status": "validated",
         "cache_key": run["cache_key"],
         "created_at_local": _run_local_time(run),
         "model": cached_model,
         "model_sha256": _canonical_hash(cached_model),
+        "analysis_handoff": run["analysis_handoff"],
+        "analysis_semantic_snapshot": run["analysis_semantic_snapshot"],
     }
     _safe_write_path(Path(run["cache_path"]), Path(run["classification_root"]))
     _atomic_write_json(Path(run["cache_path"]), payload)
@@ -3750,30 +4172,16 @@ def _publish(args: argparse.Namespace) -> int:
         raise ClassifierError("Classification model must be inside the run directory")
     model = _json_load(model_path)
     summary = _json_load(Path(run["evidence_summary_path"]))
-    summary["classifier_run_id"] = run["run_id"]
     references_value = json.loads(
         Path(run["references_path"]).read_text(encoding="utf-8")
     )
     if not isinstance(references_value, list):
         raise ClassifierError("Reference artifact must contain an array")
     references = references_value
-    summary["research_stage"] = run["research_stage"]
-    summary["research_assessments"] = run.get(
-        "research_assessments", []
+    summary = _validation_summary(
+        summary, run["run_id"], run["research_stage"], references,
+        run.get("research_assessments", []),
     )
-    accepted_reference_statuses = {
-        "retrieved",
-        "not-modified",
-        "fresh-cache",
-        "cached-after-error",
-        "packaged-verified",
-    }
-    summary["consulted_reference_ids"] = [
-        item["id"]
-        for item in references
-        if item["status"] in accepted_reference_statuses
-        and item.get("content_sha256")
-    ]
     failed_required = [
         item["id"]
         for item in references
@@ -3806,6 +4214,7 @@ def _publish(args: argparse.Namespace) -> int:
     errors = _validate_markdown(markdown_path, markdown, output)
     if errors:
         raise ClassifierError("Classification validation failed:\n- " + "\n- ".join(errors))
+    _load_run(run_path)
     _safe_write_path(markdown_path, Path(run["classification_root"]))
     _safe_write_path(json_path, Path(run["classification_root"]))
     _atomic_write_text(markdown_path, markdown)
@@ -3852,6 +4261,7 @@ def _publish(args: argparse.Namespace) -> int:
     _validate_against_schema(
         manifest, CLASSIFICATION_MANIFEST_SCHEMA_PATH, "Classification manifest"
     )
+    _load_run(run_path)
     _safe_write_path(manifest_path, Path(run["classification_root"]))
     _atomic_write_json(manifest_path, manifest)
     run["manifest_path"] = str(manifest_path)
@@ -3929,7 +4339,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return int(args.handler(args))
-    except ClassifierError as exc:
+    except (ClassifierError, AnalysisHandoffError, ReviewBatchError) as exc:
         print(
             json.dumps({"status": "failed", "error": str(exc)}, indent=2),
             file=sys.stderr,
