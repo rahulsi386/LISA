@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import unittest
 from pathlib import Path
@@ -155,6 +156,26 @@ class AgencyPluginTests(unittest.TestCase):
         self.assertIn("[switch]$RequireAzureMcp", script)
         self.assertIn("Get-Command 'az'", script)
         self.assertNotIn("& az login", script)
+
+    def test_layout_uses_python_without_dotnet_payload(self) -> None:
+        designer = PLUGIN_ROOT / "skills" / "solution-designer"
+        self.assertTrue((designer / "scripts" / "layout_engine.py").is_file())
+        self.assertFalse((designer / "resources" / "layout-engine" / "SolutionDesigner.LayoutEngine.exe").exists())
+        self.assertFalse((designer / "layout-engine" / "layout-engine.csproj").exists())
+        requirements = (PLUGIN_ROOT / "requirements.txt").read_text(encoding="utf-8")
+        self.assertIn("networkx", requirements)
+        checker = (PLUGIN_ROOT / "scripts" / "Test-LisaAgencyPrerequisites.ps1").read_text(encoding="utf-8")
+        self.assertIn("'networkx'", checker)
+        self.assertIn("layout_engine.py", checker)
+
+    def test_distributed_files_fit_agency_download_limit(self) -> None:
+        excluded = {"node_modules", "bin", "obj", "__pycache__", ".venv", ".pytest_cache", ".git"}
+        for directory, folders, files in os.walk(PLUGIN_ROOT):
+            folders[:] = [name for name in folders if name not in excluded]
+            for name in files:
+                path = Path(directory) / name
+                with self.subTest(path=path.relative_to(PLUGIN_ROOT)):
+                    self.assertLess(path.stat().st_size, 33_554_432)
 
 
 if __name__ == "__main__":

@@ -18,8 +18,11 @@ foreach ($file in @($ModelPath, $IconManifestPath, $ReferenceManifestPath)) {
 }
 $node = Get-Command node -ErrorAction SilentlyContinue
 if (-not $node) { throw 'Node.js is required for the packaged measured-layout renderer.' }
+$pythonCommand = if ($env:LISA_PYTHON) { $env:LISA_PYTHON } else { 'python' }
+$python = Get-Command $pythonCommand -ErrorAction SilentlyContinue
+if (-not $python) { throw 'Python with NetworkX is required for diagram routing.' }
 $generator = Join-Path (Split-Path $PSScriptRoot -Parent) 'renderer\generate.js'
 $result = & ([string]$node.Source) $generator --model $ModelPath --output $OutputDirectory `
-    --icons $IconManifestPath --references $ReferenceManifestPath --profile $LayoutProfile
+    --icons $IconManifestPath --references $ReferenceManifestPath --profile $LayoutProfile --python ([string]$python.Source)
 if ($LASTEXITCODE -ne 0) { throw "Diagram generation failed for the $LayoutProfile profile." }
 $result | ConvertFrom-Json

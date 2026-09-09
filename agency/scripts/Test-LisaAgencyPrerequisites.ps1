@@ -59,7 +59,7 @@ if ($InstallPythonPackages) {
     }
 }
 
-$imports = 'jsonschema', 'pypdf', 'docx', 'pptx', 'PIL', 'openpyxl', 'tzdata'
+$imports = 'jsonschema', 'pypdf', 'docx', 'pptx', 'PIL', 'openpyxl', 'tzdata', 'networkx'
 $importProbe = 'import importlib.util,sys; missing=[x for x in sys.argv[1:] if importlib.util.find_spec(x) is None]; print("\n".join(missing)); raise SystemExit(bool(missing))'
 $missingImports = (& python -c $importProbe @imports 2>&1 | Out-String).Trim()
 if ($LASTEXITCODE -ne 0) {
@@ -83,12 +83,12 @@ else {
     Write-Host 'OK  Solution Designer renderer' -ForegroundColor Green
 }
 
-$layoutEngine = Join-Path $pluginRoot 'skills\solution-designer\resources\layout-engine\SolutionDesigner.LayoutEngine.exe'
+$layoutEngine = Join-Path $pluginRoot 'skills\solution-designer\scripts\layout_engine.py'
 if (-not (Test-Path -LiteralPath $layoutEngine -PathType Leaf)) {
-    $failures.Add("Packaged layout engine is missing: $layoutEngine")
+    $failures.Add("Packaged Python layout router is missing: $layoutEngine")
 }
 else {
-    Write-Host 'OK  Packaged layout engine' -ForegroundColor Green
+    Write-Host 'OK  Packaged Python layout router (no .NET runtime required)' -ForegroundColor Green
 }
 
 if ($RequireCloudStages) {

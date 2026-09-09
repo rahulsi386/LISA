@@ -13,7 +13,7 @@ unchanged.
   Copilot engine.
 - `.claude-plugin/plugin.json` also embeds the same MCP registrations for the Claude engine.
 - `skills/`: all LISA skills, shared Python modules, contracts, resources, tests, renderer, fonts,
-  icons, and the packaged Windows layout engine.
+  icons, and the Python layout router.
 - `scripts/Test-LisaAgencyPrerequisites.ps1`: prerequisite validation and optional dependency
   restoration.
 - `lisa-config.example.json`: project-relative configuration template.
@@ -26,7 +26,7 @@ otherwise preserved.
 
 - Windows 11
 - Agency 1.0 or newer
-- Python 3.11 or newer
+- Python 3.11 or newer, including the pinned NetworkX dependency in `requirements.txt`
 - PowerShell 7 or newer
 - Node.js 20 or newer, npm, and npx (use a currently supported Node.js LTS release)
 - Microsoft Edge for the bundled Playwright MCP configuration
@@ -51,6 +51,17 @@ Omit `-RequireCloudStages` when using only local analysis, classification, desig
 cleanup capabilities. Add `-RequireAzureMcp` to require Azure CLI for the recommended Azure MCP
 sign-in flow; it is independent of the PAC-dependent `-RequireCloudStages` switch. The script
 does not authenticate Agency, PAC, Azure, Microsoft 365, Copilot Studio, or SharePoint.
+
+Solution Designer routes diagrams with `skills/solution-designer/scripts/layout_engine.py`
+and NetworkX. No layout executable, .NET runtime, SDK, or compiler is required. Install the
+Python dependencies during setup, not during a design run. Node.js/resvg still renders the PNGs.
+When invoking the diagram scripts directly, `LISA_PYTHON` can select a Python executable;
+otherwise they use `python` on PATH. The Python orchestrator forwards its own interpreter.
+
+The router preserves fixed card positions, orthogonal connections, port sides and offsets,
+obstacle avoidance, and collision-checked labels. Routes may differ from the former MSAGL
+implementation; generation, geometry validation, raster checks, and rendered inspection remain
+mandatory. Infeasible routes or labels fail rather than producing invented geometry.
 
 ## Project configuration
 
@@ -253,8 +264,8 @@ npm --prefix .\skills\solution-designer\renderer test
 
 ## Current limitations
 
-- This distribution is Windows-oriented because LISA uses PowerShell, PAC CLI, Microsoft Edge, and
-  a packaged Windows layout engine.
+- This distribution is Windows-oriented because LISA uses Windows-specific PowerShell invocation,
+  PAC CLI, and Microsoft Edge. The Python layout router itself is platform-independent.
 - Agency does not replace tenant authentication. Cloud stages stop if PAC and browser identities do
   not match the configured environment.
 - Human approval remains mandatory after classification and build. Cleanup still requires the
@@ -272,3 +283,9 @@ directories; then reapply the Agency adaptations in `cad-orchestrator`, `require
 `complexity-classifier`, `agent-builder`, `artifact-publisher`, and `postpublish-cleanup`, including
 the shared `analysis_handoff.py`, `review_batches.py`, and input resolver changes. Run the full
 validation commands above before publishing.
+
+Preserve the Agency-only Python routing adaptation in `solution-designer`. Do not copy
+`solution-designer/layout-engine/` or `solution-designer/resources/layout-engine/` from Scout
+back into this plugin. Keep `layout_engine.py`, its NetworkX requirement, renderer launch,
+cache fingerprint, and prerequisite check together. The plugin tests enforce the observed
+Agency GitHub downloader's 32 MiB per-file limit, excluding generated dependency/build folders.

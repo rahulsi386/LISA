@@ -39,7 +39,8 @@ $designDirectory = (Resolve-Path -LiteralPath $designDirectory).Path
 if (-not (Test-Path -LiteralPath $ModelPath -PathType Leaf)) { throw "Model not found: $ModelPath" }
 $ModelPath = (Resolve-Path -LiteralPath $ModelPath).Path
 Assert-UnderRoot $ModelPath $designDirectory 'design-model.json'
-$python = Get-Command python -ErrorAction SilentlyContinue
+$pythonCommand = if ($env:LISA_PYTHON) { $env:LISA_PYTHON } else { 'python' }
+$python = Get-Command $pythonCommand -ErrorAction SilentlyContinue
 if (-not $python) { throw 'Python is required for design-model schema validation.' }
 & ([string]$python.Source) (Join-Path $PSScriptRoot 'solution_designer.py') validate-model --model $ModelPath | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "design-model.json failed schema validation: $ModelPath" }
