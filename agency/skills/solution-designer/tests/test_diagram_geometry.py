@@ -5,6 +5,7 @@ import base64
 import json
 import shutil
 import subprocess
+import sys
 import time
 import unittest
 import uuid
@@ -14,7 +15,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HELPER = ROOT / "resources" / "layout-engine" / "SolutionDesigner.LayoutEngine.exe"
+HELPER = ROOT / "scripts" / "layout_engine.py"
 VALIDATOR = ROOT / "scripts" / "Test-Diagrams.ps1"
 POWERSHELL = shutil.which("pwsh") or shutil.which("powershell")
 
@@ -136,7 +137,6 @@ class LocalWorkspace(unittest.TestCase):
                 time.sleep(0.1 * (attempt + 1))
 
 
-@unittest.skipUnless(HELPER.exists(), "Packaged Windows layout helper is unavailable")
 class RoutingGeometryTests(LocalWorkspace):
     def model(self) -> dict:
         return {
@@ -153,7 +153,8 @@ class RoutingGeometryTests(LocalWorkspace):
         source, output = self.work / "input.json", self.work / "output.json"
         source.write_text(json.dumps(model), encoding="utf-8")
         output.unlink(missing_ok=True)
-        process = subprocess.run([str(HELPER), str(source), str(output)], capture_output=True, text=True, timeout=120)
+        process = subprocess.run([sys.executable, str(HELPER), str(source), str(output)], capture_output=True, text=True, timeout=120)
+        self.assertTrue(output.is_file(), process.stderr or process.stdout)
         result = json.loads(output.read_text(encoding="utf-8"))
         if success:
             self.assertEqual(0, process.returncode, f"{result}\n{process.stderr}")
@@ -316,6 +317,45 @@ class RoutingGeometryTests(LocalWorkspace):
         model = self.model()
         model["edges"][0]["targetId"] = "a"
         self.assert_geometry(model, self.run_layout(model))
+
+    def test_invalid_canvas_nodes_and_labels_fail_closed(self) -> None:
+        for change in ("canvas", "duplicate", "outside", "label", "nonfinite"):
+            with self.subTest(change=change):
+                model = self.model()
+                if change == "canvas":
+                    model["canvasWidth"] = 0
+                elif change == "duplicate":
+                    model["nodes"].append(copy.deepcopy(model["nodes"][0]))
+                elif change == "outside":
+                    model["nodes"][0]["x"] = -10
+                elif change == "nonfinite":
+                    model["nodes"][0]["width"] = float("inf")
+                else:
+                    model["edges"][0]["labelWidth"] = -1
+                self.run_layout(model, success=False)
+
+    def test_impossible_barrier_is_not_crossed(self) -> None:
+        model = self.model()
+        model["routingExclusions"] = [{"x": 400, "y": 0, "width": 150, "height": 700}]
+        self.run_layout(model, success=False)
+
+    def test_thirty_node_chain_is_deterministic_and_has_valid_geometry(self) -> None:
+        model = self.model()
+        model["canvasWidth"] = 10000
+        model["nodes"] = [
+            {"id": f"node-{index:02}", "x": 100 + index * 300, "y": 200, "width": 120, "height": 100}
+            for index in range(30)
+        ]
+        model["edges"] = [
+            {"id": f"edge-{index:02}", "sourceId": f"node-{index:02}", "targetId": f"node-{index+1:02}",
+             "sourceSide": "right", "targetSide": "left", "labelWidth": 80, "labelHeight": 24}
+            for index in range(29)
+        ]
+        result = self.run_layout(model)
+        self.assert_geometry(model, result)
+        model["edges"].reverse()
+        model["nodes"].reverse()
+        self.assertEqual(result, self.run_layout(model))
 
 
 @unittest.skipUnless(POWERSHELL, "PowerShell is unavailable")

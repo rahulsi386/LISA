@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import copy
 import hashlib
+import importlib.metadata
 import json
 import math
 import os
@@ -1188,6 +1189,10 @@ def _build_design_model(
 
 
 def _resource_hashes() -> dict[str, str]:
+    try:
+        networkx_version = importlib.metadata.version("networkx")
+    except importlib.metadata.PackageNotFoundError as exc:
+        raise DesignerError("NetworkX is required; install the Agency Python prerequisites before running design.") from exc
     for icon in _json_load(ICON_MANIFEST)["icons"]:
         icon_path = RESOURCES / icon["file"]
         if not _is_within(icon_path, RESOURCES / "icons"):
@@ -1211,7 +1216,8 @@ def _resource_hashes() -> dict[str, str]:
     return {
         **{path.name: _sha256_file(path) for path in files},
         "icons": _directory_hash(RESOURCES / "icons"),
-        "layout_engine": _directory_hash(RESOURCES / "layout-engine"),
+        "layout_engine": _sha256_file(SCRIPTS / "layout_engine.py"),
+        "networkx_version": networkx_version,
         "renderer": _directory_hash(SKILL_ROOT / "renderer"),
         "orchestrator": _sha256_file(Path(__file__).resolve()),
     }
@@ -1597,6 +1603,7 @@ def _generate_candidate(
             text=True,
             check=False,
             timeout=GENERATION_TIMEOUT_SECONDS,
+            env={**os.environ, "LISA_PYTHON": sys.executable},
         )
     except subprocess.TimeoutExpired as exc:
         raise DesignerError(

@@ -1,7 +1,7 @@
 # Third-party notices
 
-- Microsoft Automatic Graph Layout (MSAGL) 1.1.6 - MIT License  
-  https://github.com/microsoft/automatic-graph-layout
+- NetworkX 3.6.1 - BSD 3-Clause License (installed through Python requirements)
+  https://networkx.org/documentation/stable/reference/legal.html
 - `@resvg/resvg-js` 2.6.2 - Mozilla Public License 2.0  
   https://github.com/thx/resvg-js
 - resvg/usvg - Apache License 2.0 or MIT License  

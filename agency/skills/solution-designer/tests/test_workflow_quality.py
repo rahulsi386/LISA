@@ -7,6 +7,7 @@ import io
 import json
 import shutil
 import subprocess
+import sys
 import unittest
 import uuid
 import xml.etree.ElementTree as ET
@@ -22,6 +23,23 @@ SPEC = importlib.util.spec_from_file_location(
 designer = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(designer)
 FIXTURE = SKILL_ROOT / "tests" / "fixtures" / "complexity-classification_20260813_120000.json"
+
+
+class LayoutRuntimeTests(unittest.TestCase):
+    def test_cache_fingerprints_router_source_and_networkx_version(self) -> None:
+        before = designer._resource_hashes()
+        router = SKILL_ROOT / "scripts" / "layout_engine.py"
+        self.assertEqual(before["layout_engine"], hashlib.sha256(router.read_bytes()).hexdigest())
+        with patch.object(designer.importlib.metadata, "version", return_value="changed"):
+            after = designer._resource_hashes()
+        self.assertNotEqual(before["networkx_version"], after["networkx_version"])
+        self.assertNotEqual(designer._canonical_hash(before), designer._canonical_hash(after))
+
+    def test_generation_forwards_the_current_python_interpreter(self) -> None:
+        with patch.object(designer.subprocess, "run", side_effect=designer.subprocess.TimeoutExpired("test", 1)) as launch:
+            with self.assertRaises(designer.DesignerError):
+                designer._generate_candidate({}, SKILL_ROOT / "tests" / "design")
+        self.assertEqual(launch.call_args.kwargs["env"]["LISA_PYTHON"], sys.executable)
 
 
 class ProductIconTests(unittest.TestCase):

@@ -289,7 +289,7 @@ function crossingBridges(routes) {
   return bridges;
 }
 
-function architecture(model, icons, typography, profile, output) {
+function architecture(model, icons, typography, profile, output, python = process.env.LISA_PYTHON || "python") {
   const labelMeasures = new Map(model.relationships.map(edge => {
     const lines = typography.wrap(edge.label, 140, 13);
     return [edge, {
@@ -372,23 +372,24 @@ function architecture(model, icons, typography, profile, output) {
       })),
     ],
   };
-  const inputFile = path.join(output, ".msagl-input.json");
-  const outputFile = path.join(output, ".msagl-output.json");
+  const inputFile = path.join(output, ".layout-input.json");
+  const outputFile = path.join(output, ".layout-output.json");
   fs.writeFileSync(inputFile, JSON.stringify(input));
-  const helper = path.join(__dirname, "..", "resources", "layout-engine", "SolutionDesigner.LayoutEngine.exe");
-  const process = spawnSync(helper, [inputFile, outputFile], { encoding: "utf8", timeout: 120000, windowsHide: true });
-  if (process.error) throw process.error;
-  if (!fs.existsSync(outputFile)) throw new Error(`MSAGL produced no result: ${process.stderr}`);
+  fs.rmSync(outputFile, { force: true });
+  const helper = path.join(__dirname, "..", "scripts", "layout_engine.py");
+  const result = spawnSync(python, [helper, inputFile, outputFile], { encoding: "utf8", timeout: 120000, windowsHide: true });
+  if (result.error) throw result.error;
+  if (!fs.existsSync(outputFile)) throw new Error(`Python layout router produced no result: ${result.stderr}`);
   const layout = readJson(outputFile);
-  if (process.status !== 0 || layout.issues?.length) {
-    throw new Error(`MSAGL routing failed: ${(layout.issues || []).join("; ")} ${process.stderr || ""}`.trim());
+  if (result.status !== 0 || layout.issues?.length) {
+    throw new Error(`Python routing failed: ${(layout.issues || []).join("; ")} ${result.stderr || ""}`.trim());
   }
   const routeById = new Map(layout.routes.map(route => [route.id, route]));
   const bridges = crossingBridges(layout.routes);
   const edgeLabels = [];
   for (const item of edgeInputs) {
     const route = routeById.get(item.id);
-    if (!route || route.points.length < 2) throw new Error(`Missing MSAGL route: ${item.id}`);
+    if (!route || route.points.length < 2) throw new Error(`Missing Python layout route: ${item.id}`);
     const { edge } = item;
     const supporting = [edge.from, edge.to].some(id => cardById.get(id).storyRole === "supporting");
     const color = supporting && edge.implementationMode === "real" ? THEME.muted : modeColor(edge.implementationMode);
@@ -607,7 +608,7 @@ function main(argv) {
   fs.mkdirSync(output, { recursive: true });
   const icons = resolveIcons(model, readJson(args.icons), args.icons);
   const typography = new Typography();
-  const sa = architecture(model, icons, typography, args.profile, output);
+  const sa = architecture(model, icons, typography, args.profile, output, args.python);
   const sd = sequenceDiagram(model, icons, typography, args.profile);
   const saPath = path.join(output, `SA_${model.scenarioSlug}.svg`);
   const sdPath = path.join(output, `SD_${model.scenarioSlug}.svg`);
@@ -629,7 +630,7 @@ function main(argv) {
   };
   fs.writeFileSync(path.join(output, "diagram-manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
   if (process.env.SOLUTION_DESIGNER_KEEP_LAYOUT_DEBUG !== "1") {
-    for (const name of [".msagl-input.json", ".msagl-output.json"]) fs.unlinkSync(path.join(output, name));
+    for (const name of [".layout-input.json", ".layout-output.json"]) fs.unlinkSync(path.join(output, name));
   }
   process.stdout.write(JSON.stringify({
     SolutionArchitecture: saPath, SequenceDiagram: sdPath, HtmlPreview: previewPath,

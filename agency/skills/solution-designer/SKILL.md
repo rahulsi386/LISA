@@ -1,6 +1,6 @@
 ---
 name: "solution-designer"
-description: "Generates exactly two presentation-quality Microsoft agentic-solution diagrams and an offline HTML preview through a deterministic MSAGL and resvg path with semantic hierarchy, official icons, automated quality gates, and rendered inspection."
+description: "Generates exactly two presentation-quality Microsoft agentic-solution diagrams and an offline HTML preview through deterministic Python/NetworkX routing and resvg rendering with semantic hierarchy, official icons, automated quality gates, and rendered inspection."
 ---
 
 # Solution Designer: Presentation-Quality Rendering
@@ -26,7 +26,7 @@ The packaged `resources\artifact-contract.json` is validated against the shared 
 - If an evidenced product has no cached verified icon, use `generic-component` and label it as generic. Never substitute another product icon.
 - Resolve products through the packaged canonical alias registry, not broad substring guesses. In particular, Microsoft 365 Copilot is not Agent 365. Show the registered product caption when a custom canonical component name does not already identify its product.
 - Read only the latest direct child `<basePath>\output\classification\complexity-classification_<timestamp>.json`, resolved through `lisa-config.json`. Do not reread the full requirements corpus.
-- Use the packaged self-contained MSAGL helper for obstacle-aware rectilinear routing and collision-free label placement.
+- Use the packaged `scripts/layout_engine.py` with the installed NetworkX dependency for obstacle-aware rectilinear routing and collision-free label placement. Do not substitute model-generated coordinates or download an executable. Missing dependencies block the run and must be installed during setup.
 - Use the packaged `@resvg/resvg-js` renderer and bundled Inter font for deterministic, browser-free PNG generation.
 
 Reference and icon refreshes are maintenance operations performed outside a run.
@@ -196,7 +196,7 @@ The command:
 1. Uses the validated model as the shared source for both diagrams.
 2. Uses the packaged Node generator and resvg font metrics to compute content-sized cards without ellipsis or clipping.
 3. Evaluates deterministic Balanced, Spacious, and Wide candidates.
-4. Uses MSAGL rectilinear routing and label placement for every visible architecture relationship.
+4. Uses deterministic Python/NetworkX rectilinear routing and label placement for every visible architecture relationship.
 5. Rejects candidates with node, label, connector, text-box, bounds, sequence, font, or truncation defects. Structural success is not proof of good composition.
 6. Renders both SVGs through resvg with bundled deterministic fonts.
 7. Generates `preview.html` with the scenario title, summary, both PNGs, SVG/PNG links, and fit-width/actual-size viewing. All asset links are relative sibling filenames; there are no external assets, scripts, or server requirements.
@@ -290,6 +290,6 @@ Return one JSON object and no surrounding prose:
 }
 ```
 
-Set `validation` to `passed` only when both diagrams and PNGs exist, MSAGL routing and every structural gate pass, deterministic raster checks pass, the inspection schema passes, every inspection check is true, and the inspected PNG hashes match. Never publish a defective candidate.
+Set `validation` to `passed` only when both diagrams and PNGs exist, Python routing and every structural gate pass, deterministic raster checks pass, the inspection schema passes, every inspection check is true, and the inspected PNG hashes match. Never publish a defective candidate.
 
 Every returned path must be beneath `<basePath>\output\design`.

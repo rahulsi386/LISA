@@ -7,7 +7,7 @@ This directory contains the ten local skills that implement the **LISA Copilot A
 
 ## Review scope and evidence levels
 
-All files in this directory were inventoried for this reference. Maintained Markdown, JSON, Python, PowerShell, JavaScript, C#, package metadata, schemas, tests, and fixtures were examined. Packaged SVG icons, the Inter font, and the compiled layout executable were reviewed through their manifests, licenses, calling code, and tests rather than interpreted as source. Generated `.NET` files under `solution-designer/layout-engine/obj/` are build intermediates and are not extension points.
+Maintained Markdown, JSON, Python, PowerShell, JavaScript, package metadata, schemas, tests, and fixtures form the implementation. Packaged SVG icons and the Inter font are described by their manifests, licenses, calling code, and tests. Diagram routing uses the Python/NetworkX helper; this Agency distribution no longer packages a .NET layout executable or build project.
 
 The descriptions below distinguish these implementation levels:
 
@@ -376,8 +376,8 @@ Run IDs match `SDR-YYYYMMDD_HHMMSS-XXXXXXXX-XXXXXXXX`; statuses are `prepared`, 
    ```
 
 4. [`Invoke-FastPath.ps1`](solution-designer/scripts/Invoke-FastPath.ps1) validates the model, tries bounded layout profiles, runs diagram generation, SVG validation, and rasterization, and emits a pending-inspection template.
-5. [`New-Diagrams.ps1`](solution-designer/scripts/New-Diagrams.ps1) computes cards/layers, resolves manifest-backed icons, invokes the layout executable, embeds SVG icons as data URIs, and writes both SVGs and a diagram manifest.
-6. [`Program.cs`](solution-designer/layout-engine/Program.cs), built by [`layout-engine.csproj`](solution-designer/layout-engine/layout-engine.csproj), uses MSAGL rectilinear routing, simplifies paths, and places collision-avoiding labels. The packaged [`SolutionDesigner.LayoutEngine.exe`](solution-designer/resources/layout-engine/SolutionDesigner.LayoutEngine.exe) is the self-contained Windows runtime. Exit `0` means no routing issues, `3` reports routing issues, and `2` is usage/exception failure.
+5. [`New-Diagrams.ps1`](solution-designer/scripts/New-Diagrams.ps1) invokes the Node renderer, which computes cards/layers, resolves manifest-backed icons, calls the Python router, embeds icons as data URIs, and writes both SVGs and a diagram manifest.
+6. [`layout_engine.py`](solution-designer/scripts/layout_engine.py) uses NetworkX A* over an obstacle-aware orthogonal visibility grid, preserves explicit port sides/offsets, simplifies routes, and places collision-checked labels. Exit `0` means no routing issues, `3` reports unplaceable labels, and `2` is input/routing failure. No .NET runtime or compiled layout executable is needed. The router source and installed NetworkX version participate in the design cache fingerprint.
 7. [`Test-Diagrams.ps1`](solution-designer/scripts/Test-Diagrams.ps1) validates XML, names, embedded icons, legends, arrows, bounds, overlap, routes, bridges, labels, fonts, truncation, lifelines, and simulation disclosure.
 8. [`Render-Diagrams.ps1`](solution-designer/scripts/Render-Diagrams.ps1) launches the bounded Node renderer and validates its identity, report, hashes, and sizes. [`renderer/render.js`](solution-designer/renderer/render.js) uses pinned `@resvg/resvg-js` and `pngjs`, disables system fonts, and checks dimensions, opacity, and color diversity.
 9. Open and inspect both PNGs once, complete the inspection JSON truthfully, and preserve the returned PNG hashes.
@@ -400,7 +400,7 @@ The current implementation imposes a 3,600-second generation deadline and a 420-
 
 - Add an icon by adding the exact SVG, alias/source/provenance in the icon manifest, and required licensing notice; never substitute a different product icon.
 - Extend component categories only with model schema, Python layer/kind mapping, icon mapping, PowerShell layout/render behavior, and tests in the same change.
-- Rebuild the executable from maintained C# source; never edit `layout-engine/obj/` generated files.
+- Modify the Python router with routing-contract tests; preserve explicit ports, obstacle avoidance, label checks, bounded search, and deterministic ordering.
 - Keep Node dependency versions pinned and synchronize package metadata, lockfile, notices, and runtime fingerprint.
 - Do not weaken structural, geometry, raster, or inspection gates.
 - Correct governance/monitoring connector suppression in `New-Diagrams.ps1` before claiming every cross-cutting relationship is rendered.
