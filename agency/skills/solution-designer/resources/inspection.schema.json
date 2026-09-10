@@ -3,111 +3,144 @@
   "title": "Solution Designer rendered inspection",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "run_id",
-    "inspected_at",
-    "status",
-    "solution_architecture_png_sha256",
-    "sequence_png_sha256",
-    "checks",
-    "issues",
-    "summary"
-  ],
+  "required": ["run_id", "inspected_at", "status", "solution_architecture_png_sha256", "sequence_png_sha256", "checks", "issues", "summary"],
+  "allOf": [{
+    "if": {"properties": {"status": {"const": "passed"}}, "required": ["status"]},
+    "then": {"required": ["revision", "browser_evidence"]}
+  }],
   "properties": {
-    "revision": {
-      "type": "integer",
-      "minimum": 0,
-      "maximum": 2
-    },
-    "run_id": {
-      "type": "string",
-      "minLength": 1
-    },
-    "inspected_at": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "status": {
-      "enum": [
-        "passed",
-        "failed"
-      ]
-    },
-    "solution_architecture_png_sha256": {
-      "type": "string",
-      "pattern": "^[a-f0-9]{64}$"
-    },
-    "sequence_png_sha256": {
-      "type": "string",
-      "pattern": "^[a-f0-9]{64}$"
-    },
-    "checks": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "spelling",
-        "clipping",
-        "icon_correctness",
-        "connector_visibility",
-        "primary_agent_hierarchy",
-        "empty_space",
-        "label_collisions",
-        "sequence_phase_grouping",
-        "truncation",
-        "overall_composition",
-        "html_preview"
-      ],
+    "revision": {"type": "integer", "minimum": 0, "maximum": 2},
+    "run_id": {"type": "string", "minLength": 1},
+    "inspected_at": {"type": "string", "format": "date-time"},
+    "status": {"enum": ["passed", "failed"]},
+    "browser_evidence": {
+      "type": "object", "additionalProperties": false,
+      "description": "Hash-bound browser observations, not cryptographic proof of a trusted browser or a replacement for human/vision composition judgment.",
+      "required": ["path", "sha256"],
       "properties": {
-        "spelling": {
-          "type": "boolean"
-        },
-        "clipping": {
-          "type": "boolean"
-        },
-        "icon_correctness": {
-          "type": "boolean"
-        },
+        "path": {"const": "browser-evidence.json"},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    },
+    "solution_architecture_png_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "sequence_png_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "checks": {
+      "type": "object", "additionalProperties": false,
+      "required": ["spelling", "clipping", "icon_correctness", "connector_visibility", "primary_agent_hierarchy", "empty_space", "label_collisions", "sequence_phase_grouping", "truncation", "overall_composition", "html_preview"],
+      "properties": {
+        "spelling": {"type": "boolean"},
+        "clipping": {"type": "boolean"},
+        "icon_correctness": {"type": "boolean"},
         "connector_visibility": {
           "type": "boolean",
-          "description": "Main-flow, supporting, and return paths are readable and unambiguous. Arrowheads meet the intended components; shared routes must not obscure opposing directions or suggest a false dependency."
+          "description": "Main-flow, supporting, and return paths are readable and unambiguous. Arrowheads meet intended components; shared routes do not obscure opposing directions or suggest false dependencies."
         },
         "primary_agent_hierarchy": {
           "type": "boolean",
-          "description": "When an agent is evidenced, the primary agent has clear visual emphasis. When no agent is required, no agent or conversational channel has been invented."
+          "description": "An evidenced primary agent has clear emphasis. No agent or conversational channel is invented."
         },
         "empty_space": {
           "type": "boolean",
-          "description": "Canvas dimensions reflect the whole topology and measured content. No empty product/layer slots or full-width single control cards; intentional route clearance and whitespace remain balanced."
+          "description": "Canvas dimensions reflect the whole topology and measured content. No empty product/layer slots or full-width single controls; route clearance and whitespace remain balanced."
         },
-        "label_collisions": {
-          "type": "boolean"
-        },
-        "sequence_phase_grouping": {
-          "type": "boolean"
-        },
-        "truncation": {
-          "type": "boolean"
-        },
+        "label_collisions": {"type": "boolean"},
+        "sequence_phase_grouping": {"type": "boolean"},
+        "truncation": {"type": "boolean"},
         "overall_composition": {
           "type": "boolean",
-          "description": "The architecture is an open, requirements-driven composition with an evidenced main path, nearby supporting branches, and compact controls where applicable. Stage and row counts suit the actual graph, not a mandatory set of layer containers or a four-stage template. The sequence remains professionally aligned and readable."
+          "description": "Human/vision judgment: requirements-driven composition, evidenced main path, nearby support, compact controls, graph-appropriate stage/row counts, and professionally aligned readable sequence. Browser evidence does not decide this check."
         },
         "html_preview": {
           "type": "boolean",
-          "description": "The local HTML preview displays both matching PNGs, offers working SVG and PNG links, and supports fit-width and actual-size viewing without external assets or a web server."
+          "description": "Local preview displays matching PNGs and four working SVG/PNG links, and supports fit-width/actual-size viewing without external assets or a server."
         }
       }
     },
-    "issues": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
+    "issues": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "summary": {"type": "string", "minLength": 1}
+  },
+  "$defs": {
+    "browserEvidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "collector", "assurance", "run_id", "revision", "generated_at", "captured_at", "model_sha256", "artifact_sha256", "viewport", "screenshots", "diagrams", "links"],
+      "properties": {
+        "schema_version": {"const": "1.0"},
+        "collector": {"const": "playwright"},
+        "assurance": {"const": "browser-observations-not-attestation"},
+        "test_fixture": {"type": "boolean", "description": "Explicitly labels fabricated unit-test evidence; never a real inspection claim."},
+        "run_id": {"type": "string", "minLength": 1},
+        "revision": {"type": "integer", "minimum": 0, "maximum": 2},
+        "generated_at": {"type": "string", "format": "date-time"},
+        "captured_at": {"type": "string", "format": "date-time"},
+        "model_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "artifact_sha256": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[a-f0-9]{64}$"}},
+        "viewport": {
+          "type": "object", "additionalProperties": false,
+          "required": ["width", "height", "device_scale_factor"],
+          "properties": {
+            "width": {"type": "integer", "minimum": 320},
+            "height": {"type": "integer", "minimum": 240},
+            "device_scale_factor": {"type": "number", "minimum": 0.1}
+          }
+        },
+        "screenshots": {
+          "type": "object", "additionalProperties": false,
+          "required": ["architecture", "sequence", "preview"],
+          "properties": {
+            "architecture": {"$ref": "#/$defs/screenshot"},
+            "sequence": {"$ref": "#/$defs/screenshot"},
+            "preview": {"$ref": "#/$defs/screenshot"}
+          }
+        },
+        "diagrams": {
+          "type": "object", "additionalProperties": false,
+          "required": ["architecture", "sequence"],
+          "properties": {
+            "architecture": {"$ref": "#/$defs/browserDiagram"},
+            "sequence": {"$ref": "#/$defs/browserDiagram"}
+          }
+        },
+        "links": {
+          "type": "array", "minItems": 4, "maxItems": 4,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["href", "sha256", "opened", "decoded"],
+            "properties": {
+              "href": {"type": "string"},
+              "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+              "opened": {"const": true},
+              "decoded": {"const": true}
+            }
+          }
+        }
       }
     },
-    "summary": {
-      "type": "string",
-      "minLength": 1
+    "screenshot": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256", "width", "height", "viewed_asset"],
+      "properties": {
+        "path": {"type": "string"},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "width": {"type": "integer", "minimum": 1},
+        "height": {"type": "integer", "minimum": 1},
+        "viewed_asset": {"type": "string"}
+      }
+    },
+    "browserDiagram": {
+      "type": "object", "additionalProperties": false,
+      "required": ["src", "decoded", "natural_width", "natural_height", "display_width", "display_height", "actual_width", "actual_height", "actual_size_checked", "fit_width_restored"],
+      "properties": {
+        "src": {"type": "string"},
+        "decoded": {"const": true},
+        "natural_width": {"type": "integer", "minimum": 1},
+        "natural_height": {"type": "integer", "minimum": 1},
+        "display_width": {"type": "number", "exclusiveMinimum": 0},
+        "display_height": {"type": "number", "exclusiveMinimum": 0},
+        "actual_width": {"type": "number", "exclusiveMinimum": 0},
+        "actual_height": {"type": "number", "exclusiveMinimum": 0},
+        "actual_size_checked": {"const": true},
+        "fit_width_restored": {"const": true}
+      }
     }
   }
 }

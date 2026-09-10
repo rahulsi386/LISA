@@ -1,0 +1,138 @@
+{
+  "servers": {
+    "filesystem": {
+      "builtin": true,
+      "tools": []
+    },
+    "playwright": {
+      "builtin": true,
+      "tools": [
+        "browser_close",
+        "browser_resize",
+        "browser_console_messages",
+        "browser_handle_dialog",
+        "browser_evaluate",
+        "browser_file_upload",
+        "browser_drop",
+        "browser_find",
+        "browser_fill_form",
+        "browser_press_key",
+        "browser_type",
+        "browser_navigate",
+        "browser_navigate_back",
+        "browser_network_requests",
+        "browser_network_request",
+        "browser_run_code_unsafe",
+        "browser_take_screenshot",
+        "browser_snapshot",
+        "browser_click",
+        "browser_drag",
+        "browser_hover",
+        "browser_select_option",
+        "browser_tabs",
+        "browser_wait_for"
+      ]
+    },
+    "icm-mcp": {
+      "builtin": false,
+      "config": {
+        "name": "icm-mcp",
+        "url": "https://icm-mcp-prod.azure-api.net/v1/",
+        "oauthAlias": "rahulsi@microsoft.com"
+      },
+      "tools": []
+    },
+    "azure-mcp": {
+      "builtin": false,
+      "config": {
+        "name": "azure-mcp",
+        "type": "command",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@azure/mcp@latest",
+          "server",
+          "start"
+        ]
+      },
+      "tools": [
+        "documentation",
+        "azd",
+        "foundry",
+        "arm",
+        "get_azure_bestpractices",
+        "aks",
+        "appconfig",
+        "applens",
+        "appservice",
+        "role",
+        "azurebackup",
+        "datadog",
+        "managedlustre",
+        "azuremigrate",
+        "azureterraform",
+        "azureterraformbestpractices",
+        "deploy",
+        "deviceregistry",
+        "eventgrid",
+        "acr",
+        "advisor",
+        "bicepschema",
+        "cosmos",
+        "cloudarchitect",
+        "communication",
+        "compute",
+        "confidentialledger",
+        "containerapps",
+        "eventhubs",
+        "fileshares",
+        "foundryextensions",
+        "functionapp",
+        "functions",
+        "grafana",
+        "insights",
+        "iothub",
+        "keyvault",
+        "kusto",
+        "loadtesting",
+        "marketplace",
+        "quota",
+        "monitor",
+        "applicationinsights",
+        "mysql",
+        "policy",
+        "postgres",
+        "pricing",
+        "redis",
+        "resilience",
+        "resourcehealth",
+        "search",
+        "speech",
+        "servicebus",
+        "servicefabric",
+        "signalr",
+        "sreagent",
+        "sql",
+        "storage",
+        "storagesync",
+        "virtualdesktop",
+        "wellarchitectedframework",
+        "workbooks",
+        "extension_azqr",
+        "extension_cli_generate",
+        "extension_cli_install",
+        "group_list",
+        "group_resource_list",
+        "subscription_list"
+      ]
+    },
+    "ms-learn": {
+      "builtin": false,
+      "config": {
+        "name": "ms-learn",
+        "url": "https://learn.microsoft.com/api/mcp"
+      },
+      "tools": []
+    }
+  }
+}

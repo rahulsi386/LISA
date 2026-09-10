@@ -7,7 +7,7 @@ This directory contains the ten local skills that implement the **LISA Copilot A
 
 ## Review scope and evidence levels
 
-All files in this directory were inventoried for this reference. Maintained Markdown, JSON, Python, PowerShell, JavaScript, C#, package metadata, schemas, tests, and fixtures were examined. Packaged SVG icons, the Inter font, and the compiled layout executable were reviewed through their manifests, licenses, calling code, and tests rather than interpreted as source. Generated `.NET` files under `solution-designer/layout-engine/obj/` are build intermediates and are not extension points.
+All files in this directory were inventoried for this reference. Maintained Markdown, JSON, Python, PowerShell, JavaScript, package metadata, schemas, tests, and fixtures form the implementation. Packaged SVG icons and the Inter font are described by their manifests, licenses, calling code, and tests. Diagram routing uses the Python/NetworkX helper; the Scout distribution no longer packages a .NET layout executable or build project.
 
 The descriptions below distinguish these implementation levels:
 
@@ -323,7 +323,7 @@ Source: [`solution-designer/SKILL.md`](solution-designer/SKILL.md)
 
 ### What this skill is
 
-Solution Designer is a deterministic multi-language diagram pipeline. Python normalizes and orchestrates, PowerShell generates and validates SVG, a packaged C#/MSAGL engine routes connectors and labels, Node/resvg rasterizes with a bundled font, and a required manual inspection gates atomic publication.
+Solution Designer is a deterministic multi-language diagram pipeline. Python normalizes, orchestrates, and routes connectors and labels with NetworkX; PowerShell generates and validates SVG; Node/resvg rasterizes with a bundled font; and a required manual inspection gates atomic publication.
 
 ### What it does
 
@@ -332,7 +332,12 @@ It turns the classifier’s canonical topology into exactly two diagrams:
 1. `SA_<ScenarioSlug>.svg/.png` — layered Solution Architecture.
 2. `SD_<ScenarioSlug>.svg/.png` — architecture-derived Sequence Diagram.
 
-It preserves canonical names, boundaries, relationships, dispositions, simulation/manual/deferred/blocked styling, official icon provenance, trust/governance/lifecycle bands, and sequence semantics. It evaluates deterministic Balanced, Spacious, and Wide candidates, validates geometry and semantics, performs raster sanity checks, and publishes only a hash-bound inspected set.
+It first creates an editable two-page `Design_<ScenarioSlug>.drawio`, validates it, and derives
+`SA_<ScenarioSlug>.mmd` and `SD_<ScenarioSlug>.mmd` from the same canonical model. It preserves
+canonical names, boundaries, relationships, dispositions, simulation/manual/deferred/blocked
+styling, official icon provenance, trust/governance/lifecycle bands, and sequence semantics. It
+evaluates deterministic Balanced, Spacious, and Wide candidates, validates source fidelity,
+geometry, semantics, and raster quality, and publishes only a hash-bound browser-inspected set.
 
 ### Inputs consumed and outputs provided
 
@@ -340,7 +345,7 @@ It preserves canonical names, boundaries, relationships, dispositions, simulatio
 
 - `lisa-config.json`.
 - Latest direct child `output/classification/complexity-classification_<timestamp>.json`.
-- Packaged model/inspection schemas, reference and icon manifests, 49 SVG icons, C# layout executable, Node renderer, pinned packages, and Inter font.
+- Packaged model/inspection schemas, reference and icon manifests, product artwork, Python layout router, Node renderer, pinned packages, and Inter font.
 
 **Outputs under `<basePath>/output/design/`**
 
@@ -348,9 +353,12 @@ It preserves canonical names, boundaries, relationships, dispositions, simulatio
 |---|---|
 | `current-design.json` | Atomic pointer and terminal marker for the validated current set. |
 | `artifacts/design-model.json` | Shared normalized model used by both diagrams. |
+| `artifacts/Design_<slug>.drawio` | Editable two-page source containing the same architecture and sequence diagrams. |
+| `artifacts/SA_<slug>.mmd`, `artifacts/SD_<slug>.mmd` | Validated Mermaid representations derived from the canonical model. |
 | `artifacts/SA_<slug>.svg/.png` | Architecture vector and raster. |
 | `artifacts/SD_<slug>.svg/.png` | Sequence vector and raster. |
-| Reports under `artifacts/` | Diagram, generation, validation, render, inspection, and run diagnostics. |
+| `artifacts/preview.html` | Offline preview with separate diagram views and sibling source/render links. |
+| Reports and evidence under `artifacts/` | Source, candidate, diagram, generation, validation, render, browser evidence, inspection, and run diagnostics. |
 | `.solution-designer/` | Immutable run data, cache entries, and staging trees. |
 
 Run IDs match `SDR-YYYYMMDD_HHMMSS-XXXXXXXX-XXXXXXXX`; statuses are `prepared`, `awaiting_inspection`, and `validated`.
@@ -375,32 +383,54 @@ Run IDs match `SDR-YYYYMMDD_HHMMSS-XXXXXXXX-XXXXXXXX`; statuses are `prepared`, 
    & "<skill-dir>\scripts\Invoke-SolutionDesigner.ps1" generate --run "<run.json>"
    ```
 
-4. [`Invoke-FastPath.ps1`](solution-designer/scripts/Invoke-FastPath.ps1) validates the model, tries bounded layout profiles, runs diagram generation, SVG validation, and rasterization, and emits a pending-inspection template.
-5. [`New-Diagrams.ps1`](solution-designer/scripts/New-Diagrams.ps1) computes cards/layers, resolves manifest-backed icons, invokes the layout executable, embeds SVG icons as data URIs, and writes both SVGs and a diagram manifest.
-6. [`Program.cs`](solution-designer/layout-engine/Program.cs), built by [`layout-engine.csproj`](solution-designer/layout-engine/layout-engine.csproj), uses MSAGL rectilinear routing, simplifies paths, and places collision-avoiding labels. The packaged [`SolutionDesigner.LayoutEngine.exe`](solution-designer/resources/layout-engine/SolutionDesigner.LayoutEngine.exe) is the self-contained Windows runtime. Exit `0` means no routing issues, `3` reports routing issues, and `2` is usage/exception failure.
-7. [`Test-Diagrams.ps1`](solution-designer/scripts/Test-Diagrams.ps1) validates XML, names, embedded icons, legends, arrows, bounds, overlap, routes, bridges, labels, fonts, truncation, lifelines, and simulation disclosure.
-8. [`Render-Diagrams.ps1`](solution-designer/scripts/Render-Diagrams.ps1) launches the bounded Node renderer and validates its identity, report, hashes, and sizes. [`renderer/render.js`](solution-designer/renderer/render.js) uses pinned `@resvg/resvg-js` and `pngjs`, disables system fonts, and checks dimensions, opacity, and color diversity.
-9. Open and inspect both PNGs once, complete the inspection JSON truthfully, and preserve the returned PNG hashes.
-10. **Finalize.** Python validates inspection schema and every staged hash, transactionally replaces `design/artifacts`, builds the cache, and switches `current-design.json` only after durability.
+4. [`source_artifacts.py`](solution-designer/scripts/source_artifacts.py) generates and validates
+   editable Draw.io plus Mermaid sources before presentation rendering. Visible labels, anchored
+   edges, directed multi-edge/message coverage, execution modes, and hashes must match the model.
+5. [`Invoke-FastPath.ps1`](solution-designer/scripts/Invoke-FastPath.ps1) evaluates all bounded
+   layout profiles, retains diagnostics, ranks passing candidates, and selects one for rendering.
+6. [`New-Diagrams.ps1`](solution-designer/scripts/New-Diagrams.ps1) verifies the source stage,
+   computes cards/layers, resolves manifest-backed icons, invokes the Python router, embeds icons,
+   and writes both SVGs and a diagram manifest.
+7. [`layout_engine.py`](solution-designer/scripts/layout_engine.py) uses NetworkX A* over an
+   obstacle-aware orthogonal visibility grid, preserves explicit port sides/offsets, simplifies
+   routes, and places collision-checked labels. Exit `0` means no routing issues, `3` reports
+   unplaceable labels, and `2` is input/routing failure. No .NET runtime or compiled layout
+   executable is needed. Router source and installed NetworkX version participate in cache identity.
+8. [`Test-Diagrams.ps1`](solution-designer/scripts/Test-Diagrams.ps1) validates XML, names,
+   embedded icons, legends, arrows, bounds, overlap, routes, bridges, labels, fonts, truncation,
+   lifelines, simulation disclosure, and presentation quality.
+9. [`Render-Diagrams.ps1`](solution-designer/scripts/Render-Diagrams.ps1) launches the bounded Node
+   renderer and validates identity, report, hashes, sizes, opacity, and color diversity.
+10. Open the offline preview and both PNGs. Run the emitted [`inspect_preview.js`](solution-designer/scripts/inspect_preview.js)
+    collector through Playwright, inspect its screenshots, and attach the hash-bound browser
+    evidence without treating machine observations as visual approval.
+11. **Finalize.** Python revalidates source fidelity, browser evidence, inspection schema, and every
+    staged hash; transactionally replaces `design/artifacts`; builds the cache; and switches
+    `current-design.json` only after durability.
 
     ```powershell
     & "<skill-dir>\scripts\Invoke-SolutionDesigner.ps1" finalize --run "<run.json>" --inspection "<inspection.json>"
     ```
 
-11. [`Test-ReferenceCache.ps1`](solution-designer/scripts/Test-ReferenceCache.ps1) is a maintenance diagnostic that reports reference freshness; it does not fetch updates.
-12. [`resources/design-model.schema.json`](solution-designer/resources/design-model.schema.json), [`resources/inspection.schema.json`](solution-designer/resources/inspection.schema.json), [`resources/icon-manifest.json`](solution-designer/resources/icon-manifest.json), and [`resources/reference-manifest.json`](solution-designer/resources/reference-manifest.json) govern the model, manual gate, icons, and offline guidance. [`renderer/package.json`](solution-designer/renderer/package.json), [`renderer/package-lock.json`](solution-designer/renderer/package-lock.json), [`THIRD-PARTY-NOTICES.md`](solution-designer/THIRD-PARTY-NOTICES.md), and [`renderer/fonts/LICENSE.txt`](solution-designer/renderer/fonts/LICENSE.txt) govern dependencies and licensing.
+12. [`Test-ReferenceCache.ps1`](solution-designer/scripts/Test-ReferenceCache.ps1) is a maintenance diagnostic that reports reference freshness; it does not fetch updates.
+13. [`resources/design-model.schema.json`](solution-designer/resources/design-model.schema.json), [`resources/inspection.schema.json`](solution-designer/resources/inspection.schema.json), [`resources/icon-manifest.json`](solution-designer/resources/icon-manifest.json), and [`resources/reference-manifest.json`](solution-designer/resources/reference-manifest.json) govern the model, manual gate, icons, and offline guidance. [`renderer/package.json`](solution-designer/renderer/package.json), [`renderer/package-lock.json`](solution-designer/renderer/package-lock.json), [`THIRD-PARTY-NOTICES.md`](solution-designer/THIRD-PARTY-NOTICES.md), and [`renderer/fonts/LICENSE.txt`](solution-designer/renderer/fonts/LICENSE.txt) govern dependencies and licensing.
 
 ### Orchestrator stage and failure behavior
 
-This is stage **3 — design**. Unknown component references, sequence messages without architecture relationships, invalid dispositions, too many participants, geometry/routing defects, SVG errors, render timeout, degenerate PNGs, failed/late inspection, asset/hash drift, or publication failure prevents pointer replacement. Build does not start. The prior `current-design.json` and artifacts remain recoverable.
+This is stage **3 — design**. Unknown component references, sequence messages without architecture
+relationships, source-fidelity drift, invalid dispositions, too many participants, geometry/routing
+defects, SVG errors, render timeout, degenerate PNGs, missing/stale browser evidence, failed
+inspection, asset/hash drift, or publication failure prevents pointer replacement. Build does not
+start. The prior `current-design.json` and artifacts remain recoverable.
 
-The current implementation imposes a 3,600-second generation deadline and a 420-second inspection window even though the skill text does not advertise a run budget.
+The current implementation imposes a 3,600-second generation deadline. It validates inspection and
+browser-evidence timestamps for ordering and clock skew but does not impose a seven-minute review cutoff.
 
 ### Extending it without regression
 
 - Add an icon by adding the exact SVG, alias/source/provenance in the icon manifest, and required licensing notice; never substitute a different product icon.
 - Extend component categories only with model schema, Python layer/kind mapping, icon mapping, PowerShell layout/render behavior, and tests in the same change.
-- Rebuild the executable from maintained C# source; never edit `layout-engine/obj/` generated files.
+- Modify the Python router with routing-contract tests; preserve explicit ports, obstacle avoidance, label checks, bounded search, and deterministic ordering.
 - Keep Node dependency versions pinned and synchronize package metadata, lockfile, notices, and runtime fingerprint.
 - Do not weaken structural, geometry, raster, or inspection gates.
 - Correct governance/monitoring connector suppression in `New-Diagrams.ps1` before claiming every cross-cutting relationship is rendered.
@@ -988,7 +1018,7 @@ Before releasing any change, verify these suite-level concerns:
 8. **Human gates:** never bypass Classification/Build acceptance or the two cleanup consents.
 9. **Remote idempotency:** use canonical remote identity, expected hash, idempotency key, and read-back verification; do not blindly replay after interruption.
 10. **Regression tests:** update focused skill tests plus shared contract, input-routing, checkpoint, generator, and publisher tests where the handoff changes.
-11. **Generated/vendor assets:** change maintained source/manifests/licenses, not `.NET obj` files; rebuild binaries and refresh fingerprints deterministically.
+11. **Generated/vendor assets:** change maintained source, manifests, and licenses rather than generated dependency trees; refresh fingerprints deterministically.
 12. **Truthful implementation claims:** label behavior agent-directed until packaged code and tests enforce it.
 
 ### Current suite-level constraints
@@ -1014,4 +1044,4 @@ All tests use Python `unittest` except the Publisher’s JavaScript policy tests
 python -m unittest discover -s "m-skills" -p "test*.py"
 ```
 
-For a change, run the affected skill suite first, then shared contracts/input routing/checkpoints, and finally broad discovery. Solution Designer changes may also require Node dependency restoration from its lockfile and rebuilding the C# executable when maintained layout source changes.
+For a change, run the affected skill suite first, then shared contracts/input routing/checkpoints, and finally broad discovery. Solution Designer changes may also require Node dependency restoration from its lockfile and focused Python routing-contract tests when maintained layout source changes.

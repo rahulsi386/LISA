@@ -4,7 +4,8 @@ param(
     [Parameter(Mandatory = $true)][string]$OutputDirectory,
     [string]$IconManifestPath = (Join-Path (Split-Path $PSScriptRoot -Parent) 'resources\icon-manifest.json'),
     [string]$ReferenceManifestPath = (Join-Path (Split-Path $PSScriptRoot -Parent) 'resources\reference-manifest.json'),
-    [ValidateSet('Balanced', 'Spacious', 'Wide')][string]$LayoutProfile = 'Balanced'
+    [ValidateSet('Balanced', 'Spacious', 'Wide')][string]$LayoutProfile = 'Balanced',
+    [switch]$SourcesPrepared
 )
 
 Set-StrictMode -Version Latest
@@ -21,8 +22,16 @@ if (-not $node) { throw 'Node.js is required for the packaged measured-layout re
 $pythonCommand = if ($env:LISA_PYTHON) { $env:LISA_PYTHON } else { 'python' }
 $python = Get-Command $pythonCommand -ErrorAction SilentlyContinue
 if (-not $python) { throw 'Python with NetworkX is required for diagram routing.' }
+$sourceCommand = if ($SourcesPrepared) { 'validate' } else { 'generate' }
+$sourceResult = & ([string]$python.Source) (Join-Path $PSScriptRoot 'source_artifacts.py') $sourceCommand `
+    --model $ModelPath --output $OutputDirectory 2>&1
+if ($LASTEXITCODE -ne 0) {
+    throw "Editable source $sourceCommand failed: $($sourceResult -join [Environment]::NewLine)"
+}
 $generator = Join-Path (Split-Path $PSScriptRoot -Parent) 'renderer\generate.js'
 $result = & ([string]$node.Source) $generator --model $ModelPath --output $OutputDirectory `
-    --icons $IconManifestPath --references $ReferenceManifestPath --profile $LayoutProfile --python ([string]$python.Source)
-if ($LASTEXITCODE -ne 0) { throw "Diagram generation failed for the $LayoutProfile profile." }
-$result | ConvertFrom-Json
+    --icons $IconManifestPath --references $ReferenceManifestPath --profile $LayoutProfile --python ([string]$python.Source) 2>&1
+if ($LASTEXITCODE -ne 0) {
+    throw "Diagram generation failed for the $LayoutProfile profile: $($result -join [Environment]::NewLine)"
+}
+($result -join [Environment]::NewLine) | ConvertFrom-Json

@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "purpose": "Complete the generated model without rereading or reproducing duplicated authoritative artifacts.",
+  "read_plan": [
+    "Read model-context.json, this contract, the evidence overview and every linked index page and evidence batch. Follow next_page until empty; no first-batch or first-N sampling.",
+    "Join fragments with the same record_id in part order through final_part=true before parsing the text as JSON. Findings retain every original attribute, statement and source/evidence locator. Wrapper provenance points to the authoritative ledger or summary.",
+    "Use in_scope only for required implementation. Review excluded findings, gaps and conflicts to avoid scope inflation. Inspect a precise ledger/summary JSON pointer only when more context is needed; do not read the whole ledger plus its summary plus the populated draft.",
+    "Read Platform-Decision.md and the applicable detailed SKILL architecture/product guidance. Use reference-index.json to select current official documentation. Per-reference excerpt batches are navigation aids, not proof of a capability. Read applicable complete official sections and record consulted IDs in assessments, gates, scores, components and topology.",
+    "Load the draft programmatically and modify targeted fields using schema slices and the checklist below. Preserve deterministic metadata, defaults and unaffected structures. The draft is not validated architecture: all provisional product choices, baseline components and unknown capabilities still require review."
+  ],
+  "completion_checklist": {
+    "identity": "Preserve schema_version, run_id and active research_stage. Do not author deterministic coverage percentages, counts or final complexity.",
+    "requirement_assessments": "Exactly one satisfied entry for EVERY in-scope finding_id, with specific capability, active-stage platform, rationale and consulted reference_ids. No unassessed tail findings or unknown IDs.",
+    "platform_assessment": "Apply mandatory PoC gates before category ranking. Begin with allowed Stage 1 products; assess personal delegated work with Cowork. Escalate sequentially only for persisted evidence-linked gaps. No later-stage references or products in a Stage 1 solution.",
+    "delivery_assessment": "Decompose all in-scope findings into atomic business capabilities; reconcile business priority/weight, dependencies, exact component_ids, implementation status/factors, allowed product/harness, treatment, owner and typed build contract. Cover every finding. Explicitly disclose simulations and replacements. Never count out-of-bound components as team-buildable.",
+    "safety": "Use current availability, authentication, least privilege, approved test data, safe action controls, honest simulation, auditability and a viable builder path as minimum PoC gates. Require explicit approval for high-impact/irreversible actions. Never fabricate external success, approvals, IDs or state changes. Separate production gaps from PoC blockers.",
+    "components": "Name exact purpose-specific products/services and preserve requirement-named external systems. Include all applicable agents, channels, skills/plugins, tools/creation methods, triggers, data, integrations, identity, security, governance, monitoring and ALM. Distinguish requirement evidence, configuration, recommendations and mandatory baselines.",
+    "solution_topology": "Complete canonical components, inventory mappings, hosting/ownership/implementation and environment boundaries, typed source-target relationships, trust controls, Development/Test/Production promotion, five quality decisions and architecture-derived sequences. Every inventory name maps exactly once. No generic product placeholders or hidden unsupported dependencies.",
+    "sequences": "At most eight lifelines and 30 interactions; actions <=56 characters, conditions <=34 and relationship labels <=42. Cover applicable auth, request/trigger, orchestration, grounding, tools/data, human decisions, monitoring/errors and responses. Ordinary cycles and async responses are legitimate; do not invent blanket acyclicity or AuthN/Response phase-order rules.",
+    "global_reconciliation": "Even for one changed finding, reconcile ALL assessments and weighted capabilities, cross-finding conflicts/dependencies, selected products/gates, channels/triggers, component inventory/topology/sequence, owners/build boundaries, scope and readiness gaps. Delta-only review is not sufficient."
+  },
+  "publication": [
+    "Publish only a complete model inside the run directory. The publisher revalidates the source handoff, resource/context integrity, every in-scope ID, scoring, architecture and output contracts.",
+    "Only a validated, re-scored cache candidate can skip model completion. Equivalent validated republication may reuse semantic evidence identity: ignore only the ledger's top-level run_id, preserving all other fields/dates/provenance. Keep exact current publication hashes separately bound to the run. Changed evidence, source identity, configuration, resources, references or substantive research assessments invalidate reuse; research freshness is unchanged.",
+    "A cache candidate containing old upstream artifact paths, analyzer run IDs or changed publication hashes requires fresh model completion. Check classification_cache_decision; do not blindly rewrite arbitrary provenance or prose. Current output paths and hashes are generated from the current prepared run.",
+    "input_size_counters measures UTF-8 artifact bytes and bounded evidence fragments, not token counts. Add selected documentation, schema and detailed guidance reads when evaluating actual model input."
+  ]
+}

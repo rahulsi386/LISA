@@ -29,6 +29,10 @@ openpyxl>=3.1,<4
 # to make fresh-machine behavior deterministic.
 tzdata>=2024.1
 
+# Solution Designer uses NetworkX for deterministic obstacle-aware orthogonal
+# routing. Pin it because the installed version participates in cache identity.
+networkx==3.6.1
+
 # ---------------------------------------------------------------------------
 # Required system software (not installable by pip)
 # ---------------------------------------------------------------------------
@@ -64,13 +68,12 @@ tzdata>=2024.1
 # .NET 10 SDK
 #   - WinGet package: Microsoft.DotNet.SDK.10
 #   - Required when bootstrapping modern pac as a .NET tool.
-#   - Otherwise optional unless rebuilding the packaged self-contained MSAGL
-#     layout engine from solution-designer/layout-engine/layout-engine.csproj.
+#   - Otherwise optional; Solution Designer does not require .NET.
 #
 # Packaged Solution Designer runtime
-#   - resources/layout-engine/SolutionDesigner.LayoutEngine.exe
+#   - scripts/layout_engine.py with NetworkX 3.6.1
 #   - renderer/render.js, renderer/fonts/InterVariable.ttf, and healthy npm
-#     dependencies. No separate .NET runtime is needed for the packaged EXE.
+#     dependencies.
 #
 # Internet access is needed during installation for WinGet, PyPI, NuGet, and
 # npm restoration. Runtime access is needed to learn.microsoft.com and, for
@@ -92,6 +95,5 @@ tzdata>=2024.1
 #
 # Optional/conditional software:
 # - Rights-aware Microsoft 365 or Office access for protected source documents.
-# - .NET 10 SDK remains installed if the layout engine must be rebuilt.
 # - No requests, pytest, OCR engine, LibreOffice, ImageMagick, or test framework
 #   is required by the packaged standard path; tests use unittest.

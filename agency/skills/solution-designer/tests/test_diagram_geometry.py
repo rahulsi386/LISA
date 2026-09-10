@@ -194,6 +194,31 @@ class RoutingGeometryTests(LocalWorkspace):
         self.assert_geometry(model, result)
         self.assertEqual([{"x": 220, "y": 250}, {"x": 700, "y": 250}], result["routes"][0]["points"])
 
+    def test_opposite_direction_edges_get_distinct_lanes(self) -> None:
+        model = self.model()
+        model["edges"].append({"id": "return", "sourceId": "b", "targetId": "a",
+                               "labelWidth": 100, "labelHeight": 24})
+        result = self.run_layout(model)
+        self.assert_geometry(model, result)
+        self.assertLessEqual(result["metrics"]["oppositeLaneLength"], 24)
+        self.assertLessEqual(result["rerouteAttempts"], 60)
+        model["edges"].reverse()
+        model["nodes"].reverse()
+        self.assertEqual(result, self.run_layout(model))
+
+    def test_global_cost_avoids_a_transverse_route_crossing(self) -> None:
+        model = self.model()
+        model["nodes"].extend([
+            {"id": "c", "x": 400, "y": 60, "width": 120, "height": 100},
+            {"id": "d", "x": 400, "y": 500, "width": 120, "height": 100},
+        ])
+        model["edges"].append({"id": "vertical", "sourceId": "c", "targetId": "d",
+                               "labelWidth": 90, "labelHeight": 24})
+        result = self.run_layout(model)
+        self.assert_geometry(model, result)
+        self.assertEqual(result["metrics"]["crossings"], 0)
+        self.assertEqual(result["metrics"]["oppositeLaneLength"], 0)
+
     def test_port_hints_are_honored_and_order_independent(self) -> None:
         for source, target in (("right", "left"), ("top", "bottom"), ("south", "north"), ("west", "east")):
             with self.subTest(source=source, target=target):

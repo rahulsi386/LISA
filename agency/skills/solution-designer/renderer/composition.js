@@ -17,12 +17,22 @@ const median = values => {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
 };
+const visualRole = component => component.visualRole || component.visual_role || "";
+const visualGroup = component => component.visualGroup || component.visual_group || "";
+const isCrossCutting = component => CONTROL_LAYERS.has(component.layer) || visualRole(component) === "cross-cutting";
+
+function compositionFamilies(model) {
+  const families = ["story", "hub", "boundary"];
+  const preferred = model.presentation?.preferred_composition || model.presentation?.preferredComposition;
+  return families.includes(preferred) ? [preferred, ...families.filter(family => family !== preferred)] : families;
+}
 
 function graphFor(model) {
-  const components = model.components.filter(c => !CONTROL_LAYERS.has(c.layer));
+  const components = model.components.filter(c => !isCrossCutting(c)).sort((a, b) => compare(a.id, b.id));
   const byId = new Map(components.map(c => [c.id, c]));
   const edges = model.relationships.filter(e =>
-    byId.has(e.from) && byId.has(e.to) && e.from !== e.to && e.style !== "response");
+    byId.has(e.from) && byId.has(e.to) && e.from !== e.to && e.style !== "response")
+    .sort((a, b) => compare(`${a.from}|${a.to}|${a.label}|${a.id || ""}`, `${b.from}|${b.to}|${b.label}|${b.id || ""}`));
   const outgoing = new Map(components.map(c => [c.id, []]));
   const incoming = new Map(components.map(c => [c.id, []]));
   for (const edge of edges) {
@@ -38,13 +48,23 @@ function chooseSpine(model, graph) {
   const sequenceOrder = [...new Set(model.sequence.flatMap(e => [e.from, e.to]))];
   const sequenceIndex = id => sequenceOrder.includes(id) ? sequenceOrder.indexOf(id) : Number.MAX_SAFE_INTEGER;
   const candidates = components.filter(c => c.kind === "agent");
+  const hintedAgent = model.presentation?.primary_agent_id || model.presentation?.primaryAgentId ||
+    components.find(c => visualRole(c) === "primary" && c.kind === "agent")?.id;
   candidates.sort((a, b) =>
+    Number(b.id === hintedAgent) - Number(a.id === hintedAgent) ||
     sequenceIndex(a.id) - sequenceIndex(b.id) ||
     outgoing.get(b.id).length - outgoing.get(a.id).length ||
     compare(a.id, b.id));
   const primary = candidates[0] ||
     components.find(c => incoming.get(c.id).length === 0 && c.kind !== "knowledge") ||
+    components.find(c => c.id === sequenceOrder[0]) ||
     components[0];
+  const hintedPath = model.presentation?.primary_path || model.presentation?.primaryPath;
+  if (Array.isArray(hintedPath) && hintedPath.length && new Set(hintedPath).size === hintedPath.length &&
+      hintedPath.every(id => byId.has(id)) && hintedPath.includes(primary.id) &&
+      hintedPath.slice(1).every((id, index) => outgoing.get(hintedPath[index]).some(edge => edge.to === id))) {
+    return [...hintedPath];
+  }
 
   // Reverse BFS finds real requester/trigger paths without inventing a channel.
   const queue = [[primary.id]];
@@ -81,6 +101,7 @@ function chooseSpine(model, graph) {
     for (const edge of outgoing.get(id)) {
       const next = byId.get(edge.to);
       if (seen.has(next.id) || ["knowledge", "actor", "channel"].includes(next.kind)) continue;
+      if (visualRole(next) === "supporting") continue;
       // Direct agent state and grounding are supporting dependencies, not fake business stages.
       if (byId.get(id).kind === "agent" && next.kind === "data") continue;
       const following = tail(next.id, new Set([...seen, next.id]), depth + 1);
@@ -96,10 +117,10 @@ function chooseSpine(model, graph) {
 function parallelPeers(id, remaining, graph) {
   const component = graph.byId.get(id);
   if (!["actor", "channel"].includes(component.kind)) return [];
-  const neighbours = key => [
+  const neighbours = key => [...new Set([
     ...graph.incoming.get(key).map(e => `in:${e.from}`),
     ...graph.outgoing.get(key).map(e => `out:${e.to}`),
-  ].sort().join("|");
+  ])].sort().join("|");
   return remaining.filter(c => c.kind === component.kind && neighbours(c.id) === neighbours(id));
 }
 
@@ -122,8 +143,27 @@ function splitRows(items, available, gap, getWidth = item => item.width) {
 }
 
 function supportClusters(remaining, graph) {
-  const unseen = new Set(remaining.map(c => c.id));
+  const hintedGroups = new Map();
+  for (const component of remaining) {
+    const group = visualGroup(component);
+    if (!group) continue;
+    if (!hintedGroups.has(group)) hintedGroups.set(group, []);
+    hintedGroups.get(group).push(component.id);
+  }
+  const unseen = new Set(remaining.filter(c => !visualGroup(c)).map(c => c.id));
   const clusters = [];
+  const order = ids => {
+    const pending = new Set(ids);
+    const ordered = [];
+    while (pending.size) {
+      const next = [...pending].find(id => !graph.incoming.get(id).some(e => pending.has(e.from))) ||
+        pending.values().next().value;
+      ordered.push(graph.byId.get(next));
+      pending.delete(next);
+    }
+    return ordered;
+  };
+  for (const group of [...hintedGroups.keys()].sort(compare)) clusters.push(order(hintedGroups.get(group)));
   while (unseen.size) {
     const ids = [];
     const queue = [unseen.values().next().value];
@@ -137,15 +177,7 @@ function supportClusters(remaining, graph) {
       }
     }
     // A stable dependency order puts analytics and integration chains in reading order.
-    const pending = new Set(ids);
-    const ordered = [];
-    while (pending.size) {
-      const next = [...pending].find(id => !graph.incoming.get(id).some(e => pending.has(e.from))) ||
-        pending.values().next().value;
-      ordered.push(graph.byId.get(next));
-      pending.delete(next);
-    }
-    clusters.push(ordered);
+    clusters.push(order(ids));
   }
   return clusters;
 }
@@ -170,22 +202,31 @@ function semanticRegions(cards) {
   const layers = [...new Set(cards.map(card => card.component.layer))];
   return layers.map(id => {
     const members = cards.filter(card => card.component.layer === id);
-    const x = Math.min(...members.map(c => c.x)) - 24;
-    const y = Math.min(...members.map(c => c.y)) - 24;
+    const x = Math.floor(Math.min(...members.map(c => c.x))) - 25;
+    const y = Math.floor(Math.min(...members.map(c => c.y))) - 25;
     return {
       id, x, y,
-      width: Math.max(...members.map(c => c.x + c.width)) - x + 24,
-      height: Math.max(...members.map(c => c.y + c.height)) - y + 24,
+      width: Math.ceil(Math.max(...members.map(c => c.x + c.width))) - x + 25,
+      height: Math.ceil(Math.max(...members.map(c => c.y + c.height))) - y + 25,
     };
   });
 }
 
-function composeArchitecture(model, profile, prepare, top, measureLabel = () => ({ width: 140 })) {
+function boundaryOf(component) {
+  return component.deploymentBoundary || component.description?.match(/Boundary:\s*([^]*?)\.?$/)?.[1]?.replace(/\.$/, "") || "";
+}
+
+function composeArchitecture(model, profile, prepare, top, measureLabel = () => ({ width: 140 }), family = "story") {
+  if (!["story", "hub", "boundary"].includes(family)) throw new Error(`Unknown composition family: ${family}`);
   const margin = 72;
   const graph = graphFor(model);
-  const spine = chooseSpine(model, graph);
+  let spine = chooseSpine(model, graph);
+  const hintedPrimary = model.presentation?.primary_agent_id || model.presentation?.primaryAgentId ||
+    graph.components.find(c => visualRole(c) === "primary" && c.kind === "agent")?.id;
+  const heroId = spine.includes(hintedPrimary) && graph.byId.get(hintedPrimary)?.kind === "agent" ? hintedPrimary :
+    spine.find(id => graph.byId.get(id).kind === "agent");
+  if (family === "hub" && heroId) spine = spine.slice(0, spine.indexOf(heroId) + 1);
   const placed = new Set(spine);
-  const heroId = spine.find(id => graph.byId.get(id).kind === "agent");
   const columns = spine.map((id, index) => {
     const c = graph.byId.get(id);
     const peers = parallelPeers(id, graph.components.filter(item => !placed.has(item.id)), graph);
@@ -201,7 +242,10 @@ function composeArchitecture(model, profile, prepare, top, measureLabel = () => 
   const mainGap = Math.max(profile.mainGap, ...graph.edges
     .filter(edge => placed.has(edge.from) && placed.has(edge.to))
     .map(edge => measureLabel(edge).width + 28));
-  const maximumWidth = profile.width * 1.25;
+  const requestedWidth = model.presentation?.target_width ?? model.presentation?.targetWidth;
+  const hasWidthHint = typeof requestedWidth === "number" && Number.isFinite(requestedWidth) && requestedWidth > 0;
+  const maximumWidth = hasWidthHint ? Math.max(1280, Math.min(2200, requestedWidth)) :
+    Math.min(2200, profile.width * 1.25);
   const mainRows = splitRows(columns, maximumWidth - 2 * margin, mainGap);
   const naturalWidth = Math.max(0, ...mainRows.map(row =>
     row.reduce((sum, column) => sum + column.width, 0) + Math.max(0, row.length - 1) * mainGap));
@@ -212,7 +256,7 @@ function composeArchitecture(model, profile, prepare, top, measureLabel = () => 
     .map(edge => measureLabel(edge).width + 28));
   const supportArea = [...supportCards.values()].reduce((sum, card) =>
     sum + (card.width + supportGap) * (card.height + profile.rowGap), 0);
-  const controls = model.components.filter(c => CONTROL_LAYERS.has(c.layer));
+  const controls = model.components.filter(isCrossCutting);
   // A short spine must not force a dense hub or its controls into a narrow, very tall canvas.
   const contentWidth = Math.max(naturalWidth, Math.sqrt(supportArea * 2.4),
     Math.min(profile.width - 2 * margin, controls.length * 362 - 32));
@@ -299,7 +343,7 @@ function composeArchitecture(model, profile, prepare, top, measureLabel = () => 
   if (controls.length) {
     if (!cards.length) y = top + 74;
     else y -= profile.rowGap - 82;
-    headings.push({ x: margin, y: y - 28, text: "CROSS-CUTTING CONTROLS" });
+    headings.push({ x: margin, y: y - 28, text: "CROSS-CUTTING CONTROLS / SOURCE ID → TARGET ID" });
     const count = Math.min(controls.length, Math.max(1, Math.floor((width - 2 * margin + 32) / 362)));
     const controlWidth = count > 1 ? Math.min(460, (width - 2 * margin - (count - 1) * 32) / count) : 330;
     for (const row of splitRows(controls.map(c => prepare(c, controlWidth, false, true)), width - 2 * margin, 32)) {
@@ -316,14 +360,87 @@ function composeArchitecture(model, profile, prepare, top, measureLabel = () => 
       y += height + 40;
     }
   }
+  if (family === "hub" && supportRows.length > 1 && mainRows.length) {
+    // Put the orchestration hub between inbound/grounding and action satellites.
+    // This changes graph geometry, rather than just stretching the story template.
+    const split = Math.ceil(supportRows.length / 2);
+    const before = supportRows.slice(0, split);
+    const beforeIds = new Set(before.flatMap(row => row.blocks.flatMap(block => block.cards.map(card => card.id))));
+    const mainCards = cards.filter(card => card.storyRole === "main-flow");
+    const mainTop = Math.min(...mainCards.map(card => card.y));
+    const mainBottom = Math.max(...mainCards.map(card => card.y + card.height));
+    const mainHeight = mainBottom - mainTop + profile.rowGap;
+    const firstSupport = Math.min(...cards.filter(card => card.storyRole === "supporting").map(card => card.y));
+    const beforeBottom = Math.max(...cards.filter(card => beforeIds.has(card.id)).map(card => card.y + card.height));
+    const shift = beforeBottom - firstSupport + profile.rowGap;
+    for (const card of cards) {
+      if (card.storyRole === "main-flow") card.y += shift;
+      else if (beforeIds.has(card.id)) card.y -= mainHeight;
+    }
+    for (const heading of headings) {
+      if (/^\d/.test(heading.text)) heading.y += shift;
+      if (heading.text === "SUPPORTING CAPABILITIES") heading.y = mainTop - 28;
+    }
+  }
+  if (family === "boundary") {
+    // Evidenced boundaries group deployment responsibility, never semantic layers.
+    // Without boundaries this is a dependency-cluster composition, not invented trust geometry.
+    const operational = cards.filter(card => card.storyRole !== "control");
+    const groups = new Map();
+    const hasBoundaries = operational.some(card => boundaryOf(card.component));
+    const dependencyGroups = supportClusters(graph.components, graph);
+    for (const card of operational) {
+      const group = visualGroup(card.component);
+      const key = hasBoundaries ? [boundaryOf(card.component) || "Boundary not specified", group].filter(Boolean).join(" / ") :
+        group || `Dependency cluster ${dependencyGroups.findIndex(items => items.some(c => c.id === card.id)) + 1}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(card);
+    }
+    headings.length = 0;
+    let groupY = top + 86;
+    for (const [key, members] of groups) {
+      headings.push({ x: margin, y: groupY - 28, text: key });
+      // Connection barycentres keep related components nearby without altering their identities.
+      members.sort((a, b) => (spine.includes(a.id) ? spine.indexOf(a.id) : 100) -
+        (spine.includes(b.id) ? spine.indexOf(b.id) : 100) || compare(a.id, b.id));
+      const boundaryGap = Math.max(profile.supportGap, supportGap, mainGap);
+      for (const row of splitRows(members, width - 2 * margin, boundaryGap)) {
+        const height = Math.max(...row.map(card => card.height));
+        let x = margin;
+        for (const card of row) {
+          card.x = x;
+          card.y = groupY + (height - card.height) / 2;
+          x += card.width + boundaryGap;
+        }
+        groupY += height + profile.rowGap;
+      }
+    }
+    const controlCards = cards.filter(card => card.storyRole === "control");
+    if (controlCards.length) {
+      headings.push({ x: margin, y: groupY - 28, text: "CROSS-CUTTING CONTROLS / SCOPED RELATIONSHIPS" });
+      for (const row of splitRows(controlCards, width - 2 * margin, 40)) {
+        let x = margin;
+        for (const card of row) {
+          card.x = x;
+          card.y = groupY;
+          x += card.width + 40;
+        }
+        groupY += Math.max(...row.map(card => card.height)) + 40;
+      }
+    }
+  }
   const bottom = Math.max(top + 74, ...cards.map(card => card.y + card.height)) + 52;
   return {
     width, cards, headings, bottom, spine,
     regions: semanticRegions(cards),
-    strategy: "relationship-driven-story",
+    strategy: `relationship-driven-${family}`, family,
+    widthHint: { requested: requestedWidth ?? null, effectiveMaximum: maximumWidth,
+      applied: hasWidthHint, clamped: hasWidthHint && maximumWidth !== requestedWidth,
+      reason: "Target width is an advisory canvas ceiling, bounded to 1280–2200px to retain native card and 1800px fit-width readability." },
     mainRowCount: mainRows.length, supportRowCount: supportRows.length,
     columns: columns.map(column => column.cards.map(card => card.id)),
   };
 }
 
-module.exports = { composeArchitecture, graphFor, chooseSpine, CONTROL_LAYERS };
+module.exports = { composeArchitecture, graphFor, chooseSpine, CONTROL_LAYERS, boundaryOf,
+  compositionFamilies, isCrossCutting, visualRole, visualGroup };

@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
+from test_model_semantics import designer, fixture_browser_evidence
 
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
@@ -28,6 +29,15 @@ class SolutionDesignerTests(unittest.TestCase):
         return (
             datetime.fromisoformat(run["generated_at_local"]) + timedelta(seconds=1)
         ).isoformat()
+
+    def attach_fixture_evidence(self, run_path: str, inspection_path: Path, inspection: dict) -> None:
+        run = designer._json_load(Path(run_path))
+        fixture_browser_evidence(designer, run, inspection)
+        inspection["summary"] = "Synthetic test-only inspection and browser receipt; not a real visual review."
+        designer._atomic_write_json(inspection_path, inspection)
+        self.run_cli("attach-browser-evidence", "--run", run_path,
+                     "--evidence", str(Path(run["stage_design"]) / "browser-evidence.json"),
+                     "--inspection", str(inspection_path))
 
     def run_cli(self, *arguments: str, expected: int = 0) -> dict:
         completed = subprocess.run(
@@ -70,7 +80,7 @@ class SolutionDesignerTests(unittest.TestCase):
         return prepared, run
 
     def test_prepare_builds_valid_model_without_invented_auth_flow(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir=SKILL_ROOT / "tests") as directory:
             prepared, _ = self.prepare(Path(directory))
             model = json.loads(
                 Path(prepared["design_model"]).read_text(encoding="utf-8")
@@ -103,7 +113,7 @@ class SolutionDesignerTests(unittest.TestCase):
             self.assertEqual("tbd", governance_components[0]["status"])
 
     def test_prepare_consumes_solution_topology_without_inference(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir=SKILL_ROOT / "tests") as directory:
             temporary = Path(directory)
             classification_dir = temporary / "output" / "classification"
             classification_dir.mkdir(parents=True)
@@ -333,7 +343,7 @@ class SolutionDesignerTests(unittest.TestCase):
             self.assertIn("Native 65% | PoC 90%", architecture_text)
 
     def test_generation_is_pending_until_inspection(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir=SKILL_ROOT / "tests") as directory:
             prepared, run = self.prepare(Path(directory))
             generated = self.run_cli("generate", "--run", prepared["run"])
             self.assertEqual("awaiting_inspection", generated["status"])
@@ -357,7 +367,7 @@ class SolutionDesignerTests(unittest.TestCase):
             )
 
     def test_finalize_publishes_atomically_and_cache_reuses(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir=SKILL_ROOT / "tests") as directory:
             temporary = Path(directory)
             prepared, run = self.prepare(temporary)
             generated = self.run_cli("generate", "--run", prepared["run"])
@@ -368,9 +378,10 @@ class SolutionDesignerTests(unittest.TestCase):
             inspection["inspected_at"] = self.inspection_time(prepared["run"])
             inspection["checks"] = {key: True for key in inspection["checks"]}
             inspection["issues"] = []
-            inspection["summary"] = "Both rendered diagrams passed visual inspection."
+            inspection["summary"] = "Synthetic test fixture; no real inspection claimed."
             inspection_path = Path(run["run_directory"]) / "inspection.completed.json"
             inspection_path.write_text(json.dumps(inspection, indent=2), encoding="utf-8")
+            self.attach_fixture_evidence(prepared["run"], inspection_path, inspection)
             result = self.run_cli(
                 "finalize",
                 "--run",
@@ -413,6 +424,10 @@ class SolutionDesignerTests(unittest.TestCase):
             self.assertEqual(references, {
                 f"{kind}_{result['scenario_slug']}.{extension}"
                 for kind in ("SA", "SD") for extension in ("svg", "png")
+            } | {
+                f"Design_{result['scenario_slug']}.drawio",
+                f"SA_{result['scenario_slug']}.mmd",
+                f"SD_{result['scenario_slug']}.mmd",
             })
             self.assertTrue(all((artifact_root / name).is_file() for name in references))
             self.assertFalse(any(path.is_dir() for path in artifact_root.iterdir()))
@@ -428,7 +443,7 @@ class SolutionDesignerTests(unittest.TestCase):
             self.assertEqual("validated", json.loads(Path(second["run"]).read_text())["status"])
 
     def test_failed_inspection_cannot_finalize(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir=SKILL_ROOT / "tests") as directory:
             prepared, run = self.prepare(Path(directory))
             generated = self.run_cli("generate", "--run", prepared["run"])
             result = self.run_cli(
@@ -442,7 +457,7 @@ class SolutionDesignerTests(unittest.TestCase):
             self.assertIn("Rendered inspection failed", result["error"])
 
     def test_staged_artifact_tampering_is_rejected(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir=SKILL_ROOT / "tests") as directory:
             prepared, run = self.prepare(Path(directory))
             generated = self.run_cli("generate", "--run", prepared["run"])
             inspection = json.loads(
@@ -455,6 +470,7 @@ class SolutionDesignerTests(unittest.TestCase):
             inspection["summary"] = "Inspection passed."
             inspection_path = Path(run["run_directory"]) / "inspection.tamper.json"
             inspection_path.write_text(json.dumps(inspection, indent=2), encoding="utf-8")
+            self.attach_fixture_evidence(prepared["run"], inspection_path, inspection)
             slug = json.loads(Path(run["model_path"]).read_text())["scenarioSlug"]
             svg = Path(run["stage_design"]) / f"SA_{slug}.svg"
             svg.write_text(svg.read_text(encoding="utf-8") + " ", encoding="utf-8")
@@ -469,7 +485,7 @@ class SolutionDesignerTests(unittest.TestCase):
             self.assertIn("Staged artifact changed", result["error"])
 
     def test_semantically_invalid_model_is_rejected(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir=SKILL_ROOT / "tests") as directory:
             prepared, run = self.prepare(Path(directory))
             model = json.loads(Path(prepared["design_model"]).read_text(encoding="utf-8"))
             model["relationships"][0]["to"] = "missing-component"
@@ -484,7 +500,7 @@ class SolutionDesignerTests(unittest.TestCase):
             self.assertIn("unknown component", result["error"])
 
     def test_same_second_prepares_have_unique_run_ids(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir=SKILL_ROOT / "tests") as directory:
             temporary = Path(directory)
             first, _ = self.prepare(temporary)
             second, _ = self.prepare(temporary)

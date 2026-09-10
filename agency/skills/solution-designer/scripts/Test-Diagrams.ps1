@@ -10,6 +10,7 @@ $ErrorActionPreference = 'Stop'
 $Invariant = [System.Globalization.CultureInfo]::InvariantCulture
 $Utf8 = New-Object System.Text.UTF8Encoding($false)
 $issues = New-Object System.Collections.Generic.List[string]
+$quality = $null
 
 $outputDirectory = Split-Path ([IO.Path]::GetFullPath($OutputPath)) -Parent
 if ((Split-Path $outputDirectory -Leaf) -cne 'design') {
@@ -226,23 +227,39 @@ function Test-Arrow($Route, $Xml, [string]$Path) {
             (Get-Presentation $line 'stroke-width' '1') -match '^0(?:\.0*)?(?:px)?$') {
             Add-Issue "Route '$($Route.Id)' has an invisible stroke in $Path"
         }
-        $reference = Get-Presentation $line 'marker-end'
-        if ($reference -notmatch '^url\(#([A-Za-z0-9_.:-]+)\)$') {
-            Add-Issue "Route '$($Route.Id)' has no valid arrowhead reference in $Path"; continue
+        $bidirectional = $Route.Element.GetAttribute('data-direction') -ceq 'bidirectional'
+        $markerAttributes = @('marker-end')
+        if ($bidirectional) { $markerAttributes += 'marker-start' }
+        elseif ((Get-Presentation $line 'marker-start' 'none') -ne 'none') {
+            Add-Issue "Unidirectional route '$($Route.Id)' has an unexpected start arrowhead in $Path"
         }
-        $marker = $Xml.SelectSingleNode("//*[local-name()='marker' and @id='$($Matches[1])']")
-        if ($null -eq $marker) { Add-Issue "Route '$($Route.Id)' references a missing arrowhead in $Path"; continue }
-        try {
-            if (-not (Test-Visible $marker) -or (Get-Number $marker 'markerWidth') -le 0 -or
-                (Get-Number $marker 'markerHeight') -le 0) { throw 'Invisible marker dimensions.' }
-            $shapes = @($marker.SelectNodes(".//*[local-name()='path' or local-name()='polygon' or local-name()='polyline']"))
-            $painted = @($shapes | Where-Object {
-                (Test-Visible $_) -and (
-                    ((Get-Presentation $_ 'fill' 'black') -notin @('none', 'transparent') -and (Get-Presentation $_ 'fill-opacity' '1') -notmatch '^0(?:\.0*)?$') -or
-                    ((Get-Presentation $_ 'stroke' 'none') -notin @('none', 'transparent') -and (Get-Presentation $_ 'stroke-opacity' '1') -notmatch '^0(?:\.0*)?$'))
-            })
-            if ($painted.Count -eq 0) { throw 'Arrowhead has no painted shape.' }
-        } catch { Add-Issue "Route '$($Route.Id)' has an invisible arrowhead in $Path`: $($_.Exception.Message)" }
+        foreach ($markerAttribute in $markerAttributes) {
+            $reference = Get-Presentation $line $markerAttribute
+            if ($reference -notmatch '^url\(#([A-Za-z0-9_.:-]+)\)$') {
+                Add-Issue "Route '$($Route.Id)' has no valid arrowhead reference ($markerAttribute) in $Path"; continue
+            }
+            $marker = $Xml.SelectSingleNode("//*[local-name()='marker' and @id='$($Matches[1])']")
+            if ($null -eq $marker) { Add-Issue "Route '$($Route.Id)' references a missing arrowhead in $Path"; continue }
+            try {
+                if ($markerAttribute -eq 'marker-start') {
+                    $reverseShape = @($marker.SelectNodes("./*[local-name()='path']") |
+                        Where-Object { ($_.GetAttribute('d') -replace '\s', '') -ceq 'M91L15L99Z' })
+                    if ($marker.GetAttribute('orient') -cne 'auto' -or (Get-Number $marker 'refX') -ne 1 -or
+                        (Get-Number $marker 'refY') -ne 5 -or $reverseShape.Count -ne 1) {
+                        throw 'Start arrowhead does not point toward the source endpoint.'
+                    }
+                }
+                if (-not (Test-Visible $marker) -or (Get-Number $marker 'markerWidth') -le 0 -or
+                    (Get-Number $marker 'markerHeight') -le 0) { throw 'Invisible marker dimensions.' }
+                $shapes = @($marker.SelectNodes(".//*[local-name()='path' or local-name()='polygon' or local-name()='polyline']"))
+                $painted = @($shapes | Where-Object {
+                    (Test-Visible $_) -and (
+                        ((Get-Presentation $_ 'fill' 'black') -notin @('none', 'transparent') -and (Get-Presentation $_ 'fill-opacity' '1') -notmatch '^0(?:\.0*)?$') -or
+                        ((Get-Presentation $_ 'stroke' 'none') -notin @('none', 'transparent') -and (Get-Presentation $_ 'stroke-opacity' '1') -notmatch '^0(?:\.0*)?$'))
+                })
+                if ($painted.Count -eq 0) { throw 'Arrowhead has no painted shape.' }
+            } catch { Add-Issue "Route '$($Route.Id)' has an invisible arrowhead in $Path`: $($_.Exception.Message)" }
+        }
         # Straight orthogonal paths must match the metadata actually validated.
         $d = $line.GetAttribute('d')
         if ($d -match '^\s*[Mm][\d\s.,+\-eELl]+$') {
@@ -616,18 +633,100 @@ $sdSlug = [IO.Path]::GetFileNameWithoutExtension($SequenceDiagram) -replace '^SD
 if ($saSlug -ne $sdSlug) { Add-Issue "Diagram slugs do not match: '$saSlug' and '$sdSlug'" }
 if ($null -ne $saXml -and $null -ne $sdXml) {
     $saIds = @($saXml.SelectNodes("//*[@data-kind='node']") | ForEach-Object { $_.GetAttribute('data-component-id') })
+    foreach ($annotation in @($saXml.SelectNodes("//*[@data-kind='control-annotation']"))) {
+        $from = $annotation.GetAttribute('data-from'); $to = $annotation.GetAttribute('data-to')
+        $mode = $annotation.GetAttribute('data-implementation-mode')
+        $style = $annotation.GetAttribute('data-style')
+        $identity = $annotation.GetAttribute('data-id')
+        $visible = ($annotation.InnerText -replace '\s', '')
+        if ($from -notin $saIds -or $to -notin $saIds -or -not $identity -or
+            $mode -notin @('real', 'simulated', 'manual', 'deferred', 'blocked') -or
+            $style -notin @('call', 'response', 'optional', 'tbd') -or -not (Test-Visible $annotation)) {
+            Add-Issue "Invalid scoped control relationship '$identity'."
+        }
+        foreach ($required in @($identity, $from, $to, $mode, $style, $annotation.GetAttribute('data-label'))) {
+            if (-not $required -or -not $visible.Contains(($required -replace '\s', ''))) {
+                Add-Issue "Control relationship '$identity' does not visibly disclose '$required'."
+            }
+        }
+        $scopeArrow = if ($annotation.GetAttribute('data-direction') -ceq 'bidirectional') { [char]0x2194 } else { [char]0x2192 }
+        if (-not $visible.Contains("$from$scopeArrow$to")) {
+            Add-Issue "Control relationship '$identity' has no explicit directional scope."
+        }
+    }
     foreach ($lifeline in @($sdXml.SelectNodes("//*[@data-kind='lifeline']"))) {
         $id = $lifeline.GetAttribute('data-component-id')
         if ($saIds -notcontains $id) { Add-Issue "Sequence lifeline '$id' has no matching architecture component." }
     }
+}
+$manifestPath = Join-Path $outputDirectory 'diagram-manifest.json'
+if (Test-Path -LiteralPath $manifestPath) {
+    try {
+        $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
+        if ($manifest.PSObject.Properties.Name -notcontains 'layoutQuality' -or
+            $manifest.layoutQuality.PSObject.Properties.Name -notcontains 'gates') {
+            throw 'Manifest is missing its mandatory numerical visual quality gates.'
+        } else {
+            $quality = $manifest.layoutQuality
+            foreach ($name in @('crossings', 'shared-lanes', 'opposite-lanes', 'route-detour', 'content-density',
+                'fit-width-readability', 'agent-emphasis', 'geometry-bounds-overlap', 'relationship-coverage')) {
+                if (@($quality.gates | Where-Object name -eq $name).Count -ne 1) {
+                    Add-Issue "Manifest is missing or duplicates the '$name' visual gate."
+                }
+            }
+            if ($quality.validation -ne 'passed' -or
+                @($quality.gates | Where-Object { $_.passed -isnot [bool] -or -not $_.passed }).Count -gt 0) {
+                Add-Issue 'Manifest contains a failed visual quality gate.'
+            }
+            $score = Convert-Number ([string]$quality.score)
+            if ($score -lt 0 -or $score -gt 100) { Add-Issue 'Visual quality score must be finite and between 0 and 100.' }
+            $represented = @($saXml.SelectNodes("//*[@data-kind='connector' or @data-kind='control-annotation']"))
+            $expected = @($quality.relationshipCoverage)
+            if ($represented.Count -ne $expected.Count) { Add-Issue 'Architecture relationship coverage count differs from the manifest.' }
+            foreach ($edge in $expected) {
+                $matching = @($represented | Where-Object { $_.GetAttribute('data-id') -ceq $edge.id })
+                if ($matching.Count -ne 1) {
+                    Add-Issue "Canonical relationship '$($edge.id)' must appear exactly once."
+                    continue
+                }
+                foreach ($pair in @(@('from', 'data-from'), @('to', 'data-to'), @('style', 'data-style'),
+                    @('label', 'data-label'), @('implementationMode', 'data-implementation-mode'),
+                    @('relationshipType', 'data-relationship-type'))) {
+                    if ($pair[0] -eq 'relationshipType' -and $edge.PSObject.Properties.Name -notcontains 'relationshipType') { continue }
+                    if ($matching[0].GetAttribute($pair[1]) -cne [string]$edge.($pair[0])) {
+                        Add-Issue "Canonical relationship '$($edge.id)' changed its $($pair[0])."
+                    }
+                }
+                $expectedDirection = if ($edge.PSObject.Properties.Name -contains 'direction' -and $edge.direction) {
+                    [string]$edge.direction
+                } else { 'unidirectional' }
+                $actualDirection = $matching[0].GetAttribute('data-direction')
+                if (-not $actualDirection) { $actualDirection = 'unidirectional' }
+                if ($actualDirection -cne $expectedDirection) {
+                    Add-Issue "Canonical relationship '$($edge.id)' changed its direction."
+                }
+            }
+            $parts = @($saXml.DocumentElement.GetAttribute('viewBox') -split '\s+')
+            $scale = [Math]::Min(1, 1800 / (Convert-Number $parts[2]))
+            if (19 * $scale -lt 15 -or 14 * $scale -lt 11 -or 11 * $scale -lt 9) {
+                Add-Issue 'Architecture fails 1800px fit-width readability (15px names, 11px body, 9px metadata).'
+            }
+            foreach ($phase in @($sdXml.SelectNodes("//*[@data-kind='phase' and @data-message-count='1']"))) {
+                if ($phase.GetAttribute('data-treatment') -ne 'compact-label') {
+                    Add-Issue 'A single-message sequence phase must not be a full-width panel.'
+                }
+            }
+        }
+    } catch { Add-Issue "Visual quality manifest validation failed: $($_.Exception.Message)" }
 }
 $report = [ordered]@{
     validation = if ($issues.Count -eq 0) { 'passed' } else { 'failed' }
     issues = @($issues)
     solutionArchitecture = $SolutionArchitecture
     sequenceDiagram = $SequenceDiagram
+    layoutQuality = $quality
     checkedAt = [DateTimeOffset]::Now.ToString('o')
 }
-[IO.File]::WriteAllText($OutputPath, ($report | ConvertTo-Json -Depth 6), $Utf8)
+[IO.File]::WriteAllText($OutputPath, ($report | ConvertTo-Json -Depth 16), $Utf8)
 if ($issues.Count -gt 0) { throw "Diagram validation failed with $($issues.Count) issue(s). See $OutputPath" }
 $report

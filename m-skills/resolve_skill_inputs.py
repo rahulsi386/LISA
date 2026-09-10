@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from analysis_handoff import AnalysisHandoffError, select_latest_validated_analysis
 from lisa_path_resolver import (
     LisaConfigError,
     latest_file,
@@ -62,14 +63,14 @@ def resolve_inputs(skill: str, config_path: Path) -> dict[str, Any]:
     if skill == "requirement-analyzer":
         result["requirements"] = require_directory(paths.requirements, "requirements")
     elif skill == "complexity-classifier":
-        result["analysis"] = str(
-            latest_file(
-                paths.analysis,
-                "requirement-analysis_*.json",
-                "analysis JSON",
-                r"requirement-analysis_[0-9]{8}_[0-9]{6}(?:_[0-9]{3})?\.json",
+        try:
+            analysis, _, _ = select_latest_validated_analysis(
+                paths.analysis, expected_requirements_root=paths.requirements,
             )
-        )
+        except AnalysisHandoffError as exc:
+            raise LisaConfigError(str(exc)) from exc
+        result["analysis"] = str(analysis)
+        result["analysisManifest"] = str(analysis.with_name(f"{analysis.stem}-manifest.json"))
     elif skill == "solution-designer":
         result["classification"] = str(
             latest_file(

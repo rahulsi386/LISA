@@ -31,7 +31,7 @@ basePath-relative marker. Use `BLOCKED` only for a deliberate validated gate out
 |---|---|---|
 | analysis | prepare, extract, visual-review, ledger, publish | source or review-target ID |
 | classification | prepare, reference-refresh, copilot-assessment, foundry-assessment, framework-assessment, publish | reference or finding ID |
-| design | prepare, generate, inspect, finalize | candidate or inspection ID |
+| design | prepare, sources, generate, inspect, finalize | source stage, candidate, or inspection ID |
 | build | verify-environment, specify, construct, publish, verify-live, package, manifest | component or remote operation ID |
 | evaluation | prepare, dataset, rubric, execute-test, score-test, aggregate, manifest | exact test and attempt ID |
 | optimization | audit, plan, before-snapshot, apply, verify, retest, accept-or-rollback, manifest | round and operation ID |
