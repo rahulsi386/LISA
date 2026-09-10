@@ -8,12 +8,14 @@ import json
 import shutil
 import subprocess
 import sys
+import time
 import unittest
 import uuid
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 from test_model_semantics import fixture_browser_evidence, fixture_png
 
 
@@ -27,17 +29,24 @@ FIXTURE = SKILL_ROOT / "tests" / "fixtures" / "complexity-classification_2026081
 REAL_SUBPROCESS_RUN = subprocess.run
 
 
-def remove_test_directory(path: Path) -> None:
+def private_api(module, **overrides):
+    return SimpleNamespace(**{
+        **{name: value for name, value in vars(module).items() if not name.startswith("__")},
+        **overrides,
+    })
+
+
+def remove_test_directory(path: Path, remove=shutil.rmtree, sleep=time.sleep) -> None:
     for attempt in range(6):
         if not path.exists():
             return
         try:
-            shutil.rmtree(path)
+            remove(path)
             return
         except PermissionError as error:
             if getattr(error, "winerror", None) not in {5, 32, 33} or attempt == 5:
                 raise
-            designer.time.sleep(0.1 * (attempt + 1))
+            sleep(0.1 * (attempt + 1))
 
 
 class LayoutRuntimeTests(unittest.TestCase):
@@ -56,13 +65,15 @@ class LayoutRuntimeTests(unittest.TestCase):
         before = designer._resource_hashes()
         router = SKILL_ROOT / "scripts" / "layout_engine.py"
         self.assertEqual(before["layout_engine"], hashlib.sha256(router.read_bytes()).hexdigest())
-        with patch.object(designer.importlib.metadata, "version", return_value="changed"):
+        metadata = private_api(designer.importlib.metadata, version=Mock(return_value="changed"))
+        with patch.object(designer, "importlib", private_api(designer.importlib, metadata=metadata)):
             after = designer._resource_hashes()
         self.assertNotEqual(before["networkx_version"], after["networkx_version"])
         self.assertNotEqual(designer._canonical_hash(before), designer._canonical_hash(after))
 
     def test_generation_forwards_the_current_python_interpreter(self) -> None:
-        with patch.object(designer.subprocess, "run", side_effect=designer.subprocess.TimeoutExpired("test", 1)) as launch:
+        launch = Mock(side_effect=subprocess.TimeoutExpired("test", 1))
+        with patch.object(designer, "subprocess", private_api(subprocess, run=launch)):
             with self.assertRaises(designer.DesignerError):
                 designer._generate_candidate({}, SKILL_ROOT / "tests" / "design")
         self.assertEqual(launch.call_args.kwargs["env"]["LISA_PYTHON"], sys.executable)
@@ -185,17 +196,15 @@ class RepairWorkflowTests(unittest.TestCase):
         self.clock = 1788789600.0
         self.fixture_scores = {"Balanced": 90, "Spacious": 80, "Wide": 70}
         self.fixture_failed_profiles = set()
-        self.addCleanup(patch.stopall)
-        patch.object(designer.time, "time", side_effect=lambda: self.clock).start()
-        patch.object(designer, "_resource_hashes", return_value={"test-resource": "a" * 64}).start()
-        validate_sources = designer._validate_source_artifacts
-        def validate_real_sources(root):
-            with patch.object(designer.subprocess, "run", REAL_SUBPROCESS_RUN):
-                return validate_sources(root)
-        patch.object(designer, "_validate_source_artifacts", side_effect=validate_real_sources).start()
-        self.generator = patch.object(
-            designer.subprocess, "run", side_effect=self.generate_fixture
-        ).start()
+        self.enterContext(patch.object(designer, "time", private_api(time, time=lambda: self.clock)))
+        self.enterContext(patch.object(designer, "os", private_api(designer.os)))
+        self.enterContext(patch.object(designer, "_resource_hashes", return_value={"test-resource": "a" * 64}))
+        self.generator = Mock(side_effect=self.generate_fixture)
+        def run_isolated(command, **kwargs):
+            if isinstance(command, (list, tuple)) and str(designer.FAST_PATH) in command:
+                return self.generator(command, **kwargs)
+            return REAL_SUBPROCESS_RUN(command, **kwargs)
+        self.enterContext(patch.object(designer, "subprocess", private_api(subprocess, run=run_isolated)))
 
     def invoke(self, *args: str, expected: int = 0) -> dict:
         output = io.StringIO()
@@ -215,7 +224,8 @@ class RepairWorkflowTests(unittest.TestCase):
         return path, designer._json_load(path)
 
     def generate_fixture(self, command: list[str], **kwargs) -> subprocess.CompletedProcess:
-        stage = Path(command[command.index("-TempOutputPath") + 1]) / "design"
+        stage = (Path(command[command.index("-TempOutputPath") + 1]) / "design").resolve()
+        self.assertTrue(stage.is_relative_to(self.root.resolve()), "Fixture generation must stay in its owned test directory")
         attempted = [command[command.index("-LayoutProfile") + 1]] if "-LayoutProfile" in command else list(designer.LAYOUT_PROFILES)
         candidates = [
             {"profile": profile, "order": order,
@@ -687,8 +697,7 @@ class RepairWorkflowTests(unittest.TestCase):
                 error.winerror = 32
                 raise error
             return original_remove(path)
-        with patch.object(shutil, "rmtree", side_effect=transient_remove), patch.object(designer.time, "sleep"):
-            remove_test_directory(nested)
+        remove_test_directory(nested, remove=transient_remove, sleep=lambda _: None)
         self.assertEqual(2, len(calls))
         self.assertFalse(nested.exists())
 
@@ -812,6 +821,161 @@ class RepairWorkflowTests(unittest.TestCase):
         manifest["artifacts"]["candidate-report.json"] = designer._sha256_file(cache / "candidate-report.json")
         designer._atomic_write_json(cache / "cache-manifest.json", manifest)
         self.assertFalse(designer._cache_valid(cache, run["cache_key"], expected))
+
+
+class FixtureIsolationTests(unittest.TestCase):
+    def test_fixture_restores_only_owned_mocks_and_keeps_packaged_paths(self):
+        paths = {key: getattr(designer, key) for key in (
+            "RESOURCES", "ICON_MANIFEST", "MODEL_SCHEMA", "INSPECTION_SCHEMA", "REFERENCE_MANIFEST"
+        )}
+        original_time = time.time
+        original_subprocess = subprocess.run
+        original_os = designer.os
+        original_replace = original_os.replace
+        marker = SimpleNamespace(value="original")
+        external_patch = patch.object(marker, "value", "external-owner")
+        external_patch.start()
+        case = RepairWorkflowTests("test_structural_pass_is_only_an_inspection_candidate")
+        try:
+            try:
+                case.setUp()
+                self.assertIs(time.time, original_time)
+                self.assertIs(subprocess.run, original_subprocess)
+                self.assertIs(original_os.replace, original_replace)
+                self.assertIsNot(designer.time, time)
+                self.assertIsNot(designer.subprocess, subprocess)
+                self.assertIsNot(designer.os, original_os)
+                for key, value in paths.items():
+                    self.assertIs(getattr(designer, key), value)
+            finally:
+                self.assertTrue(case.doCleanups())
+            self.assertEqual("external-owner", marker.value)
+            self.assertIs(designer.time, time)
+            self.assertIs(designer.subprocess, subprocess)
+            self.assertIs(designer.os, original_os)
+            for key, value in paths.items():
+                self.assertIs(getattr(designer, key), value)
+        finally:
+            external_patch.stop()
+
+    def test_fixture_writers_reject_packaged_resource_destinations(self):
+        case = RepairWorkflowTests("test_structural_pass_is_only_an_inspection_candidate")
+        try:
+            case.setUp()
+            with self.assertRaisesRegex(AssertionError, "owned test directory"):
+                case.generate_fixture(["powershell", "-TempOutputPath", str(SKILL_ROOT / "resources")])
+            with self.assertRaisesRegex(AssertionError, "owned tests directory"):
+                fixture_browser_evidence(designer, {"stage_design": str(SKILL_ROOT / "resources")}, {})
+        finally:
+            self.assertTrue(case.doCleanups())
+
+    def test_resource_tampering_uses_a_copy_and_an_isolated_module(self):
+        work = SKILL_ROOT / "tests" / (".resource-isolation-" + uuid.uuid4().hex)
+        work.mkdir()
+        self.addCleanup(remove_test_directory, work)
+        resources = work / "resources"
+        shutil.copytree(SKILL_ROOT / "resources", resources)
+        before_paths = {key: getattr(designer, key) for key in (
+            "RESOURCES", "ICON_MANIFEST", "MODEL_SCHEMA", "INSPECTION_SCHEMA", "REFERENCE_MANIFEST"
+        )}
+        isolated = importlib.util.module_from_spec(SPEC)
+        original_search_path = list(sys.path)
+        try:
+            SPEC.loader.exec_module(isolated)
+        finally:
+            sys.path[:] = original_search_path
+        isolated.RESOURCES = resources
+        for key in ("ICON_MANIFEST", "MODEL_SCHEMA", "INSPECTION_SCHEMA", "REFERENCE_MANIFEST"):
+            setattr(isolated, key, resources / before_paths[key].name)
+        manifest = isolated._json_load(isolated.ICON_MANIFEST)
+        relative = manifest["packs"]["Power Platform"]["licenseFile"]
+        packaged = (SKILL_ROOT / "resources" / relative).resolve()
+        copied = (resources / relative).resolve()
+        self.assertTrue(copied.is_relative_to(work.resolve()))
+        self.assertNotEqual(packaged, copied)
+        before = designer._sha256_file(packaged)
+        copied.write_bytes(b"A")
+        self.assertEqual(hashlib.sha256(b"A").hexdigest(), isolated._sha256_file(copied))
+        self.assertEqual(before, designer._sha256_file(packaged))
+        for key, value in before_paths.items():
+            self.assertIs(getattr(designer, key), value)
+
+    def test_python_and_collector_license_gates_reject_private_copy_tampering(self):
+        work = SKILL_ROOT / "tests" / (".license-gate-fixture-" + uuid.uuid4().hex)
+        resources = work / "resources"
+        work.mkdir()
+        self.addCleanup(remove_test_directory, work)
+        shutil.copytree(SKILL_ROOT / "resources", resources)
+        fixture_license = resources / "icons" / "licenses" / "synthetic-fixture-license.txt"
+        fixture_license.parent.mkdir(parents=True, exist_ok=True)
+        fixture_license.write_bytes(b"Synthetic license fixture, not a Microsoft license.\n")
+        manifest = {"packs": {"Synthetic fixture": {
+            "licenseFile": "icons/licenses/synthetic-fixture-license.txt",
+            "licenseSha256": designer._sha256_file(fixture_license),
+        }}}
+        designer._atomic_write_json(resources / "icon-manifest.json", manifest)
+        isolated = importlib.util.module_from_spec(SPEC)
+        original_search_path = list(sys.path)
+        try:
+            SPEC.loader.exec_module(isolated)
+        finally:
+            sys.path[:] = original_search_path
+        isolated.RESOURCES = resources
+        isolated.ICON_MANIFEST = resources / "icon-manifest.json"
+        self.assertTrue(isolated._validate_license_provenance(manifest))
+        command = [
+            "node", "-e",
+            "const c=require(process.argv[1]);c.validateLicenseProvenance(process.argv[2])"
+            ".then(()=>console.log('passed')).catch(e=>{console.error(e.message);process.exitCode=2});",
+            str(SKILL_ROOT / "scripts" / "inspect_preview.js"), str(resources),
+        ]
+        accepted = REAL_SUBPROCESS_RUN(command, capture_output=True, text=True)
+        self.assertEqual(0, accepted.returncode, accepted.stderr)
+        fixture_license.write_bytes(b"Tampered synthetic license fixture.\n")
+        with self.assertRaisesRegex(isolated.DesignerError, "Packaged license provenance hash mismatch"):
+            isolated._validate_license_provenance(manifest)
+        rejected = REAL_SUBPROCESS_RUN(command, capture_output=True, text=True)
+        self.assertNotEqual(0, rejected.returncode)
+        self.assertIn("Packaged license provenance hash mismatch", rejected.stderr)
+        scripts = work / "scripts"
+        scripts.mkdir()
+        copied_collector = scripts / "inspect_preview.js"
+        shutil.copy2(SKILL_ROOT / "scripts" / "inspect_preview.js", copied_collector)
+        run_path = work / "run.json"
+        designer._atomic_write_json(run_path, {
+            "resource_hashes": {"icon-manifest.json": designer._sha256_file(resources / "icon-manifest.json")}
+        })
+        wrapper = work / "browser-collector.js"
+        blocked_entrypoints = REAL_SUBPROCESS_RUN([
+            "node", "-e",
+            "const c=require(process.argv[1]);const page=new Proxy({},"
+            "{get(){throw new Error('Browser accessed before license gate')}});"
+            "(async()=>{for(const call of [()=>c.collectBrowserEvidence(page,{runPath:process.argv[2]}),"
+            "()=>c.emitMcpInvocation(process.argv[2],process.argv[3])]){"
+            "try{await call();throw new Error('Mismatched license was accepted')}"
+            "catch(e){if(!e.message.includes('license provenance hash mismatch'))throw e}}})()"
+            ".catch(e=>{console.error(e.message);process.exitCode=2});",
+            str(copied_collector), str(run_path), str(wrapper),
+        ], capture_output=True, text=True)
+        self.assertEqual(0, blocked_entrypoints.returncode, blocked_entrypoints.stderr)
+        self.assertFalse(wrapper.exists())
+
+    def test_collector_requires_resource_binding_before_browser_access(self):
+        work = SKILL_ROOT / "tests" / (".collector-binding-fixture-" + uuid.uuid4().hex)
+        work.mkdir()
+        self.addCleanup(remove_test_directory, work)
+        run_path = work / "run.json"
+        designer._atomic_write_json(run_path, {"status": "awaiting_inspection"})
+        completed = REAL_SUBPROCESS_RUN([
+            "node", "-e",
+            "const c=require(process.argv[1]);const page=new Proxy({},"
+            "{get(){throw new Error('Browser accessed before provenance gate')}});"
+            "c.collectBrowserEvidence(page,{runPath:process.argv[2]})"
+            ".then(()=>process.exitCode=1).catch(e=>{if(!e.message.includes('resource-manifest binding'))"
+            "{console.error(e.message);process.exitCode=2}});",
+            str(SKILL_ROOT / "scripts" / "inspect_preview.js"), str(run_path),
+        ], capture_output=True, text=True)
+        self.assertEqual(0, completed.returncode, completed.stderr)
 
 
 if __name__ == "__main__":

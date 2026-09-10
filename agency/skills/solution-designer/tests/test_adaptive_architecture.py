@@ -9,6 +9,8 @@ import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from test_workflow_quality import remove_test_directory
+
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests" / "fixtures" / "procurement-reference-model.json"
@@ -246,12 +248,10 @@ console.log(JSON.stringify({
 class AdaptiveRenderTests(unittest.TestCase):
     def test_varied_requirements_pass_the_real_generation_and_geometry_path(self):
         procurement = json.loads(FIXTURE.read_text(encoding="utf-8"))
-        # This older visual fixture depicts grounding supply; the sequence makes the request explicit.
-        # Keep the integration fixture consistent with the directed source contract.
-        grounding = next(edge for edge in procurement["relationships"]
-                         if edge["from"] == "sharepoint" and edge["to"] == "agent")
-        grounding["from"], grounding["to"] = "agent", "sharepoint"
-        grounding["style"] = "call"
+        self.assertTrue(any(edge["from"] == "agent" and edge["to"] == "sharepoint" and edge["style"] == "call"
+                           for edge in procurement["relationships"]))
+        self.assertTrue(any(edge["from"] == "sharepoint" and edge["to"] == "agent" and edge["style"] == "response"
+                           for edge in procurement["relationships"]))
         retrieval = copy.deepcopy(procurement)
         keep = {"requester", "teams", "agent", "sharepoint", "dataverse", "entra"}
         retrieval["components"] = [c for c in retrieval["components"] if c["id"] in keep]
@@ -269,9 +269,9 @@ class AdaptiveRenderTests(unittest.TestCase):
         integration["title"] = "Procurement integration and insights"
         integration["summary"] = "Controlled ERP integration and governed analytics without a conversational channel."
         for model in (procurement, retrieval, integration):
-            with self.subTest(scenario=model["scenarioSlug"]), tempfile.TemporaryDirectory(
-                prefix=".adaptive-", dir=ROOT / "tests"
-            ) as temporary:
+            with self.subTest(scenario=model["scenarioSlug"]):
+                temporary = tempfile.mkdtemp(prefix=".adaptive-", dir=ROOT / "tests")
+                self.addCleanup(remove_test_directory, Path(temporary))
                 design = Path(temporary) / "design"
                 design.mkdir()
                 model_path = design / "design-model.json"

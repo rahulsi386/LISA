@@ -26,7 +26,9 @@ def fixture_png(width=640, height=480, color=64) -> bytes:
 
 def fixture_browser_evidence(module, run: dict, inspection: dict) -> None:
     """Fabricated, explicitly tagged test receipt; not a browser or visual inspection."""
-    root = Path(run["stage_design"])
+    root = Path(run["stage_design"]).resolve()
+    if root.name != "design" or not root.is_relative_to((ROOT / "tests").resolve()):
+        raise AssertionError("Synthetic browser evidence may only be written beneath the owned tests directory")
     slug = run["scenario_slug"]
     context = module._json_load(root / "run-report.json")["inspectionContext"]
     names = ["design-model.json", "preview.html"] + [

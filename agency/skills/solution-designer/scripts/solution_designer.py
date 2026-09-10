@@ -29,7 +29,7 @@ from validate_artifact_contracts import canonical_stage_root, validate_contract
 from lisa_path_resolver import LisaConfigError, latest_file, resolve_lisa_config
 
 
-VERSION = "4.1.0"
+VERSION = "4.1.1"
 CACHE_VERSION = "5"
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 RESOURCES = SKILL_ROOT / "resources"
@@ -1450,12 +1450,42 @@ def _build_design_model(
     return model
 
 
+def _validate_license_provenance(manifest: dict[str, Any]) -> dict[str, str]:
+    licenses = {}
+    packs = manifest.get("packs", {})
+    if not isinstance(packs, dict):
+        raise DesignerError("Packaged icon manifest packs must be an object")
+    for pack, metadata in packs.items():
+        if not isinstance(metadata, dict):
+            raise DesignerError(f"Packaged icon pack metadata is invalid: {pack}")
+        for prefix in ("license", "repositoryLicense"):
+            file_key, hash_key = prefix + "File", prefix + "Sha256"
+            if file_key not in metadata and hash_key not in metadata:
+                continue
+            name, expected = metadata.get(file_key), metadata.get(hash_key)
+            if not isinstance(name, str) or not name or not isinstance(expected, str) or not re.fullmatch(r"[a-fA-F0-9]{64}", expected):
+                raise DesignerError(f"Packaged license provenance metadata is incomplete: {pack}")
+            path = _safe_path(RESOURCES / name, RESOURCES)
+            if not path.is_file():
+                raise DesignerError(f"Packaged license is missing: {pack} ({name})")
+            actual = _sha256_file(path)
+            if actual != expected.lower():
+                raise DesignerError(
+                    f"Packaged license provenance hash mismatch: {pack} ({name}); "
+                    f"expected {expected.lower()}, got {actual}"
+                )
+            licenses[name] = actual
+    return licenses
+
+
 def _resource_hashes() -> dict[str, str]:
     try:
         networkx_version = importlib.metadata.version("networkx")
     except importlib.metadata.PackageNotFoundError as exc:
         raise DesignerError("NetworkX is required; install the Agency Python prerequisites before running design.") from exc
-    for icon in _json_load(ICON_MANIFEST)["icons"]:
+    manifest = _json_load(ICON_MANIFEST)
+    licenses = _validate_license_provenance(manifest)
+    for icon in manifest["icons"]:
         icon_path = RESOURCES / icon["file"]
         if not _is_within(icon_path, RESOURCES / "icons"):
             raise DesignerError(f"Icon asset escapes the packaged icon directory: {icon['key']}")
@@ -1480,6 +1510,7 @@ def _resource_hashes() -> dict[str, str]:
     return {
         **{path.name: _sha256_file(path) for path in files},
         "icons": _directory_hash(RESOURCES / "icons"),
+        "license_provenance": _canonical_hash(licenses),
         "layout_engine": _sha256_file(SCRIPTS / "layout_engine.py"),
         "networkx_version": networkx_version,
         "renderer": _directory_hash(SKILL_ROOT / "renderer"),
@@ -2979,6 +3010,12 @@ def _build_parser() -> argparse.ArgumentParser:
             or 0
         )
     )
+    validate_resources = commands.add_parser(
+        "validate-resources", help="Read-only validation of packaged icon/license provenance and resource hashes"
+    )
+    validate_resources.set_defaults(handler=lambda args: (
+        print(json.dumps({"validation": "passed", "resource_hashes": _resource_hashes()}, indent=2)) or 0
+    ))
     return parser
 
 

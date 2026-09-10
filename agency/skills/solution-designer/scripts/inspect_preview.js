@@ -21,6 +21,31 @@ async function assertLocal(file, root) {
   }
 }
 
+async function validateLicenseProvenance(resourceRoot = path.resolve(__dirname, "..", "resources"), expectedManifestHash) {
+  const manifestPath = path.join(resourceRoot, "icon-manifest.json");
+  await assertLocal(manifestPath, resourceRoot);
+  const bytes = await fs.readFile(manifestPath);
+  if (expectedManifestHash && sha256(bytes) !== expectedManifestHash) throw new Error("Packaged icon manifest changed after preparation");
+  const manifest = JSON.parse(bytes.toString("utf8"));
+  if (!manifest.packs || typeof manifest.packs !== "object" || Array.isArray(manifest.packs)) {
+    throw new Error("Packaged license provenance metadata is missing");
+  }
+  for (const [pack, metadata] of Object.entries(manifest.packs)) {
+    for (const prefix of ["license", "repositoryLicense"]) {
+      const filename = metadata[prefix + "File"], expected = metadata[prefix + "Sha256"];
+      if (filename === undefined && expected === undefined) continue;
+      if (typeof filename !== "string" || !filename || typeof expected !== "string" || !/^[a-fA-F0-9]{64}$/.test(expected)) {
+        throw new Error(`Packaged license provenance metadata is incomplete: ${pack}`);
+      }
+      const file = path.resolve(resourceRoot, filename);
+      await assertLocal(file, resourceRoot);
+      const actual = sha256(await fs.readFile(file));
+      if (actual !== expected.toLowerCase()) throw new Error(`Packaged license provenance hash mismatch: ${pack} (${filename}); expected ${expected.toLowerCase()}, got ${actual}`);
+    }
+  }
+  return manifestPath;
+}
+
 async function imageMetrics(locator) {
   return locator.evaluate(async image => {
     await image.decode();
@@ -36,6 +61,9 @@ async function imageMetrics(locator) {
 async function collectBrowserEvidence(page, args) {
   if (!args || !path.isAbsolute(args.runPath)) throw new Error("runPath must be an absolute run.json path");
   const run = await readJson(args.runPath);
+  const expectedManifestHash = run.resource_hashes?.["icon-manifest.json"];
+  if (!expectedManifestHash) throw new Error("Collector requires a prepared resource-manifest binding");
+  await validateLicenseProvenance(undefined, expectedManifestHash);
   const root = path.resolve(run.stage_design);
   const design = path.resolve(run.design_root);
   await assertLocal(args.runPath, design);
@@ -125,6 +153,7 @@ async function collectBrowserEvidence(page, args) {
       throw new Error(`Artifact changed during browser inspection: ${name}`);
     }
   }
+  await validateLicenseProvenance(undefined, expectedManifestHash);
   const elapsed = Math.max(0, Date.now() / 1000 - run.started_epoch);
   const captured_at = new Date(Date.parse(run.started_at_local) + elapsed * 1000).toISOString();
   const evidence = { schema_version: "1.0", collector: "playwright",
@@ -175,6 +204,32 @@ async function collectBrowserEvidenceInPage(page, args) {
     }, json);
   }
   const run = (await readFile(runPath, true)).value;
+  async function verifyLicenses() {
+    const manifestPath = absolute(args.resourceManifestPath);
+    if (!manifestPath.endsWith("\\icon-manifest.json")) throw new Error("Collector requires a packaged resource manifest");
+    const resourceRoot = manifestPath.slice(0, -"\\icon-manifest.json".length);
+    const manifestFile = await readFile(manifestPath, true);
+    if (!run.resource_hashes?.["icon-manifest.json"] ||
+        manifestFile.sha256 !== run.resource_hashes["icon-manifest.json"]) {
+      throw new Error("Packaged icon manifest changed or is not bound to the prepared run");
+    }
+    const packs = manifestFile.value.packs;
+    if (!packs || typeof packs !== "object" || Array.isArray(packs)) throw new Error("Packaged license provenance metadata is missing");
+    for (const [pack, metadata] of Object.entries(packs)) {
+      for (const prefix of ["license", "repositoryLicense"]) {
+        const filename = metadata[prefix + "File"], expected = metadata[prefix + "Sha256"];
+        if (filename === undefined && expected === undefined) continue;
+        if (typeof filename !== "string" || !filename || /^[\\/]/.test(filename) || filename.includes(":") ||
+            typeof expected !== "string" || !/^[a-fA-F0-9]{64}$/.test(expected)) {
+          throw new Error("Packaged license provenance metadata is incomplete");
+        }
+        const file = absolute(resourceRoot + "\\" + filename.replace(/\//g, "\\"));
+        const actual = (await readFile(file)).sha256;
+        if (actual !== expected.toLowerCase()) throw new Error(`Packaged license provenance hash mismatch: ${pack} (${filename})`);
+      }
+    }
+  }
+  await verifyLicenses();
   const root = absolute(run.stage_design);
   const design = absolute(run.design_root);
   if (!root.toLowerCase().startsWith(design.toLowerCase() + "\\") ||
@@ -261,6 +316,7 @@ async function collectBrowserEvidenceInPage(page, args) {
   for (const name of names) {
     if ((await readFile(root + "\\" + name)).sha256 !== artifact_sha256[name]) throw new Error("Artifacts changed while inspecting");
   }
+  await verifyLicenses();
   const elapsed = Math.max(0, Date.now() / 1000 - run.started_epoch);
   const captured_at = new Date(Date.parse(run.started_at_local) + elapsed * 1000).toISOString();
   const receipt = { schema_version: "1.0", collector: "playwright",
@@ -285,12 +341,15 @@ async function collectBrowserEvidenceInPage(page, args) {
 }
 
 function makeMcpInvocation(runPath, viewport) {
-  const args = JSON.stringify({ runPath, viewport });
+  const args = JSON.stringify({ runPath, viewport, resourceManifestPath: path.resolve(__dirname, "..", "resources", "icon-manifest.json") });
   return `async (page) => { const collect = ${collectBrowserEvidenceInPage.toString()}; const inspectionPage = await page.context().newPage(); try { return await collect(inspectionPage, ${args}); } finally { await inspectionPage.close(); } }\n`;
 }
 
 async function emitMcpInvocation(runPath, outputPath) {
   const run = await readJson(runPath);
+  const expectedManifestHash = run.resource_hashes?.["icon-manifest.json"];
+  if (!expectedManifestHash) throw new Error("Collector requires a prepared resource-manifest binding");
+  await validateLicenseProvenance(undefined, expectedManifestHash);
   const design = path.resolve(run.design_root);
   const root = path.resolve(run.stage_design);
   await assertLocal(runPath, design);
@@ -315,7 +374,7 @@ async function emitMcpInvocation(runPath, outputPath) {
   return { collector_script: outputPath, run: runPath };
 }
 
-module.exports = { collectBrowserEvidence, collectBrowserEvidenceInPage, makeMcpInvocation, emitMcpInvocation };
+module.exports = { collectBrowserEvidence, collectBrowserEvidenceInPage, makeMcpInvocation, emitMcpInvocation, validateLicenseProvenance };
 if (require.main === module) {
   const [operation, runPath, outputPath] = process.argv.slice(2);
   if (operation !== "--emit-mcp" || !runPath || !outputPath) {
