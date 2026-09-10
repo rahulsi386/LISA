@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import binascii
 import copy
 import hashlib
 import importlib.metadata
@@ -13,10 +14,12 @@ import os
 import re
 import shutil
 import subprocess
+import struct
 import sys
 import tempfile
 import time
 import uuid
+import zlib
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -26,8 +29,8 @@ from validate_artifact_contracts import canonical_stage_root, validate_contract
 from lisa_path_resolver import LisaConfigError, latest_file, resolve_lisa_config
 
 
-VERSION = "3.0.0"
-CACHE_VERSION = "3"
+VERSION = "4.1.1"
+CACHE_VERSION = "5"
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 RESOURCES = SKILL_ROOT / "resources"
 ARTIFACT_CONTRACT = validate_contract(SKILL_ROOT)
@@ -43,6 +46,12 @@ GENERATION_TIMEOUT_SECONDS = 3600
 LAYOUT_PROFILES = ("Balanced", "Spacious", "Wide")
 DEFAULT_MAX_REPAIR_ATTEMPTS = 2
 INSPECTION_CLOCK_SKEW_SECONDS = 30
+EVIDENCE_ARTIFACT_NAMES = (
+    "browser-evidence.json",
+    "inspection-architecture.png",
+    "inspection-sequence.png",
+    "inspection-preview.png",
+)
 FINAL_ARTIFACT_NAMES = {
     "preview.html",
     "design-model.json",
@@ -51,7 +60,28 @@ FINAL_ARTIFACT_NAMES = {
     "render-report.json",
     "generation-report.json",
     "inspection-report.json",
+    "source-report.json",
+    "candidate-report.json",
+    *EVIDENCE_ARTIFACT_NAMES,
 }
+MODE_BY_TREATMENT = {
+    "block": "blocked", "defer": "deferred", "manual-handoff": "manual",
+    "simulate": "simulated", "static-sample-data": "simulated",
+    "build": "real", "configure": "real", "existing": "real",
+}
+MODE_PRIORITY = ("blocked", "deferred", "manual", "simulated", "real")
+
+
+def _conservative_mode(modes: list[str]) -> str:
+    if any(mode not in MODE_PRIORITY for mode in modes):
+        raise DesignerError("Unknown classified implementation mode")
+    return next((mode for mode in MODE_PRIORITY if mode in modes), "real")
+
+
+def _preserve_fields(source: dict, target: dict, fields: dict[str, str]) -> None:
+    for original, normalized in fields.items():
+        if original in source:
+            target[normalized] = copy.deepcopy(source[original])
 
 
 class DesignerError(RuntimeError):
@@ -59,9 +89,11 @@ class DesignerError(RuntimeError):
 
 
 def _json_load(path: Path) -> dict[str, Any]:
+    def reject_constant(value: str) -> None:
+        raise ValueError(f"Non-finite JSON constant: {value}")
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        value = json.loads(path.read_text(encoding="utf-8"), parse_constant=reject_constant)
+    except (OSError, ValueError) as exc:
         raise DesignerError(f"Cannot read JSON {path}: {exc}") from exc
     if not isinstance(value, dict):
         raise DesignerError(f"Expected a JSON object in {path}")
@@ -78,13 +110,26 @@ def _atomic_write_text(path: Path, content: str) -> None:
             handle.write(content)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary, path)
+        _replace_atomic_file(Path(temporary), path)
     except BaseException:
         try:
             os.unlink(temporary)
         except FileNotFoundError:
             pass
         raise
+
+
+def _replace_atomic_file(source: Path, destination: Path) -> None:
+    # Windows sync/indexing handles can briefly deny a file rename. Retrying the
+    # same atomic operation preserves the old file; never truncate it in place.
+    for attempt in range(6):
+        try:
+            os.replace(source, destination)
+            return
+        except PermissionError as exc:
+            if getattr(exc, "winerror", None) not in {5, 32, 33} or attempt == 5:
+                raise
+            time.sleep(0.05 * (attempt + 1))
 
 
 def _atomic_write_json(path: Path, value: Any) -> None:
@@ -204,7 +249,17 @@ def _validate_model_semantics(model: dict[str, Any]) -> None:
         raise DesignerError("Design model component IDs must be unique")
     known_ids = set(component_ids)
     component_by_id = {item["id"]: item for item in model["components"]}
+    for collection in ("relationships", "sequence"):
+        identifiers = [item["id"] for item in model[collection] if "id" in item]
+        if len(identifiers) != len(set(identifiers)):
+            raise DesignerError(f"Design model {collection} IDs must be unique")
+    orders = [item["order"] for item in model["sequence"] if "order" in item]
+    if orders and (len(orders) != len(model["sequence"]) or orders != sorted(set(orders))):
+        raise DesignerError("Sequence order must be explicit, unique and increasing")
     real_statuses = {"build", "configure", "existing"}
+    for component in model["components"]:
+        if component["implementationStatus"] in {"build", "configure"} and component["buildOwner"] == "unassigned":
+            raise DesignerError(f"Buildable component lacks an assigned builder path: {component['id']}")
     for relationship in model["relationships"]:
         if relationship["from"] not in known_ids or relationship["to"] not in known_ids:
             raise DesignerError(
@@ -222,13 +277,7 @@ def _validate_model_semantics(model: dict[str, Any]) -> None:
                 "A real architecture relationship cannot connect simulated, manual, deferred, or blocked components"
             )
     participants: set[str] = set()
-    architecture_pairs = {
-        (item["from"], item["to"]) for item in model["relationships"]
-    }
-    reverse_pairs = {
-        (item["to"], item["from"])
-        for item in model["relationships"]
-    }
+    relationships_by_id = {item["id"]: item for item in model["relationships"] if "id" in item}
     for message in model["sequence"]:
         if message["from"] not in known_ids or message["to"] not in known_ids:
             raise DesignerError(
@@ -236,14 +285,40 @@ def _validate_model_semantics(model: dict[str, Any]) -> None:
                 f"{message['from']} -> {message['to']}"
             )
         participants.update((message["from"], message["to"]))
-        if message["type"] != "self" and (
-            message["from"], message["to"]
-        ) not in architecture_pairs | reverse_pairs:
+        same_endpoint = message["from"] == message["to"]
+        if same_endpoint != (message["type"] == "self"):
+            raise DesignerError("Self-call semantics require type self and identical endpoints")
+        if same_endpoint and component_by_id[message["from"]]["kind"] in {"actor", "channel", "human"}:
+            raise DesignerError("Self-call semantics require an executable component")
+        matches = [
+            item for item in model["relationships"]
+            if (item["from"], item["to"]) == (message["from"], message["to"])
+            or message["type"] == "response"
+            and (item["to"], item["from"]) == (message["from"], message["to"])
+        ]
+        relationship_id = message.get("relationshipId")
+        if relationship_id:
+            reference = relationships_by_id.get(relationship_id)
+            if reference not in matches:
+                raise DesignerError(f"Sequence relationshipId {relationship_id} disagrees with its directed endpoints")
+            matches = [reference]
+        if not same_endpoint and not matches:
             raise DesignerError(
-                "Every sequence message must map to an architecture relationship: "
+                "Every sequence message must map to a directed architecture relationship (reverse only for response): "
                 f"{message['from']} -> {message['to']}"
             )
-        if message["implementationMode"] == "simulated" and "simulat" not in message["label"].casefold():
+        if matches and any(item["implementationMode"] != message["implementationMode"] for item in matches):
+            raise DesignerError("Architecture/sequence implementation modes disagree; specify an unambiguous relationshipId")
+        if message["type"] not in {"response", "self"} and any(item["style"] == "response" for item in matches):
+            raise DesignerError("A call or approval cannot use a response-only architecture relationship")
+        if message["implementationMode"] == "real" and any(
+            component_by_id[identifier]["implementationStatus"] not in real_statuses
+            for identifier in (message["from"], message["to"])
+        ):
+            raise DesignerError("Real sequence interaction conflicts with component implementation status")
+        if message["type"] == "approval" and component_by_id[message["to"]]["kind"] != "human":
+            raise DesignerError("Approval action must target a classified human approval component")
+        if message["implementationMode"] == "simulated" and not message["label"].lstrip().casefold().startswith("simulated:"):
             raise DesignerError(
                 "Simulated sequence messages must be visibly labelled as simulated"
             )
@@ -251,6 +326,16 @@ def _validate_model_semantics(model: dict[str, Any]) -> None:
         raise DesignerError("Sequence diagrams support at most eight participants")
     if len(participants) < 2:
         raise DesignerError("Sequence diagrams require at least two participants")
+    for boundary in model.get("trustBoundaries", []):
+        if not set(boundary.get("component_ids", boundary.get("componentIds", []))).issubset(known_ids):
+            raise DesignerError("Trust boundary references an unknown component")
+    presentation = model.get("presentation", {})
+    if not set(presentation.get("primary_path", presentation.get("primaryPath", []))).issubset(known_ids):
+        raise DesignerError("Presentation primary path references an unknown component")
+    primary_agent = presentation.get("primary_agent_id", presentation.get("primaryAgentId"))
+    if primary_agent and (primary_agent not in known_ids or component_by_id[primary_agent]["kind"] != "agent"):
+        raise DesignerError("Presentation primary agent must reference an agent")
+    _validate_action_controls(model)
     reference_keys = {
         item["key"] for item in _json_load(REFERENCE_MANIFEST)["sources"]
     }
@@ -261,6 +346,79 @@ def _validate_model_semantics(model: dict[str, Any]) -> None:
         )
     if "architecture-diagrams" not in model["referenceKeys"]:
         raise DesignerError("Design model must include architecture-diagrams guidance")
+
+
+def _validate_action_controls(model: dict[str, Any]) -> None:
+    component_by_id = {item["id"]: item for item in model["components"]}
+    relationships = {item["id"]: item for item in model["relationships"] if "id" in item}
+    known_capabilities = {item["id"] for item in model.get("capabilityAssessments", [])}
+    expected_controls = {
+        item["id"]: {"capabilityId": item["id"], "actionImpact": item.get("action_impact"),
+                     "pocTreatment": item["poc_treatment"], "buildContract": item["build_contract"]}
+        for item in model.get("capabilityAssessments", []) if item.get("build_contract")
+    }
+    supplied_controls = {item["capabilityId"]: item for item in model.get("actionControls", [])}
+    if expected_controls and supplied_controls != expected_controls:
+        raise DesignerError("Normalized actionControls disagree with source capability contracts")
+    if known_capabilities:
+        for message in model["sequence"]:
+            if message.get("capabilityId") and message["capabilityId"] not in known_capabilities:
+                raise DesignerError("Sequence references an unknown capabilityId")
+    for control in model.get("actionControls", []):
+        capability_id = control["capabilityId"]
+        contract = control.get("buildContract", {})
+        high_impact = control.get("actionImpact") in {"high-impact-write", "irreversible-or-safety-critical"}
+        messages = [item for item in model["sequence"] if item.get("capabilityId") == capability_id]
+        if any(item.get("actionControl", contract) != contract for item in messages):
+            raise DesignerError(f"Sequence actionControl disagrees with classified capability {capability_id}")
+        if not high_impact and not contract.get("approval_required"):
+            continue
+        errors = []
+        if not messages:
+            errors.append("explicit capability-linked sequence")
+        if not contract.get("approval_required"):
+            errors.append("classified approval_required control")
+        approvals = [item for item in messages if item["type"] == "approval"]
+        actions = [
+            item for item in messages if item["type"] == "call"
+            and component_by_id[item["from"]]["kind"] not in {"actor", "channel", "human"}
+            and (
+                component_by_id[item["to"]]["kind"] in {"tool", "data", "integration", "external", "flow"}
+                or relationships.get(item.get("relationshipId"), {}).get("access") in {"write", "read-write", "execute"}
+            )
+        ]
+        if not approvals:
+            errors.append("approval request")
+        else:
+            first_action = min((model["sequence"].index(item) for item in actions), default=len(model["sequence"]))
+            confirmed = any(
+                model["sequence"].index(approval) < model["sequence"].index(result) < first_action
+                and result["type"] == "response"
+                and (result["from"], result["to"]) == (approval["to"], approval["from"])
+                and result.get("branchKind") == "success"
+                for approval in approvals for result in messages
+            )
+            if not confirmed:
+                errors.append("successful approval result before action")
+        branches = {item.get("branchKind") for item in messages}
+        required = {"rejection"} if high_impact and contract.get("approval_required") else set()
+        for field, branch in (("error_result", "failure"), ("timeout_behavior", "timeout")):
+            if high_impact and contract.get(field) and str(contract[field]).casefold() not in {"none", "n/a", "not applicable"}:
+                required.add(branch)
+        simulated = control.get("pocTreatment") in {"simulate", "static-sample-data"}
+        if high_impact and (simulated or contract.get("simulation_disclosure")):
+            required.add("simulation")
+        errors.extend(f"{branch} branch" for branch in sorted(required - branches))
+        if high_impact and simulated and not any(
+            item.get("branchKind") == "simulation" and item.get("simulationDisclosure")
+            for item in messages
+        ):
+            errors.append("explicit simulation disclosure")
+        if errors:
+            raise DesignerError(
+                f"Classifier repair required for {capability_id}: missing " + ", ".join(errors)
+                + ". No approval, branch, or external success is inferred from prose."
+            )
 
 
 def _slug(value: str) -> str:
@@ -288,17 +446,6 @@ def _item_name(item: dict[str, Any], fallback: str) -> str:
 
 def _summary_text(classification: dict[str, Any], title: str) -> str:
     platform = classification.get("agentic_platform", "the evidenced platform")
-    custom_tools = [
-        item
-        for item in classification.get("components", {}).get("tools", [])
-        if item.get("integrability") == "custom"
-    ]
-    if platform == "Hybrid" and custom_tools:
-        return (
-            "Copilot Studio provides grounded procurement guidance while a custom "
-            "analytics service evaluates operational data, anomalies, forecasts, "
-            "pricing, and compliance."
-        )
     return (
         f"{title} uses {platform} to deliver the evidenced agent interactions, "
         "data access, controls, and human handoffs."
@@ -415,6 +562,13 @@ def _build_design_model_from_topology(
     classification: dict[str, Any],
 ) -> dict[str, Any]:
     topology = classification["solution_topology"]
+    topology_ids = [item["id"] for item in topology["components"]]
+    if len(topology_ids) != len(set(topology_ids)):
+        raise DesignerError("Classifier topology component IDs must be unique")
+    for collection in ("relationships", "sequence_flows"):
+        for item in topology[collection]:
+            if not {item["source_id"], item["target_id"]}.issubset(topology_ids):
+                raise DesignerError(f"Classifier {collection} references an unknown component")
     platform = classification["agentic_platform"]
     category_layer = {
         "actor": "users",
@@ -454,12 +608,6 @@ def _build_design_model_from_topology(
         "monitoring": "monitoring",
         "human-approval": "human",
     }
-    lifecycle_status = {
-        "existing": "existing",
-        "configure": "to-create",
-        "build": "to-create",
-        "recommended": "to-create",
-    }
     delivery = classification.get("delivery_assessment", {})
     capabilities = delivery.get("capabilities", [])
     included_capabilities = set(
@@ -480,19 +628,26 @@ def _build_design_model_from_topology(
         "configure": 2,
         "existing": 1,
     }
-    mode_by_treatment = {
-        "block": "blocked",
-        "defer": "deferred",
-        "manual-handoff": "manual",
-        "simulate": "simulated",
-        "static-sample-data": "simulated",
-        "build": "real",
-        "configure": "real",
-        "existing": "real",
-    }
+    mode_by_treatment = MODE_BY_TREATMENT
 
     def component_disposition(item: dict[str, Any]) -> tuple[str, str, str, str]:
         mapped = capabilities_by_component.get(item["id"], [])
+        # Capabilities describe end-to-end delivery, not the shared runtime they traverse.
+        # A sample-data tool must not turn its hosting agent or ingress into sample data.
+        if item["category"] in {"actor", "channel", "agent", "agent-platform", "identity", "security", "governance", "alm", "monitoring", "human-approval"}:
+            mapped = [value for value in mapped if value.get("component_ids") == [item["id"]]]
+        explicit = item.get("implementation_status", item.get("poc_treatment"))
+        if explicit is not None and explicit not in mode_by_treatment:
+            raise DesignerError(f"Component {item['id']} has an invalid runtime implementation_status")
+        if "implementation_status" in item and "poc_treatment" in item and item["implementation_status"] != item["poc_treatment"]:
+            raise DesignerError(f"Component {item['id']} runtime implementation_status and poc_treatment disagree")
+        if explicit in mode_by_treatment:
+            treatment = explicit
+            return (
+                treatment, item.get("build_owner", "customer" if treatment == "existing" else "agent-builder"),
+                item.get("poc_scope", "represented" if treatment in {"simulate", "static-sample-data", "manual-handoff"} else "excluded" if treatment in {"block", "defer"} else "included"),
+                item.get("production_status", "ready" if treatment == "existing" else "requires-hardening"),
+            )
         if mapped:
             selected = max(
                 mapped,
@@ -518,12 +673,15 @@ def _build_design_model_from_topology(
             return treatment, owner, poc_scope, production_status
         if item["lifecycle"] == "existing":
             return "existing", "customer", "included", "ready"
-        return "configure", "agent-builder", "included", "requires-hardening"
+        return ("build" if item["lifecycle"] == "build" else "configure"), item.get("build_owner", "agent-builder"), "included", "requires-hardening"
 
     component_modes: dict[str, str] = {}
     design_components = []
     for item in topology["components"]:
         treatment, owner, poc_scope, production_status = component_disposition(item)
+        owner = item.get("build_owner", owner)
+        poc_scope = item.get("poc_scope", poc_scope)
+        production_status = item.get("production_status", production_status)
         component_modes[item["id"]] = mode_by_treatment[treatment]
         visual_status = (
             "existing"
@@ -538,6 +696,7 @@ def _build_design_model_from_topology(
                 for value in (
                     item["product_service"],
                     item["hosting_runtime"],
+                    *item.get("inventory_names", []),
                 )
                 if value and value.casefold() != item["name"].casefold()
             )
@@ -562,7 +721,33 @@ def _build_design_model_from_topology(
                 f"{item['role']} Runtime: {item['hosting_runtime']}. "
                 f"Boundary: {item['deployment_boundary']}."
             ),
+            "roleDescription": item["role"],
+            "productService": item["product_service"],
+            "hostingRuntime": item["hosting_runtime"],
+            "deploymentBoundary": item["deployment_boundary"],
         }
+        _preserve_fields(item, component, {
+            "inventory_names": "inventoryNames", "component_type": "componentType",
+            "lifecycle": "lifecycle", "category": "sourceCategory",
+            "environment_scope": "environmentScope", "visual_role": "visualRole",
+            "visual_group": "visualGroup", "presentation": "presentation",
+            "reliability": "reliability", "scalability": "scalability", "security": "security",
+            "reference_ids": "referenceIds", "source_refs": "sourceRefs",
+        })
+        mapped_ids = [value["id"] for value in capabilities_by_component.get(item["id"], [])]
+        component["capabilityIds"] = mapped_ids
+        if "allowed_tools" in delivery:
+            component["allowedToolScope"] = {
+                "allowedTools": copy.deepcopy(delivery["allowed_tools"]),
+                "capabilityIds": mapped_ids,
+                "allowedProducts": list(dict.fromkeys(
+                    value["allowed_product"] for value in capabilities_by_component.get(item["id"], [])
+                    if value.get("allowed_product")
+                )),
+            }
+        gaps = [gap for gap in delivery.get("production_readiness_gaps", []) if set(gap.get("capability_ids", [])) & set(mapped_ids)]
+        if gaps:
+            component["productionGaps"] = copy.deepcopy(gaps)
         if members:
             component["members"] = members
         if item["evidence_ids"]:
@@ -578,75 +763,118 @@ def _build_design_model_from_topology(
         "monitors": "optional",
     }
     relationships = []
-    for item in topology["relationships"]:
-        endpoint_modes = {
-            component_modes[item["source_id"]],
-            component_modes[item["target_id"]],
-        }
-        mode = next(
-            (
-                candidate
-                for candidate in ("blocked", "deferred", "manual", "simulated")
-                if candidate in endpoint_modes
-            ),
-            "real",
+    relationship_sources = topology["relationships"]
+    flow_sources = sorted(topology["sequence_flows"], key=lambda value: value["order"])
+    capabilities_by_id = {value["id"]: value for value in capabilities}
+
+    def matching_relationship(flow: dict) -> int | None:
+        if flow["message_type"] == "self":
+            if flow.get("relationship_id"):
+                raise DesignerError("Self-call cannot reference an architecture relationship")
+            return None
+        candidates = [
+            index for index, relation in enumerate(relationship_sources)
+            if (relation["source_id"], relation["target_id"]) == (flow["source_id"], flow["target_id"])
+        ]
+        if flow["message_type"] == "response" and (not candidates or flow.get("relationship_id")):
+            candidates += [
+                index for index, relation in enumerate(relationship_sources)
+                if (relation["target_id"], relation["source_id"]) == (flow["source_id"], flow["target_id"])
+                and index not in candidates
+            ]
+        if flow.get("relationship_id"):
+            candidates = [index for index in candidates if relationship_sources[index].get("id") == flow["relationship_id"]]
+        elif len(candidates) > 1:
+            exact = [index for index in candidates if relationship_sources[index]["interaction"] == flow["action"]]
+            if exact:
+                candidates = exact
+        if len(candidates) != 1:
+            raise DesignerError(f"Classifier repair required: sequence {flow.get('id', flow['order'])} needs one directed relationship_id")
+        return candidates[0]
+
+    flow_relationships = [matching_relationship(flow) for flow in flow_sources]
+
+    def flow_capability(flow: dict) -> dict | None:
+        if flow.get("capability_id"):
+            if flow["capability_id"] not in capabilities_by_id:
+                raise DesignerError(f"Unknown sequence capability_id: {flow['capability_id']}")
+            return capabilities_by_id[flow["capability_id"]]
+        matches = [
+            value for value in capabilities
+            if {flow["source_id"], flow["target_id"]}.issubset(value.get("component_ids", []))
+        ]
+        return max(matches, key=lambda value: (treatment_priority[value["poc_treatment"]], value["id"])) if matches else None
+
+    for index, item in enumerate(relationship_sources):
+        linked_flows = [flow for flow, link in zip(flow_sources, flow_relationships) if link == index]
+        explicit_modes = [
+            value["implementation_mode"] for value in [item, *linked_flows]
+            if "implementation_mode" in value
+        ]
+        if len(set(explicit_modes)) > 1:
+            raise DesignerError(f"Architecture/sequence implementation modes disagree for {item.get('id', index)}")
+        mapped_modes = [
+            mode_by_treatment[capability["poc_treatment"]]
+            for flow in linked_flows if (capability := flow_capability(flow))
+        ]
+        mode = explicit_modes[0] if explicit_modes else _conservative_mode(
+            mapped_modes + [component_modes[item["source_id"]], component_modes[item["target_id"]]]
         )
         label = item["interaction"]
-        if mode == "simulated" and "simulat" not in label.casefold():
-            label = f"Simulated: {label}"[:42]
+        if mode == "simulated" and not label.lstrip().casefold().startswith("simulated:"):
+            label = f"Simulated: {label}"
         relationship = {
+            "id": item.get("id", f"legacy-rel-{index + 1:03d}"),
             "from": item["source_id"],
             "to": item["target_id"],
             "label": label,
             "style": style_by_type.get(item["relationship_type"], "call"),
             "implementationMode": mode,
+            "relationshipType": item["relationship_type"],
         }
+        _preserve_fields(item, relationship, {
+            "direction": "direction", "integration_method": "integrationMethod",
+            "protocol": "protocol", "data_flow": "dataFlow", "access": "access",
+            "authentication": "authentication", "synchronous": "synchronous",
+            "failure_behavior": "failureBehavior", "reference_ids": "referenceIds",
+            "source_refs": "sourceRefs", "presentation": "presentation",
+        })
         if item["evidence_ids"]:
             relationship["evidenceIds"] = item["evidence_ids"]
         relationships.append(relationship)
 
     sequence = []
-    for item in sorted(topology["sequence_flows"], key=lambda value: value["order"]):
-        matching_capability = next(
-            (
-                capability
-                for capability in capabilities
-                if item["source_id"] in capability.get("component_ids", [])
-                and item["target_id"] in capability.get("component_ids", [])
-            ),
-            None,
-        )
-        mode = (
-            mode_by_treatment[matching_capability["poc_treatment"]]
-            if matching_capability
-            else next(
-                (
-                    candidate
-                    for candidate in ("blocked", "deferred", "manual", "simulated")
-                    if candidate
-                    in {
-                        component_modes[item["source_id"]],
-                        component_modes[item["target_id"]],
-                    }
-                ),
-                "real",
-            )
+    for item, relation_index in zip(flow_sources, flow_relationships):
+        matching_capability = flow_capability(item)
+        mode = relationships[relation_index]["implementationMode"] if relation_index is not None else item.get(
+            "implementation_mode", component_modes[item["source_id"]]
         )
         action = item["action"]
-        if mode == "simulated" and "simulat" not in action.casefold():
-            action = f"Simulated: {action}"[:56]
+        if mode == "simulated" and not action.lstrip().casefold().startswith("simulated:"):
+            action = f"Simulated: {action}"
         message = {
+            "id": item.get("id", f"legacy-seq-{item['order']:03d}"),
+            "order": item["order"],
             "from": item["source_id"],
             "to": item["target_id"],
             "label": action,
             "type": item["message_type"],
             "implementationMode": mode,
             "capabilityId": matching_capability["id"] if matching_capability else None,
+            "relationshipId": relationships[relation_index]["id"] if relation_index is not None else None,
+            "condition": item["condition"],
             "phase": item["phase"],
             "fragment": (
                 f"alt [{item['condition']}]" if item["condition"] else None
             ),
         }
+        _preserve_fields(item, message, {
+            "branch_kind": "branchKind", "simulation_disclosure": "simulationDisclosure",
+            "reference_ids": "referenceIds", "source_refs": "sourceRefs",
+            "presentation": "presentation",
+        })
+        if matching_capability and matching_capability.get("build_contract"):
+            message["actionControl"] = copy.deepcopy(matching_capability["build_contract"])
         if item["evidence_ids"]:
             message["evidenceIds"] = item["evidence_ids"]
         sequence.append(message)
@@ -661,8 +889,8 @@ def _build_design_model_from_topology(
     )
     model = {
         "scenarioSlug": _slug(title),
-        "title": title[:80],
-        "summary": topology["architecture_summary"][:300],
+        "title": title,
+        "summary": topology["architecture_summary"],
         "complexity": classification["complexity"],
         "coverage": {
             "nativeBuildPercent": classification.get("coverage", {}).get("native_build_percent", 0),
@@ -677,6 +905,19 @@ def _build_design_model_from_topology(
         "relationships": relationships,
         "sequence": sequence,
     }
+    _preserve_fields(topology, model, {
+        "trust_boundaries": "trustBoundaries", "environments": "environments",
+        "architecture_principles": "architecturePrinciples", "presentation": "presentation",
+    })
+    _preserve_fields(delivery, model, {
+        "allowed_tools": "allowedTools", "poc_scope": "pocScope",
+        "production_readiness_gaps": "productionReadinessGaps", "capabilities": "capabilityAssessments",
+    })
+    model["actionControls"] = [
+        {"capabilityId": value["id"], "actionImpact": value.get("action_impact"),
+         "pocTreatment": value["poc_treatment"], "buildContract": copy.deepcopy(value["build_contract"])}
+        for value in capabilities if value.get("build_contract")
+    ]
     _validate_model_semantics(model)
     return model
 
@@ -727,21 +968,23 @@ def _build_design_model(
         members: list[str] | None = None,
         evidence_ids: list[str] | None = None,
         implementation_status: str | None = None,
-        build_owner: str = "unassigned",
+        build_owner: str | None = None,
         poc_scope: str = "included",
         production_status: str = "requires-hardening",
     ) -> str:
         identifier = _component_id(name, existing_ids)
         component = {
                 "id": identifier,
-                "name": name[:60],
+                "name": name,
                 "layer": layer,
                 "kind": kind,
                 "status": status,
                 "implementationStatus": implementation_status or (
                     "existing" if status == "existing" else "configure" if status == "to-create" else "defer"
                 ),
-                "buildOwner": build_owner,
+                "buildOwner": build_owner or (
+                    "customer" if status == "existing" else "agent-builder" if status == "to-create" else "unassigned"
+                ),
                 "pocScope": poc_scope,
                 "productionStatus": production_status,
                 "iconKey": icon_key or _icon_for(name, kind, platform),
@@ -790,7 +1033,7 @@ def _build_design_model(
     )
 
     channel_ids: list[str] = []
-    for item in components_value.get("communication_channels", [])[:2]:
+    for item in components_value.get("communication_channels", []):
         name = _item_name(item, "Evidenced Channel")
         channel_ids.append(
             add_component(
@@ -953,7 +1196,7 @@ def _build_design_model(
             "; ".join(_item_name(item, "") for item in governance_controls),
         ]
     ).strip()
-    if governance_text and len(components) < 12:
+    if governance_text:
         governance_members = list(
             dict.fromkeys(
                 [
@@ -999,7 +1242,7 @@ def _build_design_model(
 
     alm_id = None
     alm_items = components_value.get("alm", [])
-    if alm_items and len(components) < 12:
+    if alm_items:
         alm_names = [_item_name(item, "ALM control") for item in alm_items]
         alm_id = add_component(
             "Application Lifecycle Management",
@@ -1032,13 +1275,13 @@ def _build_design_model(
     def relationship(
         source: str, target: str, label: str, style: str = "call"
     ) -> None:
-        if source and target and source != target and len(relationships) < 20:
+        if source and target and source != target:
             mode = interaction_mode(source, target)
             visible_label = (
                 f"Simulated: {label}" if mode == "simulated" else label
             )
             relationships.append(
-                {"from": source, "to": target, "label": visible_label[:42], "style": style, "implementationMode": mode}
+                {"id": f"legacy-rel-{len(relationships) + 1:03d}", "from": source, "to": target, "label": visible_label, "style": style, "implementationMode": mode}
             )
 
     if channel_ids:
@@ -1067,6 +1310,8 @@ def _build_design_model(
         relationship(agent_id, human_id, "Approval or review request", "optional")
     if governance_id:
         relationship(governance_id, agent_id, "Guardrails and controls", "optional")
+        if auth_evidenced:
+            relationship(actor_id, governance_id, "Authenticate user")
     if alm_id:
         relationship(alm_id, agent_id, "Lifecycle and deployment controls", "optional")
     relationship(agent_id, actor_id, "Grounded response", "response")
@@ -1086,21 +1331,31 @@ def _build_design_model(
             f"Simulated: {label}" if mode == "simulated" else label
         )
         item: dict[str, Any] = {
+            "id": f"legacy-seq-{len(sequence) + 1:03d}",
+            "order": len(sequence) + 1,
             "from": source,
             "to": target,
-            "label": visible_label[:56],
+            "label": visible_label,
             "type": message_type,
             "implementationMode": mode,
             "capabilityId": None,
             "phase": phase[:40],
             "fragment": fragment,
         }
+        if message_type != "self":
+            matches = [relation for relation in relationships if (relation["from"], relation["to"]) == (source, target)]
+            if not matches and message_type == "response":
+                matches = [relation for relation in relationships if (relation["to"], relation["from"]) == (source, target)]
+            if matches:
+                item["relationshipId"] = matches[0]["id"]
         sequence.append(item)
 
     if auth_evidenced:
         message(actor_id, governance_id, "Authenticate user", "call", "Authentication")
         message(governance_id, actor_id, "Return authenticated session", "response", "Authentication")
-    message(actor_id, agent_id, "Submit request", "call", "Request")
+    message(actor_id, channel_ids[0] if channel_ids else agent_id, "Submit request", "call", "Request")
+    if channel_ids:
+        message(channel_ids[0], agent_id, "Deliver request", "call", "Request")
     message(agent_id, agent_id, "Plan grounded response", "self", "Orchestration")
     if knowledge_id:
         message(agent_id, knowledge_id, "Retrieve grounded knowledge", "call", "Grounding")
@@ -1157,13 +1412,9 @@ def _build_design_model(
             "Request governed decision",
             "approval",
             "Human decision",
-            "alt [approval required]",
         )
         message(human_id, agent_id, "Return decision", "response", "Human decision")
     message(agent_id, actor_id, "Return response", "response", "Response")
-    if len(sequence) > 20:
-        sequence = sequence[:19] + [sequence[-1]]
-
     references = _reference_keys_from_classification(classification)
 
     model = {
@@ -1180,12 +1431,51 @@ def _build_design_model(
         "sourceClassification": str(classification_path),
         "sourceClassificationSha256": source_hash,
         "referenceKeys": references,
-        "components": components[:12],
+        "components": components,
         "relationships": relationships,
         "sequence": sequence,
     }
+    delivery = classification.get("delivery_assessment", {})
+    _preserve_fields(delivery, model, {
+        "allowed_tools": "allowedTools", "poc_scope": "pocScope",
+        "production_readiness_gaps": "productionReadinessGaps", "capabilities": "capabilityAssessments",
+    })
+    if delivery.get("capabilities"):
+        model["actionControls"] = [
+            {"capabilityId": value["id"], "actionImpact": value.get("action_impact"),
+             "pocTreatment": value["poc_treatment"], "buildContract": copy.deepcopy(value["build_contract"])}
+            for value in delivery["capabilities"] if value.get("build_contract")
+        ]
     _validate_model_semantics(model)
     return model
+
+
+def _validate_license_provenance(manifest: dict[str, Any]) -> dict[str, str]:
+    licenses = {}
+    packs = manifest.get("packs", {})
+    if not isinstance(packs, dict):
+        raise DesignerError("Packaged icon manifest packs must be an object")
+    for pack, metadata in packs.items():
+        if not isinstance(metadata, dict):
+            raise DesignerError(f"Packaged icon pack metadata is invalid: {pack}")
+        for prefix in ("license", "repositoryLicense"):
+            file_key, hash_key = prefix + "File", prefix + "Sha256"
+            if file_key not in metadata and hash_key not in metadata:
+                continue
+            name, expected = metadata.get(file_key), metadata.get(hash_key)
+            if not isinstance(name, str) or not name or not isinstance(expected, str) or not re.fullmatch(r"[a-fA-F0-9]{64}", expected):
+                raise DesignerError(f"Packaged license provenance metadata is incomplete: {pack}")
+            path = _safe_path(RESOURCES / name, RESOURCES)
+            if not path.is_file():
+                raise DesignerError(f"Packaged license is missing: {pack} ({name})")
+            actual = _sha256_file(path)
+            if actual != expected.lower():
+                raise DesignerError(
+                    f"Packaged license provenance hash mismatch: {pack} ({name}); "
+                    f"expected {expected.lower()}, got {actual}"
+                )
+            licenses[name] = actual
+    return licenses
 
 
 def _resource_hashes() -> dict[str, str]:
@@ -1193,7 +1483,9 @@ def _resource_hashes() -> dict[str, str]:
         networkx_version = importlib.metadata.version("networkx")
     except importlib.metadata.PackageNotFoundError as exc:
         raise DesignerError("NetworkX is required; install the Agency Python prerequisites before running design.") from exc
-    for icon in _json_load(ICON_MANIFEST)["icons"]:
+    manifest = _json_load(ICON_MANIFEST)
+    licenses = _validate_license_provenance(manifest)
+    for icon in manifest["icons"]:
         icon_path = RESOURCES / icon["file"]
         if not _is_within(icon_path, RESOURCES / "icons"):
             raise DesignerError(f"Icon asset escapes the packaged icon directory: {icon['key']}")
@@ -1212,10 +1504,13 @@ def _resource_hashes() -> dict[str, str]:
         SCRIPTS / "New-Diagrams.ps1",
         SCRIPTS / "Render-Diagrams.ps1",
         SCRIPTS / "Test-Diagrams.ps1",
+        SCRIPTS / "source_artifacts.py",
+        SCRIPTS / "inspect_preview.js",
     ]
     return {
         **{path.name: _sha256_file(path) for path in files},
         "icons": _directory_hash(RESOURCES / "icons"),
+        "license_provenance": _canonical_hash(licenses),
         "layout_engine": _sha256_file(SCRIPTS / "layout_engine.py"),
         "networkx_version": networkx_version,
         "renderer": _directory_hash(SKILL_ROOT / "renderer"),
@@ -1235,7 +1530,36 @@ def _cache_key(classification: Path, model: dict[str, Any]) -> str:
 
 
 def _safe_artifact_name(name: str) -> bool:
-    return bool(name) and Path(name).name == name and not Path(name).is_absolute()
+    return (
+        isinstance(name, str) and bool(name) and name not in {".", ".."}
+        and not any(character in name for character in ("/", "\\", ":"))
+        and Path(name).name == name and not Path(name).is_absolute()
+    )
+
+
+def _validate_source_artifacts(root: Path) -> None:
+    model = _json_load(root / "design-model.json")
+    for name in (f"Design_{model['scenarioSlug']}.drawio", f"SA_{model['scenarioSlug']}.mmd",
+                 f"SD_{model['scenarioSlug']}.mmd", "source-report.json"):
+        path = _safe_path(root / name, root)
+        if not path.is_file() or not path.stat().st_size:
+            raise DesignerError(f"Editable source artifact missing: {name}")
+    try:
+        completed = subprocess.run(
+            [sys.executable, str(SCRIPTS / "source_artifacts.py"), "validate",
+             "--model", str(root / "design-model.json"), "--output", str(root)],
+            capture_output=True, text=True, check=False, timeout=120,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise DesignerError("Editable source validation timed out") from exc
+    if completed.returncode:
+        raise DesignerError("Editable source validation failed: " + (completed.stderr or completed.stdout).strip())
+    try:
+        result = json.loads(completed.stdout)
+    except (ValueError, TypeError) as exc:
+        raise DesignerError("Editable source validator did not return a validation report") from exc
+    if not isinstance(result, dict) or result.get("validation") != "passed":
+        raise DesignerError("Editable source validation did not pass")
 
 
 def _cache_valid(
@@ -1245,18 +1569,24 @@ def _cache_valid(
     if not manifest_path.exists():
         return False
     try:
+        _assert_no_links(manifest_path)
         manifest = _json_load(manifest_path)
     except DesignerError:
         return False
     if manifest.get("cache_key") != cache_key:
         return False
-    artifact_names = set(manifest.get("artifacts", {}))
+    if not isinstance(manifest.get("artifacts"), dict):
+        return False
+    artifact_names = set(manifest["artifacts"])
     if artifact_names != expected_artifacts:
         return False
     for name, expected_hash in manifest.get("artifacts", {}).items():
         if not _safe_artifact_name(name):
             return False
-        artifact = (cache_dir / name).resolve()
+        try:
+            artifact = _safe_path(cache_dir / name, cache_dir)
+        except DesignerError:
+            return False
         if not _is_within(artifact, cache_dir):
             return False
         if not artifact.exists() or _sha256_file(artifact) != expected_hash:
@@ -1270,6 +1600,9 @@ def _cache_valid(
         if value["status"] != "passed" or value["issues"] or not all(value["checks"].values()):
             return False
         model = _json_load(cache_dir / "design-model.json")
+        _validate_model_semantics(model)
+        _validate_source_artifacts(cache_dir)
+        _candidate_ranking(cache_dir, _json_load(cache_dir / "generation-report.json"))
         slug = model["scenarioSlug"]
         if (
             value["solution_architecture_png_sha256"] != _sha256_file(cache_dir / f"SA_{slug}.png")
@@ -1277,6 +1610,7 @@ def _cache_valid(
             or _json_load(cache_dir / "generation-report.json").get("structuralValidation") != "passed"
         ):
             return False
+        _validate_browser_evidence(cache_dir, value, _json_load(cache_dir / "generation-report.json").get("inspectionContext"))
     except (DesignerError, OSError, KeyError, TypeError):
         return False
     return True
@@ -1344,7 +1678,7 @@ def _prepare(args: argparse.Namespace) -> int:
     inspection_template_path = run_dir / "inspection-template.json"
     expected_cache_artifacts = set(
         _artifact_names(stage_design, model["scenarioSlug"])
-        + ["generation-report.json", "inspection-report.json"]
+        + ["generation-report.json", "inspection-report.json", *EVIDENCE_ARTIFACT_NAMES]
     )
     cache_hit = _cache_valid(
         cache_dir, cache_key, expected_cache_artifacts
@@ -1376,6 +1710,9 @@ def _prepare(args: argparse.Namespace) -> int:
         "repair_attempts": [],
         "revision": 0,
         "attempted_layout_profiles": [],
+        "passing_layout_profiles": [],
+        "selected_layout_profiles": [],
+        "inspected_layout_profiles": [],
         "status": "prepared",
     }
     _atomic_write_json(run_path, run)
@@ -1432,17 +1769,32 @@ def _load_run(path: Path, expected_status: set[str]) -> dict[str, Any]:
         or revision > len(attempts)
     ):
         raise DesignerError("Run repair bounds or revision metadata are invalid")
-    profiles = run.get("attempted_layout_profiles", [])
+    profile_histories = {}
+    for key in ("attempted_layout_profiles", "passing_layout_profiles", "selected_layout_profiles", "inspected_layout_profiles"):
+        values = run.get(key)
+        if (
+            not isinstance(values, list)
+            or any(profile not in LAYOUT_PROFILES for profile in values)
+            or len(values) != len(set(values))
+        ):
+            raise DesignerError(f"Run {key} history is invalid")
+        profile_histories[key] = values
+    profiles = profile_histories["attempted_layout_profiles"]
+    passing_profiles = profile_histories["passing_layout_profiles"]
+    selected_profiles = profile_histories["selected_layout_profiles"]
+    inspected_profiles = profile_histories["inspected_layout_profiles"]
     if (
-        not isinstance(profiles, list)
-        or any(profile not in LAYOUT_PROFILES for profile in profiles)
-        or len(profiles) != len(set(profiles))
+        not set(passing_profiles).issubset(profiles)
+        or not set(selected_profiles).issubset(passing_profiles)
+        or not set(inspected_profiles).issubset(selected_profiles)
     ):
-        raise DesignerError("Run layout-profile history is invalid")
+        raise DesignerError("Generated, passing, selected and inspected profile histories disagree")
     for number, attempt in enumerate(attempts, start=1):
         if (
             not isinstance(attempt, dict) or attempt.get("revision") != number
             or attempt.get("profile") not in profiles
+            or attempt.get("profile") not in passing_profiles
+            or attempt.get("previous_selected_profile") not in inspected_profiles
             or attempt.get("status") not in {"running", "failed", "awaiting_inspection"}
         ):
             raise DesignerError("Run repair-attempt history is invalid")
@@ -1453,6 +1805,14 @@ def _load_run(path: Path, expected_status: set[str]) -> dict[str, Any]:
         raise DesignerError("Active revision is not the latest successful generation")
     if len({item["profile"] for item in attempts}) != len(attempts):
         raise DesignerError("A repair layout profile was attempted more than once")
+    successful_profiles = [item["profile"] for item in attempts if item["status"] == "awaiting_inspection"]
+    if run["status"] == "awaiting_inspection" and (
+        not selected_profiles or selected_profiles[1:] != successful_profiles
+        or selected_profiles[-1] != run.get("selected_layout_profile")
+    ):
+        raise DesignerError("Selected profile history must describe the active rendered revisions")
+    if run["status"] == "prepared" and any(profile_histories.values()):
+        raise DesignerError("Prepared runs cannot claim generated or inspected layouts")
     try:
         if not isinstance(run["started_at_local"], str) or not run["started_at_local"]:
             raise ValueError("Missing start time")
@@ -1492,12 +1852,27 @@ def _load_run(path: Path, expected_status: set[str]) -> dict[str, Any]:
             or not 0 <= attempt["previous_revision"] < number
         ):
             raise DesignerError("Run repair evidence path or previous revision is invalid")
+        previous_profiles = {0: selected_profiles[0]} if selected_profiles else {}
+        previous_profiles.update({item["revision"]: item["profile"] for item in attempts if item["status"] == "awaiting_inspection"})
+        if previous_profiles.get(attempt["previous_revision"]) != attempt.get("previous_selected_profile"):
+            raise DesignerError("Repair inspection does not match its previously selected profile")
         _safe_path(expected_evidence, design_root)
         if (
             not expected_evidence.is_file()
             or _sha256_file(expected_evidence) != attempt.get("inspection_sha256")
         ):
             raise DesignerError("Failed inspection evidence changed after repair")
+        previous_revision = attempt["previous_revision"]
+        previous_root = stage_parent / f"revision-{previous_revision}" if previous_revision else stage_parent
+        previous_design = previous_root / "design"
+        if attempt.get("previous_stage_design") != str(previous_design):
+            raise DesignerError("Archived browser evidence has an invalid revision path")
+        for name, expected_hash in attempt.get("previous_browser_evidence_artifacts", {}).items():
+            if name not in EVIDENCE_ARTIFACT_NAMES:
+                raise DesignerError("Archived browser evidence has an invalid artifact name")
+            artifact = _safe_path(previous_design / name, design_root)
+            if not artifact.is_file() or _sha256_file(artifact) != expected_hash:
+                raise DesignerError("Archived browser evidence changed after repair")
     if path.resolve().parent != run_dir or path.name != "run.json":
         raise DesignerError("Run path is not the expected run.json")
     if design_root.name != ARTIFACT_CONTRACT["rootFolder"]:
@@ -1536,7 +1911,7 @@ def _load_run(path: Path, expected_status: set[str]) -> dict[str, Any]:
     model = _json_load(model_path)
     expected_cache_artifacts = sorted(
         _artifact_names(stage_design, model["scenarioSlug"])
-        + ["generation-report.json", "inspection-report.json"]
+        + ["generation-report.json", "inspection-report.json", *EVIDENCE_ARTIFACT_NAMES]
     )
     if run.get("expected_cache_artifacts") != expected_cache_artifacts:
         raise DesignerError("Run cache-artifact allowlist is inconsistent")
@@ -1566,6 +1941,22 @@ def _load_run(path: Path, expected_status: set[str]) -> dict[str, Any]:
         }.items():
             if not isinstance(run.get(key), str) or Path(run[key]).resolve() != stage_design / name:
                 raise DesignerError(f"Run metadata path mismatch for {key}")
+        initial_design = stage_parent / "design"
+        initial_seal = attempts[0].get("previous_staged_artifacts", {}) if attempts else run.get("staged_artifacts", {})
+        if not isinstance(initial_seal, dict):
+            raise DesignerError("Initial candidate-ranking seal is invalid")
+        for name in ("candidate-report.json", "run-report.json", "diagram-manifest.json"):
+            artifact = _safe_path(initial_design / name, design_root)
+            if not artifact.is_file() or _sha256_file(artifact) != initial_seal.get(name):
+                raise DesignerError(f"Initial candidate-ranking evidence changed: {name}")
+        initial_report = _json_load(initial_design / "run-report.json")
+        initial_passing = _candidate_ranking(initial_design, initial_report)
+        if (
+            passing_profiles != initial_passing
+            or profiles != initial_report.get("attemptedLayoutProfiles")
+            or selected_profiles[0] != initial_report.get("selectedLayoutProfile")
+        ):
+            raise DesignerError("Profile histories disagree with the sealed initial candidate ranking")
         generated_at = _local_time(run.get("generated_at_local"))
         if (
             not run.get("generated_at_local")
@@ -1574,6 +1965,47 @@ def _load_run(path: Path, expected_status: set[str]) -> dict[str, Any]:
         ):
             raise DesignerError("Run generation timestamp is invalid")
     return run
+
+
+def _candidate_ranking(root: Path, generation: dict[str, Any]) -> list[str]:
+    """Validate reported scores without confusing geometric passes with visual acceptance."""
+    report = _json_load(root / "candidate-report.json")
+    candidates = report.get("candidates")
+    if not isinstance(candidates, list) or not candidates:
+        raise DesignerError("Candidate report must contain evaluated layout profiles")
+    profiles, orders, passing = [], [], []
+    for candidate in candidates:
+        if not isinstance(candidate, dict) or candidate.get("profile") not in LAYOUT_PROFILES:
+            raise DesignerError("Candidate report contains an invalid layout profile")
+        profile = candidate["profile"]
+        order = candidate.get("order")
+        status = candidate.get("validation")
+        if profile in profiles or type(order) is not int or order < 0 or order in orders or status not in {"passed", "failed"}:
+            raise DesignerError("Candidate report profile, order or validation is inconsistent")
+        profiles.append(profile)
+        orders.append(order)
+        if status == "passed":
+            score = candidate.get("score")
+            if type(score) not in {float, int} or not math.isfinite(score):
+                raise DesignerError("Passing candidates require finite numeric presentation-quality scores")
+            passing.append(candidate)
+    attempted = generation.get("attemptedLayoutProfiles")
+    if profiles != attempted or orders != sorted(orders):
+        raise DesignerError("Candidate report disagrees with attempted generation profiles")
+    ranked = sorted(passing, key=lambda candidate: (-candidate["score"], candidate["order"]))
+    if not ranked:
+        raise DesignerError("Candidate report contains no passing layout profile")
+    selected = ranked[0]["profile"]
+    if report.get("selectedLayoutProfile") != selected or generation.get("selectedLayoutProfile") != selected:
+        raise DesignerError("Selected layout is not the highest passing score with deterministic order tie-break")
+    quality = _json_load(root / "diagram-manifest.json").get("layoutQuality", {})
+    if (
+        not isinstance(quality, dict) or quality.get("validation") != "passed"
+        or type(quality.get("score")) not in {int, float}
+        or quality["score"] != ranked[0]["score"]
+    ):
+        raise DesignerError("Selected candidate score disagrees with its passing layoutQuality manifest")
+    return [candidate["profile"] for candidate in ranked]
 
 
 def _generate_candidate(
@@ -1638,10 +2070,12 @@ def _generate_candidate(
     selected = report.get("selectedLayoutProfile")
     attempted = report.get("attemptedLayoutProfiles", [selected])
     if (
-        selected not in LAYOUT_PROFILES or selected not in attempted
+        not isinstance(attempted, list)
+        or selected not in LAYOUT_PROFILES or selected not in attempted
         or any(value not in LAYOUT_PROFILES for value in attempted)
         or len(attempted) != len(set(attempted))
         or (profile and (selected != profile or attempted != [profile]))
+        or (not profile and set(attempted) != set(LAYOUT_PROFILES))
     ):
         raise DesignerError("Generator returned an inconsistent layout-profile selection")
     if _sha256_file(model_path) != run["model_sha256"]:
@@ -1655,6 +2089,7 @@ def _generate_candidate(
     ):
         raise DesignerError("Generator did not produce the expected HTML preview")
     report["attemptedLayoutProfiles"] = attempted
+    report["passingLayoutProfiles"] = _candidate_ranking(stage_design, report)
     report["modelMs"] = run["model_ms"]
     _atomic_write_json(generation_report_path, report)
     return report
@@ -1664,6 +2099,13 @@ def _seal_candidate(
     run_path: Path, run: dict[str, Any], stage_design: Path, report: dict[str, Any]
 ) -> int:
     slug = _json_load(stage_design / "design-model.json")["scenarioSlug"]
+    _validate_source_artifacts(stage_design)
+    generated_at = _run_local_time(run)
+    report["inspectionContext"] = {
+        "run_id": run["run_id"], "revision": run.get("revision", 0),
+        "generated_at": generated_at, "model_sha256": run["model_sha256"],
+    }
+    _atomic_write_json(stage_design / "run-report.json", report)
     sa_png = stage_design / f"SA_{slug}.png"
     sd_png = stage_design / f"SD_{slug}.png"
     template = _inspection_template(run["run_id"], run.get("revision", 0))
@@ -1680,7 +2122,7 @@ def _seal_candidate(
     run.update(
         {
             "status": "awaiting_inspection",
-            "generated_at_local": _run_local_time(run),
+            "generated_at_local": generated_at,
             "scenario_slug": slug,
             "stage_design": str(stage_design),
             "model_path": str(stage_design / "design-model.json"),
@@ -1689,7 +2131,10 @@ def _seal_candidate(
             "html_preview": str(stage_design / "preview.html"),
             "generation_report_path": str(stage_design / "run-report.json"),
             "staged_artifacts": staged_hashes,
+            "browser_evidence_artifacts": {},
             "selected_layout_profile": report["selectedLayoutProfile"],
+            "selected_layout_profiles": run.get("selected_layout_profiles", []) + [report["selectedLayoutProfile"]],
+            "passing_layout_profiles": run.get("passing_layout_profiles") or report["passingLayoutProfiles"],
             "attempted_layout_profiles": list(dict.fromkeys(
                 run.get("attempted_layout_profiles", []) + report["attemptedLayoutProfiles"]
             )),
@@ -1706,6 +2151,9 @@ def _seal_candidate(
                 "inspection_template": run["inspection_template_path"],
                 "revision": run.get("revision", 0),
                 "layout_profile": report["selectedLayoutProfile"],
+                "passing_layout_profiles": run["passing_layout_profiles"],
+                "selected_layout_profiles": run["selected_layout_profiles"],
+                "inspected_layout_profiles": run["inspected_layout_profiles"],
                 "remaining_repair_attempts": run.get("max_repair_attempts", DEFAULT_MAX_REPAIR_ATTEMPTS) - len(run.get("repair_attempts", [])),
             },
             indent=2,
@@ -1732,6 +2180,10 @@ def _validate_staged(run: dict[str, Any]) -> None:
         if not artifact.is_file() or _sha256_file(artifact) != expected_hash:
             raise DesignerError(f"Staged artifact changed after generation: {name}")
     report = _json_load(stage_design / "run-report.json")
+    _validate_source_artifacts(stage_design)
+    ranked = _candidate_ranking(stage_design, report)
+    if report.get("passingLayoutProfiles") != ranked:
+        raise DesignerError("Sealed passing-profile ranking disagrees with candidate report")
     if (
         report.get("structuralValidation") != "passed"
         or report.get("validation") != "pending-inspection"
@@ -1762,6 +2214,167 @@ def _validate_inspection(run: dict[str, Any], inspection: dict[str, Any]) -> Non
     ):
         if _sha256_file(Path(run[path_key])) != inspection[key]:
             raise DesignerError(f"{label} PNG changed after inspection")
+    if inspection["status"] == "passed" or inspection.get("browser_evidence"):
+        _validate_browser_evidence(
+            Path(run["stage_design"]), inspection,
+            _json_load(Path(run["generation_report_path"])).get("inspectionContext"),
+            now=_local_time(_run_local_time(run)),
+        )
+        sealed_evidence = run.get("browser_evidence_artifacts")
+        if not sealed_evidence or set(sealed_evidence) != set(EVIDENCE_ARTIFACT_NAMES):
+            raise DesignerError("Browser evidence is not attached and sealed; use attach-browser-evidence")
+        for name, expected in sealed_evidence.items():
+            if _sha256_file(Path(run["stage_design"]) / name) != expected:
+                raise DesignerError(f"Browser evidence changed after attachment: {name}")
+
+
+def _png_dimensions(path: Path) -> tuple[int, int]:
+    data = path.read_bytes()
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise DesignerError(f"Browser evidence is not a PNG image: {path.name}")
+    offset, compressed, dimensions, ended = 8, bytearray(), None, False
+    while offset + 12 <= len(data):
+        length = struct.unpack(">I", data[offset:offset + 4])[0]
+        kind = data[offset + 4:offset + 8]
+        payload = data[offset + 8:offset + 8 + length]
+        end = offset + 12 + length
+        if end > len(data) or binascii.crc32(kind + payload) & 0xffffffff != int.from_bytes(data[end - 4:end], "big"):
+            raise DesignerError(f"PNG image checksum is invalid: {path.name}")
+        if kind == b"IHDR":
+            if dimensions or length != 13 or offset != 8:
+                raise DesignerError(f"PNG image header is invalid: {path.name}")
+            width, height, depth, color, compression, filtering, interlace = struct.unpack(">IIBBBBB", payload)
+            if not 0 < width <= 32768 or not 0 < height <= 32768 or width * height > 100_000_000 or compression or filtering or interlace:
+                raise DesignerError(f"Unsupported PNG image dimensions/encoding: {path.name}")
+            dimensions = (width, height)
+        elif kind == b"IDAT":
+            compressed.extend(payload)
+        elif kind == b"IEND":
+            ended = True
+            if length or end != len(data):
+                raise DesignerError(f"PNG image trailer is invalid: {path.name}")
+            break
+        offset = end
+    if not dimensions or not ended or not compressed:
+        raise DesignerError(f"PNG image is incomplete: {path.name}")
+    channels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}.get(color)
+    valid_depths = {0: {1, 2, 4, 8, 16}, 2: {8, 16}, 3: {1, 2, 4, 8}, 4: {8, 16}, 6: {8, 16}}
+    if channels is None or depth not in valid_depths[color]:
+        raise DesignerError(f"PNG image format is invalid: {path.name}")
+    expected_size = height * (1 + (width * channels * depth + 7) // 8)
+    try:
+        decoder = zlib.decompressobj()
+        decoded = decoder.decompress(compressed, expected_size + 1)
+        if len(decoded) != expected_size or not decoder.eof or decoder.unused_data:
+            raise ValueError("Invalid raster payload")
+        row_size = expected_size // height
+        if any(decoded[offset] > 4 for offset in range(0, expected_size, row_size)):
+            raise ValueError("Invalid PNG scanline filter")
+    except (zlib.error, ValueError) as exc:
+        raise DesignerError(f"PNG image cannot be decoded: {path.name}") from exc
+    return dimensions
+
+
+def _validate_browser_evidence(
+    root: Path, inspection: dict[str, Any], context: dict | None, now: datetime | None = None
+) -> dict[str, Any]:
+    descriptor = inspection.get("browser_evidence")
+    if not isinstance(descriptor, dict) or descriptor.get("path") != "browser-evidence.json":
+        raise DesignerError("Inspection requires browser_evidence; all-true checks and hashes alone are not inspection evidence")
+    report_path = _safe_path(root / descriptor["path"], root)
+    if not report_path.is_file() or _sha256_file(report_path) != descriptor.get("sha256"):
+        raise DesignerError("Browser evidence report is missing or changed")
+    evidence = _json_load(report_path)
+    import jsonschema
+    schema = _json_load(INSPECTION_SCHEMA)
+    try:
+        jsonschema.Draft202012Validator({
+            "$ref": "#/$defs/browserEvidence", "$defs": schema["$defs"]
+        }).validate(evidence)
+    except jsonschema.ValidationError as exc:
+        raise DesignerError(f"Browser evidence schema error: {exc.message}") from exc
+    if not context:
+        raise DesignerError("Generation has no sealed inspection context")
+    for field in ("run_id", "revision", "generated_at", "model_sha256"):
+        if evidence[field] != context.get(field):
+            raise DesignerError(f"Browser evidence {field} does not match the sealed generation")
+    if evidence["run_id"] != inspection["run_id"] or evidence["revision"] != inspection.get("revision", 0):
+        raise DesignerError("Browser evidence does not match inspection identity/revision")
+    generated = _local_time(evidence["generated_at"])
+    captured = _local_time(evidence["captured_at"])
+    inspected = _local_time(inspection["inspected_at"])
+    if captured < generated - timedelta(seconds=1) or captured > inspected + timedelta(seconds=1):
+        raise DesignerError("Browser evidence capture is stale or later than the inspection")
+    if now and captured > now + timedelta(seconds=INSPECTION_CLOCK_SKEW_SECONDS):
+        raise DesignerError("Browser evidence timestamp is in the future")
+    model = _json_load(root / "design-model.json")
+    slug = model["scenarioSlug"]
+    diagram_names = {f"{prefix}_{slug}.{extension}" for prefix in ("SA", "SD") for extension in ("svg", "png")}
+    expected_names = diagram_names | {"preview.html", "design-model.json"}
+    if set(evidence["artifact_sha256"]) != expected_names:
+        raise DesignerError("Browser evidence must bind the model, preview and all four diagram assets")
+    for name, expected in evidence["artifact_sha256"].items():
+        path = _safe_path(root / name, root)
+        if not path.is_file() or _sha256_file(path) != expected:
+            raise DesignerError(f"Browser-viewed artifact changed: {name}")
+    if evidence["model_sha256"] != evidence["artifact_sha256"]["design-model.json"]:
+        raise DesignerError("Browser evidence model hash disagrees")
+    links = evidence["links"]
+    if {link["href"] for link in links} != diagram_names:
+        raise DesignerError("Browser evidence must confirm four distinct sibling diagram links")
+    for link in links:
+        if not _safe_artifact_name(link["href"]) or link["sha256"] != evidence["artifact_sha256"][link["href"]]:
+            raise DesignerError("Browser link confirmation has an invalid sibling path or hash")
+    for key, prefix in (("architecture", "SA"), ("sequence", "SD")):
+        image = evidence["diagrams"][key]
+        filename = f"{prefix}_{slug}.png"
+        if image["src"] != filename:
+            raise DesignerError("Browser diagram references the wrong sibling image")
+        natural = _png_dimensions(root / filename)
+        if natural != (image["natural_width"], image["natural_height"]):
+            raise DesignerError("Browser decoded natural image dimensions disagree")
+        if any(abs(image[f"actual_{dimension}"] - value) > 1 for dimension, value in zip(("width", "height"), natural)):
+            raise DesignerError("Browser actual-size toggle did not display native dimensions")
+        if image["display_width"] > natural[0] + 1 or abs(image["display_width"] / image["display_height"] - natural[0] / natural[1]) > 0.01:
+            raise DesignerError("Browser display dimensions stretch or distort the diagram")
+    for key, screenshot in evidence["screenshots"].items():
+        name = f"inspection-{key}.png"
+        asset = "preview.html" if key == "preview" else f"{'SA' if key == 'architecture' else 'SD'}_{slug}.png"
+        if screenshot["path"] != name or screenshot["viewed_asset"] != asset:
+            raise DesignerError("Browser screenshot must reference a fixed sibling evidence file and viewed asset")
+        path = _safe_path(root / name, root)
+        if not path.is_file() or _sha256_file(path) != screenshot["sha256"]:
+            raise DesignerError(f"Browser screenshot missing or changed: {name}")
+        if _png_dimensions(path) != (screenshot["width"], screenshot["height"]):
+            raise DesignerError(f"Browser screenshot dimensions disagree: {name}")
+        if asset.endswith(".png") and screenshot["sha256"] == evidence["artifact_sha256"][asset]:
+            raise DesignerError("A diagram file copied as its screenshot is not browser capture evidence")
+    return evidence
+
+
+def _attach_browser_evidence(run_path: Path, evidence_path: Path, inspection_path: Path) -> int:
+    run = _load_run(run_path, {"awaiting_inspection"})
+    _validate_staged(run)
+    stage = Path(run["stage_design"])
+    if evidence_path != stage / "browser-evidence.json":
+        raise DesignerError("Collect browser evidence in the active staged design directory")
+    inspection_path = _safe_path(inspection_path, Path(run["design_root"]))
+    if inspection_path == evidence_path or inspection_path.name in run["staged_artifacts"]:
+        raise DesignerError("Inspection attachment may not overwrite a staged artifact")
+    inspection = _json_load(inspection_path)
+    inspection["browser_evidence"] = {"path": "browser-evidence.json", "sha256": _sha256_file(evidence_path)}
+    _schema_validate(inspection, INSPECTION_SCHEMA, "Inspection")
+    _validate_browser_evidence(
+        stage, inspection, _json_load(Path(run["generation_report_path"])).get("inspectionContext"),
+        now=_local_time(_run_local_time(run)),
+    )
+    run["browser_evidence_artifacts"] = {name: _sha256_file(stage / name) for name in EVIDENCE_ARTIFACT_NAMES}
+    _atomic_write_json(inspection_path, inspection)
+    _atomic_write_json(run_path, run)
+    print(json.dumps({"status": "evidence-attached", "inspection": str(inspection_path),
+                      "browser_evidence": str(evidence_path),
+                      "human_vision_judgment_required": True}, indent=2))
+    return 0
 
 
 def _repair(run_path: Path, inspection_path: Path, profile: str | None = None) -> int:
@@ -1773,19 +2386,25 @@ def _repair(run_path: Path, inspection_path: Path, profile: str | None = None) -
         raise DesignerError("Repair requires a failed rendered inspection")
     if not inspection["issues"] and all(inspection["checks"].values()):
         raise DesignerError("Failed inspection must identify an issue or failed check")
+    run["inspected_layout_profiles"] = list(dict.fromkeys(
+        run["inspected_layout_profiles"] + [run["selected_layout_profile"]]
+    ))
+    _atomic_write_json(run_path, run)
     attempts = run.get("repair_attempts", [])
     if any(attempt["status"] == "running" for attempt in attempts):
         raise DesignerError("A repair is already in progress; do not modify its sealed state")
     if len(attempts) >= run.get("max_repair_attempts", DEFAULT_MAX_REPAIR_ATTEMPTS):
         raise DesignerError("Bounded repair attempts exhausted; prepare a new run")
-    model = _json_load(Path(run["model_path"]))
-    profiles = ("Spacious", "Wide", "Balanced") if len(model["components"]) > 18 else LAYOUT_PROFILES
-    available = [value for value in profiles if value not in run.get("attempted_layout_profiles", [])]
+    prior_repairs = {attempt["profile"] for attempt in attempts}
+    available = [
+        value for value in run["passing_layout_profiles"]
+        if value not in run["inspected_layout_profiles"] and value not in prior_repairs
+    ]
     if not available:
-        raise DesignerError("No unattempted deterministic layout profiles remain")
+        raise DesignerError("No uninspected passing layout profiles remain")
     selected = profile or available[0]
     if selected not in available:
-        raise DesignerError("Repair must select an unattempted layout profile")
+        raise DesignerError("Repair must select an uninspected passing profile not previously retried")
     revision = len(attempts) + 1
     revision_root = _safe_path(Path(run["stage_parent"]) / f"revision-{revision}", Path(run["design_root"]))
     if revision_root.exists():
@@ -1798,15 +2417,18 @@ def _repair(run_path: Path, inspection_path: Path, profile: str | None = None) -
     attempt = {
         "revision": revision,
         "previous_revision": run.get("revision", 0),
+        "previous_selected_profile": run["selected_layout_profile"],
         "profile": selected,
         "status": "running",
         "started_at_local": _run_local_time(run),
         "inspection_path": str(evidence_path),
         "inspection_sha256": _sha256_file(evidence_path),
         "previous_staged_artifacts": copy.deepcopy(run["staged_artifacts"]),
+        "previous_stage_design": run["stage_design"],
+        "previous_browser_evidence_artifacts": copy.deepcopy(run.get("browser_evidence_artifacts", {})),
     }
     run["repair_attempts"] = attempts + [attempt]
-    run["attempted_layout_profiles"] = run.get("attempted_layout_profiles", []) + [selected]
+    run["attempted_layout_profiles"] = list(dict.fromkeys(run["attempted_layout_profiles"] + [selected]))
     _atomic_write_json(run_path, run)
     try:
         report = _generate_candidate(run, stage_design, selected)
@@ -1832,6 +2454,11 @@ def _artifact_names(stage_design: Path, slug: str) -> list[str]:
         "diagram-manifest.json",
         "validation-report.json",
         "render-report.json",
+        "candidate-report.json",
+        f"Design_{slug}.drawio",
+        f"SA_{slug}.mmd",
+        f"SD_{slug}.mmd",
+        "source-report.json",
     ]
 
 
@@ -1845,7 +2472,7 @@ def _atomic_copy(source: Path, destination: Path) -> None:
     os.close(descriptor)
     try:
         shutil.copy2(source, temporary)
-        os.replace(temporary, destination)
+        _replace_atomic_file(Path(temporary), destination)
     except BaseException:
         try:
             os.unlink(temporary)
@@ -1890,7 +2517,7 @@ def _commit_directory(temporary: Path, destination: Path) -> None:
         shutil.rmtree(temporary, ignore_errors=True)
 
 
-def _replace_directory(temporary: Path, destination: Path) -> None:
+def _replace_directory(temporary: Path, destination: Path, on_commit=None) -> None:
     backup = destination.with_name(
         f".{destination.name}.backup-{os.getpid()}-{uuid.uuid4().hex[:6]}"
     )
@@ -1900,6 +2527,8 @@ def _replace_directory(temporary: Path, destination: Path) -> None:
         os.replace(destination, backup)
     try:
         _commit_directory(temporary, destination)
+        if on_commit:
+            on_commit()
     except BaseException:
         if destination.exists():
             shutil.rmtree(destination, ignore_errors=True)
@@ -1907,7 +2536,7 @@ def _replace_directory(temporary: Path, destination: Path) -> None:
             os.replace(backup, destination)
         raise
     if backup.exists():
-        shutil.rmtree(backup)
+        shutil.rmtree(backup, ignore_errors=True)
 
 
 def _final_result(
@@ -1932,6 +2561,15 @@ def _final_result(
             "solution_architecture_png": str(artifact_root / f"SA_{slug}.png"),
             "sequence_png": str(artifact_root / f"SD_{slug}.png"),
         },
+        "editable_sources": {
+            "drawio": str(artifact_root / f"Design_{slug}.drawio"),
+            "architecture_mermaid": str(artifact_root / f"SA_{slug}.mmd"),
+            "sequence_mermaid": str(artifact_root / f"SD_{slug}.mmd"),
+            "report": str(artifact_root / "source-report.json"),
+        },
+        "browser_evidence": str(artifact_root / "browser-evidence.json"),
+        "candidate_report": str(artifact_root / "candidate-report.json"),
+        "inspection_assurance": "Hash-bound browser observations plus recorded human/vision judgment; not browser attestation.",
         "scenario_slug": slug,
         "icon_manifest": manifest.get("icons", []),
         "reference_sources": manifest.get("referenceSources", []),
@@ -1971,7 +2609,6 @@ def _write_cache(
         shutil.rmtree(temporary)
     temporary.mkdir(parents=True)
     cached_inspection = _json_load(artifact_root / "inspection-report.json")
-    cached_inspection["run_id"] = "CACHE"
     for name in artifacts:
         if name in {"inspection-report.json", "run-report.json"}:
             continue
@@ -1997,6 +2634,9 @@ def _write_cache(
     )
     if set(artifact_hashes) != set(run["expected_cache_artifacts"]):
         raise DesignerError("Cache artifact set does not match the expected allowlist")
+    if not _cache_valid(temporary, run["cache_key"], set(run["expected_cache_artifacts"])):
+        shutil.rmtree(temporary, ignore_errors=True)
+        raise DesignerError("Cache evidence or editable source validation failed before commit")
     _commit_directory(temporary, cache_dir)
 
 
@@ -2027,8 +2667,14 @@ def _publish_versioned_set(
             if not source.exists():
                 raise DesignerError(f"Publication source is missing: {source}")
             shutil.copy2(source, destination)
-        _atomic_write_json(temporary / "generation-report.json", generation)
+        portable_generation = copy.deepcopy(generation)
+        portable_generation["htmlPreview"] = "preview.html"
+        portable_generation["candidateReport"] = "candidate-report.json"
+        _atomic_write_json(temporary / "generation-report.json", portable_generation)
         _atomic_write_json(temporary / "inspection-report.json", inspection)
+        _validate_source_artifacts(temporary)
+        _candidate_ranking(temporary, portable_generation)
+        _validate_browser_evidence(temporary, inspection, generation.get("inspectionContext"))
         published = base_artifacts + [
             "generation-report.json",
             "inspection-report.json",
@@ -2056,10 +2702,17 @@ def _publish_versioned_set(
             "artifactDirectory": str(artifact_root),
             "completedAt": _run_local_time(run),
             "timingsMs": result["timings_ms"],
+            "layoutProfiles": copy.deepcopy(generation.get("profileHistory", {})),
             "artifacts": artifact_hashes,
         }
         _atomic_write_json(temporary / "run-report.json", final_report)
         published.append("run-report.json")
+        if not cache_hit:
+            _write_cache(run, temporary, published)
+
+        def commit_pointer() -> None:
+            _write_current_pointer(run, result, artifact_root, published, cache_hit)
+
         if artifact_root.exists():
             existing = {
                 item.name: _sha256_file(item)
@@ -2082,12 +2735,17 @@ def _publish_versioned_set(
                     raise DesignerError(
                         f"Existing immutable artifact set differs: {artifact_root}"
                     )
-                _replace_directory(temporary, artifact_root)
-                temporary = artifact_root
+                _replace_directory(temporary, artifact_root, commit_pointer)
             else:
                 shutil.rmtree(temporary)
+                commit_pointer()
         else:
             _commit_directory(temporary, artifact_root)
+            try:
+                commit_pointer()
+            except BaseException:
+                shutil.rmtree(artifact_root, ignore_errors=True)
+                raise
         complete_hashes = {
             name: _sha256_file(artifact_root / name) for name in published
         }
@@ -2126,6 +2784,11 @@ def _write_current_pointer(
     pointer_result["renders"]["sequence_png"] = relative(
         result["renders"]["sequence_png"]
     )
+    pointer_result["editable_sources"] = {
+        key: relative(value) for key, value in result["editable_sources"].items()
+    }
+    pointer_result["browser_evidence"] = relative(result["browser_evidence"])
+    pointer_result["candidate_report"] = relative(result["candidate_report"])
     pointer = {
         "run_id": run["run_id"],
         "artifact_directory": artifact_root.resolve().relative_to(base_root).as_posix(),
@@ -2164,10 +2827,17 @@ def _finalize(run_path: Path, inspection_path: Path) -> int:
         )
     if inspection["issues"]:
         raise DesignerError("Passed inspection cannot contain issues")
+    run["inspected_layout_profiles"] = list(dict.fromkeys(
+        run["inspected_layout_profiles"] + [run["selected_layout_profile"]]
+    ))
     generation = _json_load(Path(run["generation_report_path"]))
+    generation["profileHistory"] = {
+        name: list(run[f"{name}_layout_profiles"])
+        for name in ("attempted", "passing", "selected", "inspected")
+    }
     stage_design = Path(run["stage_design"])
     slug = run["scenario_slug"]
-    artifacts = _artifact_names(stage_design, slug)
+    artifacts = _artifact_names(stage_design, slug) + list(EVIDENCE_ARTIFACT_NAMES)
     generation["inspectionMs"] = max(
         0,
         round(
@@ -2183,10 +2853,6 @@ def _finalize(run_path: Path, inspection_path: Path) -> int:
         generation,
         inspection,
         cache_hit=False,
-    )
-    _write_cache(run, artifact_root, published)
-    _write_current_pointer(
-        run, result, artifact_root, published, cache_hit=False
     )
     run.update(
         {
@@ -2224,8 +2890,7 @@ def _reuse(run_path: Path) -> int:
     run["scenario_slug"] = slug
     generation = _json_load(cache_dir / "generation-report.json")
     inspection = _json_load(cache_dir / "inspection-report.json")
-    inspection["run_id"] = run["run_id"]
-    inspection["inspected_at"] = _run_local_time(run)
+    # Reuse preserves who/what/when was inspected; it is not a new browser inspection.
     base_artifacts = [
         name
         for name in manifest["artifacts"]
@@ -2242,9 +2907,6 @@ def _reuse(run_path: Path) -> int:
         generation,
         inspection,
         cache_hit=True,
-    )
-    _write_current_pointer(
-        run, result, artifact_root, published, cache_hit=True
     )
     run.update(
         {
@@ -2289,8 +2951,18 @@ def _build_parser() -> argparse.ArgumentParser:
         handler=lambda args: _run_fast_path(Path(args.run).resolve())
     )
 
+    attach = commands.add_parser(
+        "attach-browser-evidence", help="Validate and seal collected browser observations without asserting visual checks"
+    )
+    attach.add_argument("--run", required=True)
+    attach.add_argument("--evidence", required=True)
+    attach.add_argument("--inspection", required=True)
+    attach.set_defaults(handler=lambda args: _attach_browser_evidence(
+        Path(args.run).resolve(), Path(args.evidence).resolve(), Path(args.inspection).resolve()
+    ))
+
     repair = commands.add_parser(
-        "repair", help="Regenerate a failed visual candidate using an unattempted layout profile"
+        "repair", help="Regenerate an uninspected passing layout after a failed visual inspection"
     )
     repair.add_argument("--run", "--run-state", dest="run", required=True)
     repair.add_argument("--inspection", required=True)
@@ -2338,6 +3010,12 @@ def _build_parser() -> argparse.ArgumentParser:
             or 0
         )
     )
+    validate_resources = commands.add_parser(
+        "validate-resources", help="Read-only validation of packaged icon/license provenance and resource hashes"
+    )
+    validate_resources.set_defaults(handler=lambda args: (
+        print(json.dumps({"validation": "passed", "resource_hashes": _resource_hashes()}, indent=2)) or 0
+    ))
     return parser
 
 

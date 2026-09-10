@@ -2,5 +2,18 @@
 **/bin/
 **/obj/
 
+# Python caches
+**/__pycache__/
+**/*.py[cod]
+
 # Local browser automation output
 **/.playwright-mcp/
+
+# Skill test work directories
+**/tests/.adaptive-*/
+**/tests/.collector-contract-smoke/
+**/tests/.geometry-*/
+**/tests/.pipeline-*/
+**/tests/.source-artifacts-*/
+**/tests/.visual-quality-*/
+**/tests/.workflow-quality-*/

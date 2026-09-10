@@ -1,22 +1,63 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
+from unittest import mock
 
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = SKILL_ROOT / "scripts" / "complexity_classifier.py"
 FIXTURE = SKILL_ROOT / "tests" / "fixtures" / "basic"
+sys.path.insert(0, str(SKILL_ROOT.parent))
+from analysis_handoff import build_validated_manifest
+
+SPEC = importlib.util.spec_from_file_location("classifier_under_test", SCRIPT)
+classifier = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(classifier)
 
 
 class ComplexityClassifierTests(unittest.TestCase):
     maxDiff = None
+
+    @staticmethod
+    def build_handoff(
+        temporary: Path, ledger_path: Path | None = None,
+        requirements_root: Path | None = None,
+    ) -> Path:
+        if ledger_path is None:
+            ledger_path = temporary / "output" / "analysis" / "requirement-analysis_20260813_120000.json"
+        ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+        markdown_path = ledger_path.with_suffix(".md")
+        markdown_path.write_text("# Requirement Analysis\n\nValidated fixture.\n", encoding="utf-8")
+        sources = [{
+            "source_id": "SRC-FIXTURE",
+            "relative_path": "policy.pdf",
+            "sha256": "a" * 64,
+        }]
+        manifest = {
+            "schema_version": "1.0",
+            "run_id": ledger["run_id"],
+            "requirements_root": str((requirements_root or temporary / "requirements").resolve()),
+            "source_count": len(sources),
+            "sources": sources,
+            "manifest_sha256": classifier._canonical_hash(sources),
+        }
+        manifest = build_validated_manifest(
+            manifest, ledger_path, markdown_path, "2026-08-13T12:00:00+05:30",
+        )
+        manifest_path = ledger_path.with_name(f"{ledger_path.stem}-manifest.json")
+        manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+        return manifest_path
 
     def run_cli(self, *arguments: str, expected: int = 0) -> dict:
         completed = subprocess.run(
@@ -42,6 +83,9 @@ class ComplexityClassifierTests(unittest.TestCase):
         output = temporary / "output"
         if not (output / "analysis").exists():
             shutil.copytree(FIXTURE / "analysis", output / "analysis")
+        ledger_path = output / "analysis" / "requirement-analysis_20260813_120000.json"
+        if not ledger_path.with_name(f"{ledger_path.stem}-manifest.json").exists():
+            self.build_handoff(temporary, ledger_path)
         config = {"basePath": "."}
         if lisa_config is not None:
             config.update(lisa_config)
@@ -2031,6 +2075,419 @@ class ComplexityClassifierTests(unittest.TestCase):
             )
             self.assertTrue(result["classification_cache_hit"])
             self.assertLess(result["duration_seconds"], 30)
+
+    def test_prepare_rejects_incomplete_or_tampered_handoffs(self) -> None:
+        cases = {
+            "missing-marker": "Cannot read analysis handoff",
+            "unvalidated": "no validated publication marker",
+            "pending": "no validated publication marker",
+            "ledger-tamper": "ledger hash does not match",
+            "markdown-tamper": "markdown hash does not match",
+            "wrong-root": "requirements root differs",
+            "wrong-run": "no validated publication marker",
+            "wrong-source-digest": "source inventory hash",
+            "escaping-ledger-path": "exact sibling",
+        }
+        for case, message in cases.items():
+            with self.subTest(case=case), tempfile.TemporaryDirectory(dir=SKILL_ROOT / "tests") as directory:
+                root = Path(directory)
+                analysis = root / "output" / "analysis"
+                shutil.copytree(FIXTURE / "analysis", analysis)
+                config = root / "lisa-config.json"
+                config.write_text('{"basePath":"."}', encoding="utf-8")
+                ledger = analysis / "requirement-analysis_20260813_120000.json"
+                marker_path = self.build_handoff(root)
+                marker = json.loads(marker_path.read_text(encoding="utf-8"))
+                if case == "missing-marker":
+                    marker_path.unlink()
+                elif case == "ledger-tamper":
+                    ledger.write_text(ledger.read_text(encoding="utf-8") + " ", encoding="utf-8")
+                elif case == "markdown-tamper":
+                    ledger.with_suffix(".md").write_text("Changed", encoding="utf-8")
+                else:
+                    if case == "unvalidated":
+                        marker.pop("publication")
+                    elif case == "pending":
+                        marker["publication"]["status"] = "pending"
+                    elif case == "wrong-root":
+                        marker["requirements_root"] = str(root / "elsewhere" / "requirements")
+                    elif case == "wrong-run":
+                        marker["publication"]["run_id"] = "RA-20260813_120000-BBBBBBBB"
+                    elif case == "wrong-source-digest":
+                        marker["sources"][0]["sha256"] = "b" * 64
+                    elif case == "escaping-ledger-path":
+                        marker["publication"]["ledger"]["path"] = "..\\outside.json"
+                    marker_path.write_text(json.dumps(marker), encoding="utf-8")
+                result = self.run_cli("prepare", "--config", str(config), "--offline", expected=2)
+                self.assertIn(message, result["error"])
+                self.assertFalse((root / "output" / "classification").exists())
+
+    def test_newer_unvalidated_analysis_does_not_fall_back(self) -> None:
+        with tempfile.TemporaryDirectory(dir=SKILL_ROOT / "tests") as directory:
+            root = Path(directory)
+            prepared, run = self.prepare(root)
+            newest = Path(run["input_path"]).with_name("requirement-analysis_20260813_130000.json")
+            newest.write_bytes(Path(run["input_path"]).read_bytes())
+            latest_time = Path(run["input_path"]).stat().st_mtime_ns + 10_000_000_000
+            os.utime(newest, ns=(latest_time, latest_time))
+            result = self.run_cli(
+                "prepare", "--config", run["lisa_config_path"], "--offline", expected=2,
+            )
+            self.assertIn(newest.stem + "-manifest.json", result["error"])
+            with self.assertRaisesRegex(classifier.ClassifierError, "Cannot read analysis handoff"):
+                classifier._load_run(Path(prepared["run"]))
+
+    def test_manifest_only_drift_rejects_publication(self) -> None:
+        with tempfile.TemporaryDirectory(dir=SKILL_ROOT / "tests") as directory:
+            prepared, run = self.prepare(Path(directory))
+            marker_path = Path(run["analysis_handoff"]["manifest_path"])
+            marker = json.loads(marker_path.read_text(encoding="utf-8"))
+            marker["publication"]["validated_at_local"] = "2026-08-13T12:01:00+05:30"
+            marker_path.write_text(json.dumps(marker), encoding="utf-8")
+            model_path = Path(run["run_directory"]) / "completed.json"
+            model_path.write_text(json.dumps(self.model(run["run_id"])), encoding="utf-8")
+            result = self.run_cli(
+                "publish", "--run", prepared["run"], "--model", str(model_path), expected=2,
+            )
+            self.assertIn("handoff changed", result["error"])
+            self.assertFalse(Path(run["target_json_path"]).exists())
+            self.assertFalse((Path(run["classification_root"]) / "classification-manifest.json").exists())
+            next_prepared, next_run = self.prepare(
+                Path(directory), local_time="2026-08-13T12:31:00+05:30",
+            )
+            self.assertEqual(run["cache_key"], next_run["cache_key"])
+            self.assertNotEqual(run["analysis_handoff"], next_run["analysis_handoff"])
+            self.assertFalse(next_prepared["classification_cache_hit"])
+
+    def test_fingerprints_cover_contracts_and_shared_helpers(self) -> None:
+        fingerprints = classifier._resource_hashes()
+        required = {
+            "classification_manifest_schema", "artifact_contract", "artifact_contract_schema",
+            "artifact_contract_validator", "path_resolver", "analysis_handoff",
+            "review_batches", "skill_instructions", "completion_contract",
+        }
+        self.assertTrue(required.issubset(fingerprints))
+        paths = [
+            classifier.CLASSIFICATION_MANIFEST_SCHEMA_PATH,
+            classifier.RESOURCES / "artifact-contract.json",
+            SKILL_ROOT.parent / "analysis_handoff.py",
+            SKILL_ROOT.parent / "review_batches.py",
+        ]
+        original_hash = classifier._sha256_file
+        def key() -> str:
+            return classifier._cache_key(
+                Path("fixture.json"), [],
+                analysis_snapshot={"ledger_sha256": "a" * 64}, evidence_summary={},
+            )
+
+        baseline = key()
+        for changed in paths:
+            with self.subTest(path=changed), mock.patch.object(
+                classifier, "_sha256_file",
+                side_effect=lambda path: "f" * 64 if path == changed else original_hash(path),
+            ):
+                self.assertNotEqual(baseline, key())
+        with tempfile.TemporaryDirectory(dir=SKILL_ROOT / "tests") as directory:
+            prepared, _ = self.prepare(Path(directory))
+            with mock.patch.object(
+                classifier, "_resource_hashes", return_value={**fingerprints, "artifact_contract": "f" * 64},
+            ), self.assertRaisesRegex(classifier.ClassifierError, "resources changed"):
+                classifier._load_run(Path(prepared["run"]))
+
+    def test_config_outside_base_remains_authoritative_without_source_reread(self) -> None:
+        with tempfile.TemporaryDirectory(dir=SKILL_ROOT / "tests") as directory:
+            root = Path(directory)
+            base = root / "customer"
+            shutil.copytree(FIXTURE / "analysis", base / "output" / "analysis")
+            self.build_handoff(base)
+            config_path = root / "lisa-config.json"
+            config_path.write_text(
+                json.dumps({"basePath": "customer", "channels": ["Web"]}), encoding="utf-8",
+            )
+            prepared = self.run_cli("prepare", "--config", str(config_path), "--offline")
+            run = json.loads(Path(prepared["run"]).read_text(encoding="utf-8"))
+            self.assertEqual(str(config_path), run["lisa_config_path"])
+            self.assertEqual(str(base / "requirements"), run["analysis_handoff"]["requirements_root"])
+            self.assertFalse((base / "requirements").exists())
+            summary = json.loads(Path(prepared["evidence_summary"]).read_text(encoding="utf-8"))
+            self.assertEqual(["Web"], summary["lisa_config"]["configured_channels"])
+
+    @staticmethod
+    def read_batches(index_path: Path) -> tuple[dict, dict[str, str]]:
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+        texts: dict[str, str] = {}
+        parts: dict[str, int] = {}
+        final: set[str] = set()
+        for batch in index["batches"]:
+            payload = (index_path.parent / batch["path"]).read_bytes()
+            assert len(payload) == batch["byte_count"] <= index["max_bytes"]
+            assert hashlib.sha256(payload).hexdigest() == batch["sha256"]
+            for record in json.loads(payload)["records"]:
+                identifier = record["record_id"]
+                assert identifier not in final
+                assert record["part"] == parts.get(identifier, 0) + 1
+                parts[identifier] = record["part"]
+                texts[identifier] = texts.get(identifier, "") + record["text"]
+                if record["final_part"]:
+                    final.add(identifier)
+        assert final == set(texts)
+        return index, texts
+
+    def test_compact_context_preserves_all_findings_and_oversized_provenance(self) -> None:
+        with tempfile.TemporaryDirectory(dir=SKILL_ROOT / "tests") as directory:
+            root = Path(directory)
+            analysis = root / "output" / "analysis"
+            shutil.copytree(FIXTURE / "analysis", analysis)
+            ledger_path = analysis / "requirement-analysis_20260813_120000.json"
+            ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+            for index in range(90):
+                ledger["findings"].append({
+                    "finding_id": f"REQ-{index + 100:010X}",
+                    "kind": "Explicit requirement", "status": "Required",
+                    "statement": f"Requirement {index} includes unique data and ownership boundaries. " * 8,
+                    "confidence": "Confirmed",
+                    "evidence": [{"source_id": "SRC-FIXTURE", "locator": f"section {index}"}],
+                })
+            ledger["findings"][-1]["statement"] = "Late finding, Unicode 🧭 漢字 and exact boundaries.\n" * 1200
+            ledger["findings"][-1]["evidence"][0]["locator"] = "long provenance / detail " * 1700
+            ledger_path.write_text(json.dumps(ledger, ensure_ascii=False), encoding="utf-8")
+            prepared, run = self.prepare(root)
+            index, texts = self.read_batches(Path(prepared["evidence_index"]))
+            self.assertGreater(len(index["batches"]), 2)
+            for finding in ledger["findings"]:
+                self.assertEqual(finding, json.loads(texts[f"finding:{finding['finding_id']}"]))
+            self.assertGreater(index["fragment_count"], index["record_count"])
+            context = json.loads(Path(prepared["model_context"]).read_text(encoding="utf-8"))
+            self.assertEqual(92, context["in_scope_finding_count"])
+            counters = prepared["input_size_counters"]
+            self.assertEqual(sum(item["byte_count"] for item in index["batches"]), counters["evidence_batch_bytes"])
+            self.assertLess(counters["mandatory_review_bytes"], counters["duplicated_input_baseline_bytes"])
+            self.assertNotIn(ledger["findings"][-1]["statement"], Path(prepared["model_context"]).read_text(encoding="utf-8"))
+            draft = json.loads(Path(prepared["model_draft"]).read_text(encoding="utf-8"))
+            self.assertEqual(92, len(draft["delivery_assessment"]["capabilities"]))
+            candidate = self.model(run["run_id"])
+            candidate["requirement_assessments"].extend([
+                {**candidate["requirement_assessments"][0], "finding_id": finding["finding_id"]}
+                for finding in ledger["findings"][3:-1]
+            ])
+            candidate_path = Path(run["run_directory"]) / "missing-tail.json"
+            candidate_path.write_text(json.dumps(candidate), encoding="utf-8")
+            result = self.run_cli(
+                "publish", "--run", prepared["run"], "--model", str(candidate_path), expected=2,
+            )
+            self.assertIn(ledger["findings"][-1]["finding_id"], result["error"])
+            self.assertIn("every in-scope finding", result["error"])
+
+    def test_small_context_one_batch_and_drift_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory(dir=SKILL_ROOT / "tests") as directory:
+            prepared, run = self.prepare(Path(directory))
+            index, _ = self.read_batches(Path(prepared["evidence_index"]))
+            self.assertEqual(1, len(index["batches"]))
+            reference_index = json.loads(Path(prepared["reference_index"]).read_text(encoding="utf-8"))
+            self.assertNotIn("excerpt", reference_index["references"][0])
+            for item in reference_index["references"]:
+                path = Path(run["run_directory"]) / item["path"]
+                self.assertLessEqual(path.stat().st_size, classifier.REVIEW_BATCH_MAX_BYTES)
+                self.assertEqual(item["id"], json.loads(path.read_text(encoding="utf-8"))["id"])
+            batch = Path(prepared["evidence_index"]).parent / index["batches"][0]["path"]
+            batch.write_bytes(batch.read_bytes() + b" ")
+            with self.assertRaisesRegex(classifier.ClassifierError, "review artifact changed"):
+                classifier._load_run(Path(prepared["run"]))
+
+    def test_large_configuration_stays_in_lossless_batches_not_context_header(self) -> None:
+        with tempfile.TemporaryDirectory(dir=SKILL_ROOT / "tests") as directory:
+            configuration = {
+                "knowledgeSources": [
+                    {"name": f"Policy {index}", "path": f"configured-source-{index}-" + "x" * 100}
+                    for index in range(500)
+                ],
+            }
+            prepared, run = self.prepare(Path(directory), lisa_config=configuration)
+            _, texts = self.read_batches(Path(prepared["evidence_index"]))
+            context_path = Path(prepared["model_context"])
+            context = json.loads(context_path.read_text(encoding="utf-8"))
+            self.assertLessEqual(context_path.stat().st_size, classifier.REVIEW_BATCH_MAX_BYTES)
+            summary = json.loads(Path(run["evidence_summary_path"]).read_text(encoding="utf-8"))
+            self.assertEqual(summary["lisa_config"], json.loads(texts[context["configuration_record"]]))
+            self.assertEqual(summary["evidenced_channels"],
+                             json.loads(texts[context["evidenced_channels_record"]]))
+
+    def test_cache_requires_validation_and_complete_current_evidence(self) -> None:
+        with tempfile.TemporaryDirectory(dir=SKILL_ROOT / "tests") as directory:
+            root = Path(directory)
+            prepared, run = self.prepare(root)
+            self.publish_model(prepared, run, self.model(run["run_id"]), "valid-cache")
+            cache_path = Path(run["cache_path"])
+            payload = json.loads(cache_path.read_text(encoding="utf-8"))
+            unvalidated = {**payload, "status": "prepared"}
+            cache_path.write_text(json.dumps(unvalidated), encoding="utf-8")
+            second, _ = self.prepare(root, local_time="2026-08-13T12:31:00+05:30")
+            self.assertFalse(second["classification_cache_hit"])
+            payload["model"]["requirement_assessments"].pop()
+            payload["model_sha256"] = classifier._canonical_hash(payload["model"])
+            cache_path.write_text(json.dumps(payload), encoding="utf-8")
+            third, _ = self.prepare(root, local_time="2026-08-13T12:32:00+05:30")
+            self.assertFalse(third["classification_cache_hit"])
+
+    @staticmethod
+    def republish_analysis(old_ledger: Path, timestamp: str, change: str = "") -> Path:
+        ledger = json.loads(old_ledger.read_text(encoding="utf-8"))
+        manifest = json.loads(
+            old_ledger.with_name(f"{old_ledger.stem}-manifest.json").read_text(encoding="utf-8")
+        )
+        previous_run_id = ledger["run_id"]
+        ledger["run_id"] = f"RA-{timestamp}-BBBBBBBB"
+        manifest["run_id"] = ledger["run_id"]
+        manifest["created_at_local"] = "2026-08-13T13:00:00+05:30"
+        for source in manifest["sources"]:
+            if "extraction_path" in source:
+                source["extraction_path"] = source["extraction_path"].replace(previous_run_id, ledger["run_id"])
+                source["cache_hit"] = True
+        if change == "finding":
+            ledger["findings"][0]["statement"] += " A new approval boundary is required."
+        elif change == "source":
+            manifest["sources"][0]["sha256"] = "b" * 64
+        elif change == "source-date":
+            manifest["sources"][0]["modified_at"] = "2026-08-14T12:00:00+05:30"
+        elif change == "provenance":
+            ledger["findings"][0]["evidence"].append({
+                "source_id": "SRC-FIXTURE", "locator": "section 9", "observed_at": "2026-08-14",
+            })
+        new_ledger = old_ledger.with_name(f"requirement-analysis_{timestamp}.json")
+        new_ledger.write_text(json.dumps(ledger, indent=2), encoding="utf-8")
+        markdown = new_ledger.with_suffix(".md")
+        markdown.write_text(f"# Requirement Analysis\n\nRun {ledger['run_id']}.\n", encoding="utf-8")
+        manifest["manifest_sha256"] = classifier._canonical_hash(manifest["sources"])
+        marker = build_validated_manifest(manifest, new_ledger, markdown, "2026-08-13T13:00:00+05:30")
+        new_ledger.with_name(f"{new_ledger.stem}-manifest.json").write_text(json.dumps(marker), encoding="utf-8")
+        newest_time = max(path.stat().st_mtime_ns for path in old_ledger.parent.glob("*.json")) + 1_000_000_000
+        os.utime(new_ledger, ns=(newest_time, newest_time))
+        return new_ledger
+
+    def test_semantic_republication_reuses_model_but_rebinds_exact_run_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory(dir=SKILL_ROOT / "tests") as directory:
+            root = Path(directory)
+            shutil.copytree(FIXTURE / "analysis", root / "output" / "analysis")
+            marker_path = self.build_handoff(root)
+            marker = json.loads(marker_path.read_text(encoding="utf-8"))
+            marker["created_at_local"] = "2026-08-13T12:00:00+05:30"
+            marker["sources"][0].update({
+                "extraction_path": str(
+                    root / "output" / "analysis" / ".requirement-analyzer"
+                    / "runs" / marker["run_id"] / "extractions" / "SRC-FIXTURE.json"
+                ),
+                "extraction_sha256": "c" * 64,
+                "cache_hit": False,
+                "modified_at": "2026-08-12T09:00:00+05:30",
+            })
+            marker["manifest_sha256"] = classifier._canonical_hash(marker["sources"])
+            marker_path.write_text(json.dumps(marker), encoding="utf-8")
+            first, first_run = self.prepare(root)
+            self.publish_model(first, first_run, self.model(first_run["run_id"]), "first-publication")
+            new_ledger = self.republish_analysis(Path(first_run["input_path"]), "20260813_130000")
+            second, second_run = self.prepare(root, local_time="2026-08-13T13:30:00+05:30")
+            self.assertTrue(second["classification_cache_hit"])
+            self.assertEqual("semantic-republication", second["classification_cache_decision"]["reuse_kind"])
+            self.assertEqual(first_run["cache_key"], second_run["cache_key"])
+            self.assertEqual(first_run["analysis_semantic_snapshot"], second_run["analysis_semantic_snapshot"])
+            self.assertNotEqual(first_run["input_sha256"], second_run["input_sha256"])
+            self.assertNotEqual(first_run["analysis_handoff"], second_run["analysis_handoff"])
+            self.assertEqual(str(new_ledger), second_run["input_path"])
+            reused = json.loads(Path(second["reused_model"]).read_text(encoding="utf-8"))
+            self.assertEqual(second_run["run_id"], reused["run_id"])
+            current_marker_path = Path(second_run["analysis_handoff"]["manifest_path"])
+            marker_bytes = current_marker_path.read_bytes()
+            current_marker = json.loads(marker_bytes)
+            current_marker["publication"]["validated_at_local"] = "2026-08-13T13:01:00+05:30"
+            current_marker_path.write_text(json.dumps(current_marker), encoding="utf-8")
+            with self.assertRaisesRegex(classifier.ClassifierError, "handoff changed"):
+                classifier._load_run(Path(second["run"]))
+            current_marker_path.write_bytes(marker_bytes)
+            result = self.run_cli("publish", "--run", second["run"], "--model", second["reused_model"])
+            output = json.loads(Path(result["json"]).read_text(encoding="utf-8"))
+            self.assertEqual(str(new_ledger), output["input_analysis"])
+            publication = json.loads(Path(result["manifest"]).read_text(encoding="utf-8"))
+            self.assertEqual(second_run["input_sha256"], publication["input"]["sha256"])
+
+    def test_semantic_republication_misses_on_finding_source_provenance_date_or_config_change(self) -> None:
+        with tempfile.TemporaryDirectory(dir=SKILL_ROOT / "tests") as directory:
+            root = Path(directory)
+            first, run = self.prepare(root)
+            self.publish_model(first, run, self.model(run["run_id"]), "baseline")
+            for index, change in enumerate(("finding", "source", "source-date", "provenance", "config"), 1):
+                with self.subTest(change=change):
+                    self.republish_analysis(Path(run["input_path"]), f"20260813_13{index:02d}00", change)
+                    prepared, current_run = self.prepare(
+                        root, local_time=f"2026-08-13T14:{index:02d}:00+05:30",
+                        lisa_config={"tenant": "different"} if change == "config" else None,
+                    )
+                    self.assertFalse(prepared["classification_cache_hit"])
+                    self.assertNotEqual(run["cache_key"], current_run["cache_key"])
+
+    def test_semantic_republication_declines_models_with_old_upstream_references(self) -> None:
+        with tempfile.TemporaryDirectory(dir=SKILL_ROOT / "tests") as directory:
+            root = Path(directory)
+            first, run = self.prepare(root)
+            model = self.model(run["run_id"])
+            model["components"]["agents"][0]["source_refs"] = [run["input_path"]]
+            self.publish_model(first, run, model, "publication-bound-model")
+            self.republish_analysis(Path(run["input_path"]), "20260813_130000")
+            second, second_run = self.prepare(root, local_time="2026-08-13T13:30:00+05:30")
+            self.assertEqual(run["cache_key"], second_run["cache_key"])
+            self.assertFalse(second["classification_cache_hit"])
+            self.assertIn("publication-specific reference", second["classification_cache_decision"]["reason"])
+            self.assertEqual("", second["reused_model"])
+
+    def test_semantic_identity_excludes_only_top_level_ledger_run_id(self) -> None:
+        original = {
+            "run_id": "RA-20260813_120000-AAAAAAAA",
+            "findings": [{"finding_id": "REQ-1", "date": "2026-08-13", "evidence": {
+                "run_id": "source-business-run", "locator": "source-file_20260813.md",
+            }}],
+            "reviewed_at": "2026-08-13",
+        }
+        changed_run = {**original, "run_id": "RA-20260813_130000-BBBBBBBB"}
+        self.assertEqual(classifier._semantic_ledger(original), classifier._semantic_ledger(changed_run))
+        for key in ("date", "evidence"):
+            changed = copy.deepcopy(original)
+            changed["findings"][0][key] = "changed"
+            self.assertNotEqual(
+                classifier._canonical_hash(classifier._semantic_ledger(original)),
+                classifier._canonical_hash(classifier._semantic_ledger(changed)),
+            )
+        changed_date = {**original, "reviewed_at": "2026-08-14"}
+        self.assertNotEqual(classifier._semantic_ledger(original), classifier._semantic_ledger(changed_date))
+
+    def test_fresh_reference_cache_still_avoids_network_without_extending_ttl(self) -> None:
+        with tempfile.TemporaryDirectory(dir=SKILL_ROOT / "tests") as directory:
+            root = Path(directory)
+            reference = {
+                "id": "fixture-reference", "title": "Official reference",
+                "url": "https://learn.microsoft.com/en-us/fixture",
+                "domain": "learn.microsoft.com", "required": True,
+            }
+            retrieved_at = datetime.now().astimezone().isoformat()
+            cached = {
+                **reference, "manifest_fingerprint": classifier._canonical_hash(reference),
+                "retrieved_at": retrieved_at, "content_sha256": "a" * 64,
+                "excerpt": "Complete cached locator", "status": "retrieved",
+            }
+            cache_path = root / "fixture-reference.json"
+            cache_path.write_text(json.dumps(cached), encoding="utf-8")
+            with mock.patch.object(classifier.urllib.request, "urlopen") as network:
+                fresh = classifier._refresh_reference(reference, root, "2026-09-08", False, 24, False)
+                network.assert_not_called()
+            self.assertEqual("fresh-cache", fresh["status"])
+            self.assertEqual(retrieved_at, fresh["retrieved_at"])
+            cached["retrieved_at"] = (datetime.now().astimezone() - timedelta(hours=25)).isoformat()
+            cache_path.write_text(json.dumps(cached), encoding="utf-8")
+            with mock.patch.object(
+                classifier.urllib.request, "urlopen", side_effect=TimeoutError,
+            ) as network:
+                stale = classifier._refresh_reference(reference, root, "2026-09-08", False, 24, False)
+                network.assert_called_once()
+            self.assertEqual("cached-after-error", stale["status"])
+            self.assertEqual(cached["retrieved_at"], stale["retrieved_at"])
 
 
 if __name__ == "__main__":

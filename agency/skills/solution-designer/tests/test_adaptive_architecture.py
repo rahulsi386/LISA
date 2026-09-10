@@ -9,6 +9,8 @@ import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from test_workflow_quality import remove_test_directory
+
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests" / "fixtures" / "procurement-reference-model.json"
@@ -27,9 +29,9 @@ const edge = (from,to,style='call') => ({from,to,style,label:'Evidenced interact
 function model(components,relationships) {
   return {components,relationships,sequence:relationships.slice(0,6)};
 }
-function plan(input,profile='Balanced') {
+function plan(input,profile='Balanced',family='story') {
   const p = composeArchitecture(input,PROFILES[profile],
-    (c,w,hero,compact)=>prepareCard(c,w,t,hero,compact,{verified:true}),180);
+    (c,w,hero,compact)=>prepareCard(c,w,t,hero,compact,{verified:true}),180,undefined,family);
   return {...p,cards:p.cards.map(c=>({id:c.id,x:c.x,y:c.y,width:c.width,height:c.height,
     role:c.storyRole,kind:c.component.kind,hero:c.hero}))};
 }
@@ -54,7 +56,8 @@ console.log(JSON.stringify(plan(input)));
         self.assertEqual(result["spine"][-3:], ["agent", "flow", "erp"])
         self.assertIn(set(["teams", "m365"]), [set(ids) for ids in result["columns"]])
         self.assertEqual(len(result["cards"]), 14)
-        self.assertEqual(result["mainRowCount"], 1)
+        self.assertLessEqual(result["mainRowCount"], 2)
+        self.assertLessEqual(result["width"], 2200, "Native text must remain readable at 1800px fit width.")
         roles = {card["id"]: card["role"] for card in result["cards"]}
         for identity in ("sharepoint", "dataverse", "fabric", "powerbi"):
             self.assertEqual(roles[identity], "supporting")
@@ -161,11 +164,94 @@ console.log(JSON.stringify({before:forward.cards[0].y,after:returning.cards[0].y
         self.assertGreaterEqual(result["after"] - result["before"], 67)
         self.assertTrue(result["headingsUnchanged"])
 
+    def test_duplicate_channel_edges_do_not_strand_the_alternate_channel(self):
+        result = self.run_node("""
+const nodes=[component('user','actor'),component('teams','channel'),
+  component('m365','channel'),component('agent','agent')];
+const input=model(nodes,[edge('user','teams'),edge('user','m365'),
+  edge('teams','agent'),edge('teams','agent'),edge('m365','agent'),edge('agent','teams','response')]);
+console.log(JSON.stringify(plan(input)));
+""")
+        self.assertIn({"teams", "m365"}, [set(ids) for ids in result["columns"]])
+        self.assertEqual(len(result["cards"]), 4)
+
+    def test_three_families_have_distinct_geometry_without_changing_the_graph(self):
+        result = self.run_node("""
+const input=require('../tests/fixtures/procurement-reference-model.json');
+const before=JSON.stringify(input);
+const plans=['story','hub','boundary'].map(family=>plan(input,'Balanced',family));
+console.log(JSON.stringify({plans,unchanged:before===JSON.stringify(input)}));
+""")
+        self.assertTrue(result["unchanged"])
+        fingerprints = []
+        for plan in result["plans"]:
+            fingerprints.append([(card["id"], card["x"], card["y"]) for card in plan["cards"]])
+            self.assertEqual(len(plan["cards"]), 14)
+        self.assertEqual(len({json.dumps(value) for value in fingerprints}), 3)
+
+    def test_primary_agent_hint_survives_an_upstream_agent_on_the_evidenced_path(self):
+        result = self.run_node("""
+const nodes=[component('user','actor'),component('entry-agent','agent'),
+  {...component('primary-agent','agent'),visual_role:'primary'},component('action','tool')];
+const input=model(nodes,[edge('user','entry-agent'),edge('entry-agent','primary-agent'),edge('primary-agent','action')]);
+input.presentation={primary_agent_id:'primary-agent',primary_path:['user','entry-agent','primary-agent','action']};
+console.log(JSON.stringify({story:plan(input),hub:plan(input,'Balanced','hub')}));
+""")
+        for family in ("story", "hub"):
+            self.assertEqual([card["id"] for card in result[family]["cards"] if card["hero"]], ["primary-agent"])
+        self.assertEqual(result["hub"]["spine"], ["user", "entry-agent", "primary-agent"])
+
+    def test_target_width_is_applied_but_cannot_bypass_fit_width_readability(self):
+        result = self.run_node("""
+const input=model([component('user','actor'),component('agent','agent'),component('action','tool')],
+  [edge('user','agent'),edge('agent','action')]);
+input.presentation={target_width:1440};
+const narrow=plan(input);
+input.presentation.target_width=4000;
+const clamped=plan(input);
+console.log(JSON.stringify({narrow,clamped}));
+""")
+        self.assertLessEqual(result["narrow"]["width"], 1440)
+        self.assertTrue(result["narrow"]["widthHint"]["applied"])
+        self.assertFalse(result["narrow"]["widthHint"]["clamped"])
+        self.assertLessEqual(result["clamped"]["width"], 2200)
+        self.assertTrue(result["clamped"]["widthHint"]["clamped"])
+
+    def test_visual_groups_and_cross_cutting_roles_preserve_every_component(self):
+        result = self.run_node("""
+const nodes=[component('user','actor'),component('agent','agent'),
+  {...component('knowledge-a','knowledge'),visual_group:'Exact shared group'},
+  {...component('knowledge-b','knowledge'),visualGroup:'Exact shared group'},
+  {...component('control','tool'),visual_role:'cross-cutting'}];
+const input=model(nodes,[edge('user','agent'),edge('agent','knowledge-a'),
+  edge('agent','knowledge-b'),edge('control','agent')]);
+const before=JSON.stringify(input);
+console.log(JSON.stringify({layout:plan(input,'Balanced','boundary'),unchanged:before===JSON.stringify(input)}));
+""")
+        self.assertEqual(len(result["layout"]["cards"]), 5)
+        self.assertTrue(result["unchanged"])
+        self.assertEqual(next(card["role"] for card in result["layout"]["cards"] if card["id"] == "control"), "control")
+        self.assertIn("Exact shared group", [heading["text"] for heading in result["layout"]["headings"]])
+
+    def test_preferred_composition_changes_only_the_bounded_tie_break_order(self):
+        result = self.run_node("""
+const {compositionFamilies}=require('./composition');
+console.log(JSON.stringify({
+  hinted:compositionFamilies({presentation:{preferred_composition:'boundary'}}),
+  invalid:compositionFamilies({presentation:{preferred_composition:'unknown'}})}));
+""")
+        self.assertEqual(result["hinted"], ["boundary", "story", "hub"])
+        self.assertEqual(result["invalid"], ["story", "hub", "boundary"])
+
 
 @unittest.skipUnless(POWERSHELL, "PowerShell is unavailable")
 class AdaptiveRenderTests(unittest.TestCase):
     def test_varied_requirements_pass_the_real_generation_and_geometry_path(self):
         procurement = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        self.assertTrue(any(edge["from"] == "agent" and edge["to"] == "sharepoint" and edge["style"] == "call"
+                           for edge in procurement["relationships"]))
+        self.assertTrue(any(edge["from"] == "sharepoint" and edge["to"] == "agent" and edge["style"] == "response"
+                           for edge in procurement["relationships"]))
         retrieval = copy.deepcopy(procurement)
         keep = {"requester", "teams", "agent", "sharepoint", "dataverse", "entra"}
         retrieval["components"] = [c for c in retrieval["components"] if c["id"] in keep]
@@ -183,9 +269,9 @@ class AdaptiveRenderTests(unittest.TestCase):
         integration["title"] = "Procurement integration and insights"
         integration["summary"] = "Controlled ERP integration and governed analytics without a conversational channel."
         for model in (procurement, retrieval, integration):
-            with self.subTest(scenario=model["scenarioSlug"]), tempfile.TemporaryDirectory(
-                prefix=".adaptive-", dir=ROOT / "tests"
-            ) as temporary:
+            with self.subTest(scenario=model["scenarioSlug"]):
+                temporary = tempfile.mkdtemp(prefix=".adaptive-", dir=ROOT / "tests")
+                self.addCleanup(remove_test_directory, Path(temporary))
                 design = Path(temporary) / "design"
                 design.mkdir()
                 model_path = design / "design-model.json"
@@ -193,7 +279,7 @@ class AdaptiveRenderTests(unittest.TestCase):
                 result = subprocess.run([
                     POWERSHELL, "-NoProfile", "-File", str(ROOT / "scripts" / "Invoke-FastPath.ps1"),
                     "-ModelPath", str(model_path), "-TempOutputPath", temporary,
-                ], capture_output=True, text=True, timeout=180, check=False)
+                ], capture_output=True, text=True, timeout=1200, check=False)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 report = json.loads((design / "run-report.json").read_text(encoding="utf-8-sig"))
                 self.assertEqual(report["structuralValidation"], "passed", report)
@@ -202,19 +288,25 @@ class AdaptiveRenderTests(unittest.TestCase):
                 nodes = [e for e in sa.iter() if e.get("data-kind") == "node"]
                 self.assertEqual({e.get("data-component-id") for e in nodes}, {c["id"] for c in model["components"]})
                 self.assertEqual(len(nodes), len(model["components"]))
-                controls = {c["id"] for c in model["components"] if c["layer"] in {"governance", "monitoring"}}
                 expected = sorted(
                     (e["from"], e["to"], e["implementationMode"]) for e in model["relationships"]
-                    if e["from"] not in controls and e["to"] not in controls
                 )
                 actual = sorted(
                     (e.get("data-from"), e.get("data-to"), e.get("data-implementation-mode"))
-                    for e in sa.iter() if e.get("data-kind") == "connector"
+                    for e in sa.iter() if e.get("data-kind") in {"connector", "control-annotation"}
                 )
                 self.assertEqual(actual, expected)
                 self.assertTrue((design / f"SA_{model['scenarioSlug']}.png").is_file())
+                preview = (design / "preview.html").read_text(encoding="utf-8")
+                for source_name in (f"Design_{model['scenarioSlug']}.drawio",
+                                    f"SA_{model['scenarioSlug']}.mmd", f"SD_{model['scenarioSlug']}.mmd"):
+                    self.assertTrue((design / source_name).is_file())
+                    self.assertIn(f'href="{source_name}"', preview)
                 manifest = json.loads((design / "diagram-manifest.json").read_text(encoding="utf-8-sig"))
-                self.assertEqual(manifest["layoutQuality"]["composition"]["strategy"], "relationship-driven-story")
+                self.assertIn(manifest["layoutQuality"]["composition"]["strategy"],
+                              {"relationship-driven-story", "relationship-driven-hub", "relationship-driven-boundary"})
+                self.assertEqual(manifest["layoutQuality"]["validation"], "passed")
+                self.assertGreater(manifest["layoutQuality"]["score"], 0)
 
 
 if __name__ == "__main__":

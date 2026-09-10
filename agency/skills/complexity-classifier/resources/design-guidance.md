@@ -217,6 +217,14 @@ For Cowork, distinguish built-in skills, custom skills, and plugins. Cite Cowork
 
 The final model must populate `solution_topology`. This is the authoritative contract for the solution-designer and must not require it to infer hosting, grouping, or relationships.
 
+Separate the complete evidence model from its visual reading order. Optional `presentation`
+contains `primary_agent_id`, an ordered `primary_path` of existing component IDs,
+`preferred_composition` (`story`, `hub`, or `boundary`), and `target_width` (1280-2560).
+Every consecutive primary-path pair must have an evidenced directed relationship. Component
+`visual_role` (`primary`, `supporting`, or `cross-cutting`) and `visual_group` are layout hints,
+not permission to merge canonical components, invent trust boundaries, or hide dependencies.
+Prefer concise role text; do not repeat the runtime or deployment boundary in the role field.
+
 ### Canonical components
 
 Create one canonical topology component for every human, channel, configurable capability, deployable service, Microsoft managed service, external system, and cross-cutting control that must appear in the architecture. Each component requires:
@@ -263,6 +271,14 @@ Keep the diagram interaction label at 42 characters or fewer; place protocol, da
 
 Model `Actor -> Channel -> Agent` for every conversational channel. Model every trigger to its target agent, every tool to its service/data dependency, AuthN and AuthZ token flow, data access direction, integrations, human approvals, security protection, governance application, monitoring, and ALM deployment.
 
+For new classifications, set each relationship's `implementation_mode` to `real`, `simulated`,
+`manual`, `deferred`, or `blocked` for the stated PoC interaction. An actually built agent reading
+approved sample data is not a simulated runtime; only the unavailable operation is simulated.
+Do not propagate an external dependency's simulation status to authentication, channel hosting,
+or all agent actions. Reconcile duplicate interactions here. Different relationships between the
+same endpoints remain separate when their responsibilities differ; do not collapse them by
+endpoint alone. Prefer separate canonical deployable services to a generic multi-product card.
+
 ### Trust, environments, and sequence
 
 Define:
@@ -275,6 +291,18 @@ Define:
 Keep each sequence action at 56 characters or fewer and each optional condition at 34 characters or fewer so the contract is directly renderable without truncation.
 
 The sequence contract must cover the applicable authentication, request or autonomous trigger, orchestration, grounding, tool/data/integration calls, human decision, monitoring/error behavior, and final response. Include only interactions represented by architecture relationships.
+
+For new classifications, include `relationship_id` on every non-self interaction and explicit
+`implementation_mode` matching that relationship. Include `capability_id` when the interaction
+implements a delivery capability. A self-step has no external relationship and must not replace
+an actual store write or tool invocation. `branch_kind` can identify `success`, `failure`,
+`insufficient-grounding`, `rejection`, `timeout`, or `simulation`; use `condition` for its guard.
+When required by the capability contract, explicitly model the approval decision/return,
+rejection, expiry/timeout, failed dependency, insufficient grounding, and simulated receipt.
+Include `simulation_disclosure` stating when no data was transmitted to an external system.
+Do not merely describe these behaviors in prose and expect the renderer to invent messages.
+Legacy contracts without these optional fields remain readable; ambiguous or contradictory
+semantics must be corrected before publication.
 
 Ordinary interaction cycles and asynchronous responses are legitimate. Do not invent blanket
 acyclicity or Authentication/Response phase ordering; dependency semantics must come from evidence

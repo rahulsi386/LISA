@@ -63,6 +63,27 @@ obstacle avoidance, and collision-checked labels. Routes may differ from the for
 implementation; generation, geometry validation, raster checks, and rendered inspection remain
 mandatory. Infeasible routes or labels fail rather than producing invented geometry.
 
+## Solution Designer delivery workflow
+
+The designer uses one canonical model and a gated **Draw.io -> Mermaid -> presentation**
+workflow. It first creates a two-page editable `Design_<ScenarioSlug>.drawio`, verifies the
+nodes and directed interactions, then creates the architecture and sequence `.mmd` sources.
+Only validated sources proceed to presentation composition, SVG generation, PNG rendering,
+and local preview inspection. It does not send topology to an online editor or convert one
+lossy diagram format into another.
+
+The output still represents exactly two semantic diagrams: solution architecture and sequence.
+Editable sources, rendered files, the offline preview, candidate diagnostics, and inspection
+evidence are published together under the configured `output\design\artifacts` directory.
+Keep that folder together when sharing it. Generated Draw.io source is an editable structural
+draft; the SVG/PNG pair is the presentation output.
+
+Passing geometry alone is insufficient. The pipeline evaluates multiple composition/profile
+candidates, chooses the highest passing measured-quality score, and still requires browser
+evidence and an explicit visual judgment. Source tampering, contradictory execution modes,
+missing required decision contracts, stale evidence, or failed readability/routing gates
+prevent publication. Existing published designs are not silently changed by a skill update.
+
 ## Project configuration
 
 LISA data belongs in the target project, not in the installed plugin directory. Create these items

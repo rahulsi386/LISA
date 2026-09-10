@@ -798,6 +798,10 @@
               "uniqueItems": true,
               "items": {"type": "string", "minLength": 1}
             },
+            "visual_role": {
+              "enum": ["primary", "supporting", "cross-cutting"]
+            },
+            "visual_group": {"type": "string", "minLength": 1, "maxLength": 120},
             "reliability": {
               "type": "string",
               "minLength": 1,
@@ -890,6 +894,7 @@
               "maxLength": 160
             },
             "synchronous": {"type": "boolean"},
+            "implementation_mode": {"$ref": "#/$defs/implementationMode"},
             "failure_behavior": {
               "type": "string",
               "minLength": 1,
@@ -1014,10 +1019,36 @@
             "message_type": {
               "enum": ["call", "response", "self", "approval"]
             },
+            "implementation_mode": {"$ref": "#/$defs/implementationMode"},
+            "relationship_id": {"type": ["string", "null"], "minLength": 1},
+            "capability_id": {"type": ["string", "null"], "minLength": 1},
+            "branch_kind": {
+              "enum": ["success", "failure", "insufficient-grounding", "rejection", "timeout", "simulation"]
+            },
+            "simulation_disclosure": {"type": ["string", "null"], "maxLength": 300},
             "condition": {"type": ["string", "null"], "maxLength": 34}
           }
         }
       ]
+    },
+    "implementationMode": {
+      "enum": ["real", "simulated", "manual", "deferred", "blocked"]
+    },
+    "presentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "primary_path": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 30,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "primary_agent_id": {"type": "string", "minLength": 1},
+        "preferred_composition": {"enum": ["story", "hub", "boundary"]},
+        "target_width": {"type": "integer", "minimum": 1280, "maximum": 2560}
+      }
     },
     "solutionTopology": {
       "type": "object",
@@ -1032,6 +1063,7 @@
         "sequence_flows"
       ],
       "properties": {
+        "presentation": {"$ref": "#/$defs/presentation"},
         "architecture_summary": {
           "type": "string",
           "minLength": 1,

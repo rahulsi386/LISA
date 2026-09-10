@@ -19,7 +19,17 @@
     {"relativePath": "artifacts/SA_<scenario-slug>.png", "required": true, "schema": null, "kind": "image"},
     {"relativePath": "artifacts/SD_<scenario-slug>.svg", "required": true, "schema": null, "kind": "image"},
     {"relativePath": "artifacts/SD_<scenario-slug>.png", "required": true, "schema": null, "kind": "image"},
-    {"relativePath": "artifacts/preview.html", "required": true, "schema": null, "kind": "html"}
+    {"relativePath": "artifacts/preview.html", "required": true, "schema": null, "kind": "html"},
+    {"relativePath": "artifacts/Design_<scenario-slug>.drawio", "required": true, "schema": null, "kind": "other"},
+    {"relativePath": "artifacts/SA_<scenario-slug>.mmd", "required": true, "schema": null, "kind": "other"},
+    {"relativePath": "artifacts/SD_<scenario-slug>.mmd", "required": true, "schema": null, "kind": "other"},
+    {"relativePath": "artifacts/source-report.json", "required": true, "schema": null, "kind": "json"},
+    {"relativePath": "artifacts/candidate-report.json", "required": true, "schema": null, "kind": "json"},
+    {"relativePath": "artifacts/inspection-report.json", "required": true, "schema": "inspection.schema.json", "kind": "json"},
+    {"relativePath": "artifacts/browser-evidence.json", "required": true, "schema": null, "kind": "json"},
+    {"relativePath": "artifacts/inspection-architecture.png", "required": true, "schema": null, "kind": "image"},
+    {"relativePath": "artifacts/inspection-sequence.png", "required": true, "schema": null, "kind": "image"},
+    {"relativePath": "artifacts/inspection-preview.png", "required": true, "schema": null, "kind": "image"}
   ],
   "directories": [
     {"relativePath": ".solution-designer", "required": true},
@@ -28,7 +38,10 @@
   "patterns": {
     "architecture": "^SA_[A-Za-z0-9_]+\\.(svg|png)$",
     "sequence": "^SD_[A-Za-z0-9_]+\\.(svg|png)$",
-    "preview": "^preview\\.html$"
+    "preview": "^preview\\.html$",
+    "candidate_report": "^candidate-report\\.json$"
+    ,"editable_sources": "^(Design_[A-Za-z0-9_]+\\.drawio|S[AD]_[A-Za-z0-9_]+\\.mmd|source-report\\.json)$"
+    ,"browser_evidence": "^(browser-evidence\\.json|inspection-(architecture|sequence|preview)\\.png)$"
   },
   "forbiddenPathPatterns": [
     "(?i)(^|/)(browser[-_ ]?storage|cookies?|tokens?|credentials?|secrets?)\\.(json|txt)$"

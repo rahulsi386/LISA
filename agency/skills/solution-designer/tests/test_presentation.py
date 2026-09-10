@@ -143,6 +143,146 @@ console.log(JSON.stringify(Object.fromEntries(colors.map(key=>[
         for color, contrast in result.items():
             self.assertGreaterEqual(contrast, 4.5, color)
 
+    def test_runtime_and_boundary_metadata_are_compact_without_losing_exact_names(self):
+        result = self.run_node("""
+const {Typography}=require('./typography');
+const {prepareCard}=require('./generate');
+const c={id:'canonical',name:'Exact service name',kind:'tool',implementationStatus:'simulate',
+  buildOwner:'external-team',pocScope:'represented',productionStatus:'gap',
+  description:'Perform the exact approved role. Runtime: Exact hosting runtime. Boundary: Exact tenant.',
+  members:['Exact hosting runtime','Extra canonical inventory member']};
+const card=prepareCard(c,340,new Typography(),false,false,{verified:true});
+console.log(JSON.stringify({description:card.description.join(' '),details:card.details,
+  represented:card.representedMembers,members:card.members.map(m=>m.name),metadata:card.metadata.join(' ')}));
+""")
+        self.assertEqual(result["description"], "Perform the exact approved role.")
+        self.assertIn("Exact hosting runtime", result["represented"])
+        self.assertEqual(result["members"], ["Extra canonical inventory member"])
+        self.assertEqual(result["details"][1]["value"], "Exact tenant")
+        for value in ("Simulated", "External team", "PoC represented", "Production gap", "canonical"):
+            self.assertIn(value, result["metadata"])
+
+    def test_single_message_phases_use_compact_labels_not_full_width_panels(self):
+        result = self.run_node("""
+const fs=require('fs');
+const {Typography}=require('./typography');
+const {sequenceDiagram}=require('./generate');
+const model=require('../tests/fixtures/procurement-reference-model.json');
+model.sequence=model.sequence.slice(0,4).map((m,i)=>({...m,phase:'Exact phase '+i,fragment:null}));
+const uri='data:image/svg+xml;base64,'+fs.readFileSync('../resources/icons/copilot-studio.svg').toString('base64');
+const icons=new Map(model.components.map(c=>[c.id,{verified:true,uri}]));
+const result=sequenceDiagram(model,icons,new Typography(),'Balanced');
+console.log(JSON.stringify({quality:result.quality,compact:(result.svg.match(/data-treatment="compact-label"/g)||[]).length}));
+""")
+        self.assertEqual(result["compact"], 4)
+        self.assertEqual(result["quality"]["validation"], "passed")
+        self.assertEqual(result["quality"]["fullWidthSingleMessagePanels"], 0)
+
+    def test_sequence_preserves_canonical_ids_and_collision_safe_legacy_occurrences(self):
+        result = self.run_node("""
+const fs=require('fs');
+const {Typography}=require('./typography');
+const {sequenceDiagram}=require('./generate');
+const model=require('../tests/fixtures/procurement-reference-model.json');
+model.sequence=model.sequence.slice(0,3).map((m,i)=>{
+  const message={...m}; delete message.id;
+  if(i===1) message.id='sequence-0001';
+  if(i===2) message.id='exact-canonical-sequence';
+  return message;
+});
+const uri='data:image/svg+xml;base64,'+fs.readFileSync('../resources/icons/copilot-studio.svg').toString('base64');
+const icons=new Map(model.components.map(c=>[c.id,{verified:true,uri}]));
+const result=sequenceDiagram(model,icons,new Typography(),'Balanced');
+console.log(JSON.stringify({ids:result.quality.messageCoverage.map(m=>m.id),
+  rendered:result.quality.messageCoverage.every(m=>result.svg.includes('data-id="'+m.id+'"')),
+  order:result.quality.messageCoverage.map(m=>m.order)}));
+""")
+        self.assertEqual(result["ids"], ["sequence-0001-legacy", "sequence-0001", "exact-canonical-sequence"])
+        self.assertEqual(result["order"], [1, 2, 3])
+        self.assertTrue(result["rendered"])
+
+    def test_inventory_names_are_preserved_once_even_without_members(self):
+        result = self.run_node("""
+const {Typography}=require('./typography');
+const {prepareCard}=require('./generate');
+const component={id:'component',name:'Exact component',kind:'tool',implementationStatus:'configure',
+  buildOwner:'customer',pocScope:'included',productionStatus:'ready',
+  description:'Exact role.',members:['Exact shared name'],
+  inventoryNames:['Exact inventory-only name','Exact shared name','Exact component']};
+const card=prepareCard(component,340,new Typography(),false,false,{verified:true});
+console.log(JSON.stringify({all:card.canonicalMembers,
+  separate:card.members.map(m=>m.name),represented:card.representedMembers}));
+""")
+        self.assertEqual(result["all"], ["Exact shared name", "Exact inventory-only name", "Exact component"])
+        self.assertEqual(result["separate"], ["Exact shared name", "Exact inventory-only name"])
+        self.assertEqual(result["represented"], ["Exact component"])
+
+    def test_sequence_condition_order_and_action_control_do_not_synthesize_branches(self):
+        result = self.run_node("""
+const fs=require('fs');
+const {Typography}=require('./typography');
+const {sequenceDiagram}=require('./generate');
+const model=require('../tests/fixtures/procurement-reference-model.json');
+model.sequence=model.sequence.slice(0,2).map((m,i)=>({...m,order:(i+1)*10,fragment:null}));
+model.sequence[0].relationshipId='exact-relationship';
+model.sequence[0].condition='only after explicit approval';
+model.sequence[0].actionControl={requiresApproval:true,execution:'manual'};
+const before=JSON.stringify(model);
+const uri='data:image/svg+xml;base64,'+fs.readFileSync('../resources/icons/copilot-studio.svg').toString('base64');
+const icons=new Map(model.components.map(c=>[c.id,{verified:true,uri}]));
+const result=sequenceDiagram(model,icons,new Typography(),'Balanced');
+console.log(JSON.stringify({quality:result.quality,
+  conditionVisible:result.drawing.texts.map(t=>t.text).join(' ').includes('Condition: only after explicit approval'),
+  orderVisible:result.drawing.texts.some(t=>t.text.startsWith('10.')),
+  fragments:(result.svg.match(/data-kind="fragment"/g)||[]).length,
+  metadata:result.svg.includes('data-order="10"')&&result.svg.includes('data-relationship-id="exact-relationship"'),
+  unchanged:JSON.stringify(model)===before}));
+""")
+        self.assertEqual(result["quality"]["validation"], "passed")
+        self.assertEqual(result["quality"]["messageCoverage"][0]["order"], 10)
+        self.assertEqual(result["quality"]["messageCoverage"][0]["occurrence"], 1)
+        self.assertEqual(result["quality"]["messageCoverage"][0]["actionControl"],
+                         {"requiresApproval": True, "execution": "manual"})
+        self.assertTrue(result["conditionVisible"])
+        self.assertTrue(result["orderVisible"])
+        self.assertTrue(result["metadata"])
+        self.assertTrue(result["unchanged"])
+        self.assertEqual(result["fragments"], 0)
+
+    def test_declared_participants_preserve_order_and_unused_lifelines(self):
+        result = self.run_node("""
+const fs=require('fs');
+const {Typography}=require('./typography');
+const {sequenceDiagram,sequenceParticipants}=require('./generate');
+const model=require('../tests/fixtures/procurement-reference-model.json');
+model.sequence=model.sequence.slice(0,2);
+const legacy=sequenceParticipants(model);
+model.sequenceParticipants=[{id:'monitor'},{componentId:'teams'},'requester','entra'];
+const uri='data:image/svg+xml;base64,'+fs.readFileSync('../resources/icons/copilot-studio.svg').toString('base64');
+const icons=new Map(model.components.map(c=>[c.id,{verified:true,uri}]));
+const result=sequenceDiagram(model,icons,new Typography(),'Balanced');
+console.log(JSON.stringify({legacy,quality:result.quality,
+  lifelines:[...result.svg.matchAll(/data-kind="lifeline" data-component-id="([^"]+)"/g)].map(match=>match[1])}));
+""")
+        self.assertEqual(result["legacy"], ["requester", "teams", "entra"])
+        self.assertEqual(result["quality"]["validation"], "passed")
+        self.assertEqual(result["quality"]["participantIds"], ["monitor", "teams", "requester", "entra"])
+        self.assertEqual(result["lifelines"], ["monitor", "teams", "requester", "entra"])
+
+    def test_invalid_explicit_participant_contract_is_not_silently_repaired(self):
+        result = self.run_node("""
+const {sequenceParticipants}=require('./generate');
+const base={components:[{id:'a'},{id:'b'},{id:'c'}],sequence:[{from:'a',to:'b'}]};
+console.log(JSON.stringify([['a','b','missing'],['a','b','a'],['a','c'],'not an array'].map(sequenceParticipantsValue=>{
+  try { sequenceParticipants({...base,sequenceParticipants:sequenceParticipantsValue}); return null; }
+  catch(error) { return error.message; }
+})));
+""")
+        self.assertIn("Unknown", result[0])
+        self.assertIn("Duplicate", result[1])
+        self.assertIn("Message endpoint missing", result[2])
+        self.assertIn("must be an array", result[3])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -28,10 +28,10 @@ class PreviewParser(HTMLParser):
 
 
 class HtmlPreviewTests(unittest.TestCase):
-    def render(self, model: dict) -> str:
+    def render(self, model: dict, options: dict | None = None) -> str:
         result = subprocess.run(
             ["node", "-e", "const {createPreview}=require('./preview');"
-             f"process.stdout.write(createPreview({json.dumps(model)}));"],
+             f"process.stdout.write(createPreview({json.dumps(model)},{json.dumps(options or {})}));"],
             cwd=ROOT / "renderer", capture_output=True, text=True, encoding="utf-8",
             timeout=30, check=False,
         )
@@ -57,6 +57,7 @@ class HtmlPreviewTests(unittest.TestCase):
             "SA_Procurement_Test.png", "SD_Procurement_Test.png",
         ])
         self.assertTrue(all(image.get("alt") for image in images))
+        self.assertTrue(all(image.get("loading") == "eager" and image.get("decoding") == "sync" for image in images))
         self.assertFalse(any(tag in {"script", "iframe", "object", "base"} for tag, _ in parsed.elements))
         self.assertIn("default-src 'none'", html)
         self.assertEqual(html, self.render(self.model()))
@@ -89,6 +90,71 @@ class HtmlPreviewTests(unittest.TestCase):
         regions = [attrs for _, attrs in parsed.elements if attrs.get("class") == "viewport"]
         self.assertEqual(len(regions), 2)
         self.assertTrue(all(region.get("tabindex") == "0" and region.get("aria-label") for region in regions))
+        ids = {attrs.get("id") for _, attrs in parsed.elements}
+        self.assertTrue(all(region.get("aria-describedby") in ids for region in regions))
+        self.assertIn(".native-size:checked ~ .viewport img { max-width: none;", self.render(self.model()))
+        self.assertIn("blank or unavailable", self.render(self.model()))
+        self.assertIn("no JavaScript is required", self.render(self.model()))
+
+    def test_source_downloads_are_local_optional_and_keep_exactly_two_sections(self):
+        metadata = {
+            "drawio": {"path": "Design_Procurement_Test.drawio"},
+            "architectureMermaid": {"path": "SA_Procurement_Test.mmd"},
+            "sequenceMermaid": {"path": "SD_Procurement_Test.mmd"},
+        }
+        for options in (
+            {"sources": True}, {"sources": metadata}, {"sourceReport": {"sources": metadata}},
+            {"sources": {"validation": "passed", "sources": metadata}},
+        ):
+            with self.subTest(options=options):
+                html = self.render(self.model(), options)
+                parsed = PreviewParser(html)
+                self.assertEqual(parsed.resources(), {
+                    "Design_Procurement_Test.drawio", "SA_Procurement_Test.mmd", "SD_Procurement_Test.mmd",
+                    "SA_Procurement_Test.svg", "SA_Procurement_Test.png", "SD_Procurement_Test.svg", "SD_Procurement_Test.png",
+                })
+                self.assertEqual(sum(tag == "section" for tag, _ in parsed.elements), 2)
+                self.assertEqual(sum(tag == "img" for tag, _ in parsed.elements), 2)
+                downloads = [attrs for tag, attrs in parsed.elements if tag == "a" and attrs.get("href", "").endswith((".mmd", ".drawio"))]
+                self.assertTrue(all("download" in attrs for attrs in downloads))
+                self.assertIn("same two diagrams", html)
+        self.assertFalse(any(path.endswith(".mmd") for path in PreviewParser(self.render(
+            self.model(), {"sources": {"drawio": metadata["drawio"]}}
+        )).resources()))
+
+    def test_source_metadata_never_supplies_unsafe_external_or_traversal_paths(self):
+        model = self.model()
+        model["sourceReport"] = {"sources": {
+            "drawio": {"path": "../../outside.drawio"},
+            "architectureMermaid": {"path": "https://example.invalid/external.mmd"},
+            "sequenceMermaid": {"path": 'x" onclick="bad'},
+        }}
+        html = self.render(model)
+        parsed = PreviewParser(html)
+        self.assertTrue(all("/" not in resource and "\\" not in resource for resource in parsed.resources()))
+        self.assertNotIn("example.invalid", html)
+        self.assertFalse(any(key.startswith("on") for _, attrs in parsed.elements for key in attrs))
+
+    def test_decoded_png_dimensions_are_preserved_as_intrinsic_image_attributes(self):
+        result = subprocess.run(
+            ["node", "-e", "const {PNG}=require('pngjs');const {createPreview}=require('./preview');"
+             "function dims(w,h){const image=new PNG({width:w,height:h});image.data.fill(255);"
+             "const decoded=PNG.sync.read(PNG.sync.write(image));"
+             "return {width:decoded.width,height:decoded.height};}"
+             f"process.stdout.write(createPreview({json.dumps(self.model())},"
+             "{architecture:dims(123,45),sequence:dims(67,189)}));"],
+            cwd=ROOT / "renderer", capture_output=True, text=True, encoding="utf-8", timeout=30, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        images = [attrs for tag, attrs in PreviewParser(result.stdout).elements if tag == "img"]
+        self.assertEqual([(image.get("width"), image.get("height")) for image in images], [("123", "45"), ("67", "189")])
+        self.assertTrue(all(image["decoding"] == "sync" and image["loading"] == "eager" for image in images))
+        for options in ({}, {"architecture": {"width": -1, "height": 20}},
+                        {"architecture": {"width": '1" onload="bad', "height": 20}},
+                        {"sequence": {"width": 10.5, "height": 20}}):
+            with self.subTest(options=options):
+                images = [attrs for tag, attrs in PreviewParser(self.render(self.model(), options)).elements if tag == "img"]
+                self.assertTrue(all("width" not in image and "height" not in image for image in images))
 
     def test_unsafe_scenario_filenames_are_rejected(self):
         result = subprocess.run(

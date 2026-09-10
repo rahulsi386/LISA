@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 import sys
+from functools import lru_cache
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -90,6 +91,44 @@ def length(points: list[Point]) -> float:
                for start, end in zip(points, points[1:]))
 
 
+def interaction(first: Point, last: Point, other_first: Point, other_last: Point) -> tuple[int, float, float]:
+    """Count transverse crossings and shared lanes, including opposing arrows."""
+    vertical = first[0] == last[0]
+    other_vertical = other_first[0] == other_last[0]
+    if vertical != other_vertical:
+        v1, v2, h1, h2 = ((first, last, other_first, other_last) if vertical
+                           else (other_first, other_last, first, last))
+        cross = (min(h1[0], h2[0]) < v1[0] < max(h1[0], h2[0])
+                 and min(v1[1], v2[1]) < h1[1] < max(v1[1], v2[1]))
+        return int(cross), 0.0, 0.0
+    axis = 1 if vertical else 0
+    if first[1 - axis] != other_first[1 - axis]:
+        return 0, 0.0, 0.0
+    overlap = max(0.0, min(max(first[axis], last[axis]), max(other_first[axis], other_last[axis]))
+                  - max(min(first[axis], last[axis]), min(other_first[axis], other_last[axis])))
+    opposed = (last[axis] - first[axis]) * (other_last[axis] - other_first[axis]) < 0
+    return 0, overlap, overlap if opposed else 0.0
+
+
+def route_metrics(routes: list[dict]) -> dict:
+    crossings = shared = opposed = 0
+    for index, route in enumerate(routes):
+        points = [(point["x"], point["y"]) for point in route["points"]]
+        for other in routes[index + 1:]:
+            other_points = [(point["x"], point["y"]) for point in other["points"]]
+            for first, last in zip(points, points[1:]):
+                for start, end in zip(other_points, other_points[1:]):
+                    cross, overlap, opposite = interaction(first, last, start, end)
+                    crossings += cross
+                    shared += overlap
+                    opposed += opposite
+    distance = sum(length([(p["x"], p["y"]) for p in r["points"]]) for r in routes)
+    bends = sum(max(0, len(r["points"]) - 2) for r in routes)
+    return {"crossings": crossings, "sharedLaneLength": shared, "oppositeLaneLength": opposed,
+            "length": distance, "bends": bends,
+            "cost": distance + bends * 24 + crossings * 900 + shared * 4 + opposed * 20}
+
+
 def preference(edge: dict, endpoint: str) -> str | None:
     hint = edge.get(endpoint + "Side")
     if hint is None:
@@ -144,6 +183,7 @@ class Router:
         self.obstacles += [box.inflate(self.padding) for box in self.exclusions
                            if not any(node.contains(box) for node in self.nodes.values())]
         self.graph = self.visibility_graph()
+        self.weight = "weight"
 
     def port(self, edge: dict, endpoint: str, side: str) -> tuple[Point, Point, int]:
         box = self.nodes[edge[endpoint + "Id"]]
@@ -166,6 +206,9 @@ class Router:
         for box in self.obstacles:
             coordinates_x.update((box.x, box.right))
             coordinates_y.update((box.y, box.bottom))
+            # Separate return/fan-out lanes, rather than repeatedly using the same obstacle edge.
+            coordinates_x.update((box.x - 24, box.right + 24))
+            coordinates_y.update((box.y - 24, box.bottom + 24))
         for edge in self.edges:
             for endpoint in ("source", "target"):
                 for side in ("east", "west", "north", "south"):
@@ -202,7 +245,7 @@ class Router:
         target, end, target_axis = self.port(edge, "target", target_side)
         path = nx.astar_path(
             self.graph, (start, source_axis), (end, target_axis),
-            heuristic=lambda first, last: length([first[0], last[0]]), weight="weight",
+            heuristic=lambda first, last: length([first[0], last[0]]), weight=self.weight,
         )
         points = simplify([source] + [state[0] for state in path] + [target])
         if len(points) < 2:
@@ -227,6 +270,8 @@ class Router:
             preferred = ("east", "west") if delta_x >= 0 else ("west", "east")
         else:
             preferred = ("south", "north") if delta_y >= 0 else ("north", "south")
+        preferred = (SIDES.get(edge.get("preferredSourceSide"), preferred[0]),
+                     SIDES.get(edge.get("preferredTargetSide"), preferred[1]))
         source_fixed, target_fixed = preference(edge, "source"), preference(edge, "target")
         choices = [preferred] + [(side, side) for side in ("south", "north", "east", "west")]
         choices += [(first, last) for first in ("east", "west", "north", "south")
@@ -236,22 +281,59 @@ class Router:
     def solve(self) -> dict:
         routes = []
         for edge in self.edges:
+            self.set_cost(routes)
+            choices = []
             for source_side, target_side in self.sides(edge):
                 try:
                     points = self.route(edge, source_side, target_side)
-                    break
+                    candidate = {"id": edge["id"], "sourceId": edge["sourceId"], "targetId": edge["targetId"],
+                                 "points": [{"x": point[0], "y": point[1]} for point in points],
+                                 "labelWidth": edge.get("labelWidth", 100), "labelHeight": edge.get("labelHeight", 24)}
+                    choices.append((route_metrics(routes + [candidate])["cost"], candidate))
+                    if len(choices) >= 5:
+                        break
                 except (nx.NetworkXNoPath, nx.NodeNotFound, ValueError):
                     continue
-            else:
+            if not choices:
                 raise ValueError(f"No collision-free route for edge '{edge['id']}'.")
-            routes.append({"id": edge["id"], "sourceId": edge["sourceId"], "targetId": edge["targetId"],
-                           "points": [{"x": point[0], "y": point[1]} for point in points],
-                           "labelWidth": edge.get("labelWidth", 100), "labelHeight": edge.get("labelHeight", 24)})
+            routes.append(min(choices, key=lambda item: item[0])[1])
+        initial_metrics = route_metrics(routes)
+        # Rip up congested routes only; a bounded deterministic repair never makes global cost worse.
+        reroutes = 0
+        for _ in range(2):
+            baseline = route_metrics(routes)["cost"]
+            ranked = sorted(range(len(routes)), key=lambda i: (
+                -(baseline - route_metrics(routes[:i] + routes[i + 1:])["cost"]),
+                routes[i]["id"]))
+            changed = False
+            for index in ranked[:6]:
+                original = routes[index]
+                others = routes[:index] + routes[index + 1:]
+                self.set_cost(others)
+                old_issues = len(self.place_labels(routes))
+                for source_side, target_side in self.sides(self.edges[index])[:5]:
+                    reroutes += 1
+                    try:
+                        points = self.route(self.edges[index], source_side, target_side)
+                        candidate = {**original, "points": [{"x": p[0], "y": p[1]} for p in points]}
+                        cost = route_metrics(others + [candidate])["cost"]
+                        if cost < baseline - .01:
+                            routes[index] = candidate
+                            if len(self.place_labels(routes)) <= old_issues:
+                                baseline = cost
+                                changed = True
+                                break
+                            routes[index] = original
+                    except (nx.NetworkXNoPath, nx.NodeNotFound, ValueError):
+                        continue
+            if not changed:
+                break
         issues = self.place_labels(routes)
         attempts = 0
         for route, edge in zip(routes, self.edges):
             if "labelX" in route:
                 continue
+            self.set_cost([item for item in routes if item is not route])
             original = route["points"]
             original_length = length([(point["x"], point["y"]) for point in original])
             allowance = 2 * sum(self.nodes[edge[key]].width + self.nodes[edge[key]].height
@@ -273,7 +355,33 @@ class Router:
                     pass
                 route["points"] = original
                 self.place_labels(routes)
-        return {"engine": ENGINE, "routes": routes, "issues": self.place_labels(routes)}
+        return {"engine": ENGINE, "routes": routes, "issues": self.place_labels(routes),
+                "metrics": route_metrics(routes), "initialMetrics": initial_metrics,
+                "rerouteAttempts": reroutes, "labelRepairAttempts": min(attempts, 24)}
+
+    def set_cost(self, routes: list[dict]) -> None:
+        segments = []
+        for route in routes:
+            points = [(point["x"], point["y"]) for point in route["points"]]
+            segments.extend(zip(points, points[1:]))
+
+        @lru_cache(maxsize=300_000)
+        def cost(first, last):
+            base = self.graph[first][last]["weight"]
+            if first[0] == last[0]:
+                return base
+            for start, end in segments:
+                cross, overlap, opposed = interaction(first[0], last[0], start, end)
+                # A transverse segment can meet a visibility-grid vertex, not just its interior.
+                a, b = first[0], last[0]
+                if (a[0] == b[0]) != (start[0] == end[0]):
+                    v1, v2, h1, h2 = (a, b, start, end) if a[0] == b[0] else (start, end, a, b)
+                    cross = int(min(h1[0], h2[0]) <= v1[0] <= max(h1[0], h2[0])
+                                and min(v1[1], v2[1]) <= h1[1] <= max(v1[1], v2[1]))
+                base += cross * 450 + overlap * 4 + opposed * 20
+            return base
+
+        self.weight = lambda first, last, attributes: cost(first, last)
 
     def place_labels(self, routes: list[dict]) -> list[str]:
         occupied: list[Box] = []
@@ -282,7 +390,8 @@ class Router:
         for route in routes:
             points = [(point["x"], point["y"]) for point in route["points"]]
             segments.extend(zip(points, points[1:]))
-        for route in routes:
+        for route in sorted(routes, key=lambda item: (
+                -item["labelWidth"] * item["labelHeight"], item["id"])):
             route.pop("labelX", None)
             route.pop("labelY", None)
             for box in label_candidates(route):

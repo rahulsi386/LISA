@@ -186,8 +186,8 @@ powershell.exe -ExecutionPolicy Bypass -File .\Install-LISA-Prerequisites.ps1
 The installer performs this gated sequence:
 
 1. Checks WinGet, Microsoft Scout, Windows PowerShell 5.1, PowerShell 7, Python, the Python
-  libraries in the sibling root `requirements.txt`, Node.js/npm, the renderer and layout engine
-  beneath `m-skills`, modern Power Platform CLI support, and conditional .NET 10 availability.
+  libraries in the sibling root `requirements.txt`, Node.js/npm, the renderer and Python layout
+  router beneath `m-skills`, modern Power Platform CLI support, and conditional .NET 10 availability.
 2. Lists every missing prerequisite and its installation action. It changes nothing until the user
   types the exact confirmation `INSTALL`.
 3. Installs only missing local prerequisites. It uses WinGet for supported Windows applications,
@@ -364,16 +364,18 @@ steps, reviews, remote reconciliation, and model-guided work remain owned by the
 | PowerShell 7 | 7.6.5 verified | Installs `Microsoft.PowerShell` when absent |
 | Windows PowerShell | 5.1 | Checked only; it must be enabled as a Windows component |
 | Power Platform CLI (`pac`) | Modern CLI with `copilot` and `solution` commands | Installs `Microsoft.PowerApps.CLI.Tool` as a current-user .NET global tool when needed |
-| .NET SDK | 10 | Installed conditionally to bootstrap modern PAC or rebuild the layout engine |
-| Layout engine | Packaged self-contained Windows executable | Uses the packaged EXE or rebuilds it from the packaged .NET project |
+| .NET SDK | 10 | Installed conditionally to bootstrap modern PAC |
+| Layout router | Packaged Python source with NetworkX 3.6.1 | Validates the packaged router; no .NET runtime, SDK, or compiler is required for diagrams |
 
 The Python manifest includes `jsonschema[format-nongpl]`, `pypdf`, `python-docx`, `python-pptx`,
-`Pillow`, `openpyxl`, and `tzdata`. The format extra activates URI and RFC 3339 date-time checks;
-`tzdata` makes configured IANA zones deterministic on Windows. Do not install those packages one by
-one during normal setup; approve the installer's consolidated prerequisite action instead.
+`Pillow`, `openpyxl`, `tzdata`, and pinned `networkx`. The format extra activates URI and RFC 3339
+date-time checks; `tzdata` makes configured IANA zones deterministic on Windows. NetworkX powers
+Solution Designer's obstacle-aware orthogonal router and participates in its cache fingerprint. Do
+not install those packages one by one during normal setup; approve the installer's consolidated
+prerequisite action instead.
 
-The bundled `SolutionDesigner.LayoutEngine.exe` is self-contained. A .NET runtime is unnecessary
-when that executable and modern PAC are already available.
+Solution Designer invokes `scripts/layout_engine.py` with the same Python interpreter used by its
+orchestrator. No layout executable or separate .NET runtime is required.
 
 ### Manual service and project requirements
 
@@ -486,7 +488,7 @@ an optional millisecond suffix.
 |---|---|---|
 | `analysis` | `requirement-analysis_<timestamp>.md`, `.json`, and `-manifest.json`; `.requirement-analyzer\` | Cached extraction and working state |
 | `classification` | `classification-manifest.json`, `complexity-classification_<timestamp>.md` and `.json`; `.complexity-classifier\` | Staged research and model working state |
-| `design` | `current-design.json`, `artifacts\design-model.json`, `SA_<slug>.svg/.png`, `SD_<slug>.svg/.png`; `.solution-designer\` | Candidate and inspection state |
+| `design` | `current-design.json`; under `artifacts\`: `design-model.json`, `Design_<slug>.drawio`, `SA_<slug>.mmd/.svg/.png`, `SD_<slug>.mmd/.svg/.png`, `preview.html`, reports, and browser inspection evidence; `.solution-designer\` | Candidate, repair, and staged inspection state |
 | `build` | `build-manifest.json`, `agent-build-handoff.json`, `agent-build-report.md`, `agent-instructions.md`, `agent-live-state.json`, `agent-solution-manifest.json`; `packages\`, `evidence\` | Optional `project\`; a valid build may have no ZIP for unsupported package paths |
 | `evaluation` | `evaluation-manifest.json`, dataset JSON/CSV, rubric, observations, baseline, run report, gate summary; `evidence\` | Evidence named `EVAL-NNN-attempt-NN.<png|jpg|jpeg|json>` |
 | `optimization` | Manifest, plan, change log, run report, instruction audit JSON/Markdown; `rounds\` | Immutable before/after snapshots and rollback snapshots for rejected rounds |
@@ -686,8 +688,9 @@ and identity must match the verified PAC identity.
 ### Diagram rendering fails
 
 Rerun `Install-LISA-Prerequisites.ps1`. It checks Node.js, npm, the locked renderer dependency tree,
-and the packaged layout engine, and repairs missing components after `INSTALL` confirmation. The
-bundled layout engine does not require an installed .NET runtime.
+the packaged Python layout router, and pinned NetworkX. It repairs missing installable dependencies
+after `INSTALL` confirmation and fails explicitly if packaged router source is absent. Diagram
+routing does not require an installed .NET runtime.
 
 ### Publication cannot start
 

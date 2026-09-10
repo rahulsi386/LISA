@@ -403,59 +403,6 @@ function Ensure-Renderer {
     }
 }
 
-function Ensure-LayoutEngine {
-    $engine = Join-Path $SourceSkillsRoot 'solution-designer\resources\layout-engine\SolutionDesigner.LayoutEngine.exe'
-    if (Test-Path -LiteralPath $engine -PathType Leaf) {
-        if ((Get-Item -LiteralPath $engine).Length -le 0) {
-            throw "The packaged layout engine is empty: $engine"
-        }
-        $script:VerifiedComponents.Add('Solution Designer layout engine')
-        return
-    }
-
-    $project = Join-Path $SourceSkillsRoot 'solution-designer\layout-engine\layout-engine.csproj'
-    if (-not (Test-Path -LiteralPath $project -PathType Leaf)) {
-        throw "The layout engine and its rebuild project are both missing: $engine"
-    }
-    if (-not (Ensure-DotNet10)) {
-        return
-    }
-
-    $architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
-    $runtime = switch ($architecture) {
-        'X64' { 'win-x64' }
-        'Arm64' { 'win-arm64' }
-        default { throw "Unsupported Windows architecture for layout-engine rebuild: $architecture" }
-    }
-
-    if (-not $script:InstallerCmdlet.ShouldProcess($engine, "Build self-contained layout engine for $runtime")) {
-        return
-    }
-
-    $temporary = Join-Path ([IO.Path]::GetTempPath()) ("lisa-layout-{0}" -f [guid]::NewGuid().ToString('N'))
-    try {
-        $null = New-Item -ItemType Directory -Path $temporary
-        Invoke-NativeCommand -FilePath 'dotnet' -Arguments @(
-            'publish', $project, '--configuration', 'Release',
-            '--runtime', $runtime, '--self-contained', 'true',
-            '--output', $temporary
-        )
-        $published = Join-Path $temporary 'SolutionDesigner.LayoutEngine.exe'
-        if (-not (Test-Path -LiteralPath $published -PathType Leaf)) {
-            throw 'The layout-engine build completed without producing the expected executable.'
-        }
-        $null = New-Item -ItemType Directory -Path (Split-Path $engine -Parent) -Force
-        Copy-Item -LiteralPath $published -Destination $engine -Force
-        $script:InstalledPackages.Add('Solution Designer layout engine')
-    }
-    finally {
-        if (Test-Path -LiteralPath $temporary) {
-            Remove-Item -LiteralPath $temporary -Recurse -Force
-        }
-    }
-    $script:VerifiedComponents.Add('Solution Designer layout engine')
-}
-
 function Get-ScoutExecutable {
     $candidates = @(
         (Join-Path $env:LOCALAPPDATA 'Programs\Microsoft Scout\scout.exe'),
@@ -508,6 +455,7 @@ packages = {
     "Pillow": "Pillow",
     "openpyxl": "openpyxl",
     "tzdata": "tzdata",
+    "networkx": "networkx",
 }
 for label, distribution in packages.items():
     try:
@@ -608,7 +556,7 @@ function Get-PrerequisiteState {
         [pscustomobject]@{ Installed = $false; Details = 'Python 3.11+ is unavailable.' }
     }
     $renderer = Test-RendererPrerequisite
-    $layoutEngine = Join-Path $SourceSkillsRoot 'solution-designer\resources\layout-engine\SolutionDesigner.LayoutEngine.exe'
+    $layoutRouter = Join-Path $SourceSkillsRoot 'solution-designer\scripts\layout_engine.py'
     $scout = Get-ScoutExecutable
     $modernPac = Test-ModernPac
 
@@ -671,10 +619,10 @@ function Get-PrerequisiteState {
             InstallAction = 'WinGet package Microsoft.DotNet.SDK.10.'
         }
         [pscustomobject]@{
-            Key = 'LayoutEngine'; Requirement = 'Packaged Solution Designer layout engine'
-            Installed = (Test-Path -LiteralPath $layoutEngine -PathType Leaf) -and (Get-Item -LiteralPath $layoutEngine -ErrorAction SilentlyContinue).Length -gt 0
-            Details = $layoutEngine
-            InstallAction = 'Rebuild from the packaged project using .NET 10.'
+            Key = 'LayoutRouter'; Requirement = 'Packaged Solution Designer Python layout router'
+            Installed = (Test-Path -LiteralPath $layoutRouter -PathType Leaf) -and (Get-Item -LiteralPath $layoutRouter -ErrorAction SilentlyContinue).Length -gt 0
+            Details = $layoutRouter
+            InstallAction = 'Restore scripts\layout_engine.py from the LISA distribution.'
         }
     )
 }
@@ -732,8 +680,8 @@ function Install-MissingPrerequisites {
     if ($missingKeys -contains 'Renderer' -and $nodeAvailable) {
         Ensure-Renderer
     }
-    if ($missingKeys -contains 'LayoutEngine') {
-        Ensure-LayoutEngine
+    if ($missingKeys -contains 'LayoutRouter') {
+        throw 'The packaged Solution Designer Python layout router is missing from the LISA distribution.'
     }
 }
 

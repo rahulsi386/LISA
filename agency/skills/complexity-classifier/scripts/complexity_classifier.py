@@ -2052,6 +2052,67 @@ def _classification_inventory_names(model: dict[str, Any]) -> set[str]:
     return {name for name in names if name}
 
 
+def _validate_design_handoff(
+    topology: dict[str, Any], capability_ids: set[str] | None = None
+) -> None:
+    """Validate optional editorial hints and explicit per-interaction semantics."""
+    components = {item["id"]: item for item in topology["components"]}
+    relationships = {item["id"]: item for item in topology["relationships"]}
+    directed = {
+        (item["source_id"], item["target_id"])
+        for item in relationships.values()
+    } | {
+        (item["target_id"], item["source_id"])
+        for item in relationships.values() if item["direction"] == "bidirectional"
+    }
+    presentation = topology.get("presentation", {})
+    primary = presentation.get("primary_agent_id")
+    if primary is not None and (
+        primary not in components or components[primary]["category"] != "agent"
+    ):
+        raise ClassifierError("Presentation primary_agent_id must identify a canonical agent")
+    primary_path = presentation.get("primary_path", [])
+    if set(primary_path) - set(components):
+        raise ClassifierError("Presentation primary_path references unknown components")
+    if any(pair not in directed for pair in zip(primary_path, primary_path[1:])):
+        raise ClassifierError("Presentation primary_path must follow evidenced relationships")
+    signatures: set[str] = set()
+    for relationship in relationships.values():
+        signature = json.dumps(
+            {key: value for key, value in relationship.items()
+             if key not in {"id", "evidence_ids", "reference_ids", "source_refs"}},
+            sort_keys=True,
+        )
+        if signature in signatures:
+            raise ClassifierError(
+                f"Duplicate architecture interaction '{relationship['id']}'; "
+                "reconcile it upstream instead of drawing an indistinguishable duplicate"
+            )
+        signatures.add(signature)
+    for flow in topology["sequence_flows"]:
+        capability_id = flow.get("capability_id")
+        if capability_id is not None and capability_ids is not None and capability_id not in capability_ids:
+            raise ClassifierError(f"Sequence '{flow['id']}' references unknown capability '{capability_id}'")
+        relationship_id = flow.get("relationship_id")
+        if relationship_id is None:
+            continue
+        relationship = relationships.get(relationship_id)
+        if relationship is None:
+            raise ClassifierError(f"Sequence '{flow['id']}' references unknown relationship '{relationship_id}'")
+        pair = (flow["source_id"], flow["target_id"])
+        allowed = {(relationship["source_id"], relationship["target_id"])}
+        if relationship["direction"] == "bidirectional":
+            allowed.add((relationship["target_id"], relationship["source_id"]))
+        if flow["message_type"] == "self" or pair not in allowed:
+            raise ClassifierError(f"Sequence '{flow['id']}' does not match its directed relationship")
+        if (
+            flow.get("implementation_mode") is not None
+            and relationship.get("implementation_mode") is not None
+            and flow["implementation_mode"] != relationship["implementation_mode"]
+        ):
+            raise ClassifierError(f"Sequence '{flow['id']}' implementation mode conflicts with its relationship")
+
+
 def _validate_solution_topology(model: dict[str, Any]) -> None:
     topology = model["solution_topology"]
     components = model["components"]
@@ -2482,6 +2543,9 @@ def _validate_solution_topology(model: dict[str, Any]) -> None:
         raise ClassifierError(
             "Sequence flows must include explicit Authentication and Response phases"
         )
+    _validate_design_handoff(
+        topology, {item["id"] for item in model["delivery_assessment"]["capabilities"]}
+    )
 
 
 def _validate_delivery_assessment(
