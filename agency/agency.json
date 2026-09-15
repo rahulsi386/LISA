@@ -4,7 +4,7 @@
     "claude"
   ],
   "category": "developer-tools",
-  "description": "LISA Copilot Agent Delivery lifecycle for Microsoft agent solutions.",
+  "description": "LISA Copilot Agent Delivery lifecycle and explicitly invoked solution marketing video generation.",
   "governance": {
     "layer": 4,
     "certification": "draft",

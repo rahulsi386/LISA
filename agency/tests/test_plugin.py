@@ -19,6 +19,7 @@ EXPECTED_SKILLS = (
     "artifact-generator",
     "artifact-publisher",
     "postpublish-cleanup",
+    "video-generator",
 )
 
 
@@ -58,6 +59,41 @@ class AgencyPluginTests(unittest.TestCase):
             match = re.search(r'^name:\s*["\']?([^"\'\r\n]+)', text, re.MULTILINE)
             self.assertIsNotNone(match, skill_path)
             self.assertEqual(name, match.group(1).strip())
+
+    def test_video_generator_requires_explicit_invocation(self) -> None:
+        skill = (PLUGIN_ROOT / "skills" / "video-generator" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("user-invocable: true", skill)
+        self.assertIn("disable-model-invocation: true", skill)
+        self.assertIn("not a CAD stage", skill)
+        for relative_path in ("cad-orchestrator/SKILL.md", "workflow_checkpoint.py"):
+            content = (PLUGIN_ROOT / "skills" / relative_path).read_text(encoding="utf-8")
+            self.assertNotIn("video-generator", content)
+        checkpoint_schema = (PLUGIN_ROOT / "skills" / "workflow-checkpoint.schema.json").read_text(encoding="utf-8")
+        self.assertNotIn('"video"', checkpoint_schema)
+        narration = (PLUGIN_ROOT / "skills" / "video-generator" / "resources" / "template" / "Narrate.ps1").read_text(encoding="utf-8")
+        self.assertIn("[switch]$AllowOnlineSpeech", narration)
+        self.assertIn("if (-not $AllowOnlineSpeech)", narration)
+
+    def test_video_generator_is_self_contained_and_requirements_are_documented(self) -> None:
+        skill = PLUGIN_ROOT / "skills" / "video-generator"
+        for relative_path in (
+            "scripts/initialize.mjs",
+            "resources/production-guide.md",
+            "resources/artifact-contract.json",
+            "resources/template/render.mjs",
+            "resources/template/Narrate.ps1",
+            "resources/template/package.json",
+            "resources/template/package-lock.json",
+            "requirements.txt",
+        ):
+            content = (skill / relative_path).read_text(encoding="utf-8")
+            self.assertNotIn("marketing/lisa-agency-video", content)
+        dependencies = (skill / "requirements.txt").read_text(encoding="utf-8")
+        for required in ("edge-tts==7.2.7", "@napi-rs/canvas==0.1.80", "ffmpeg-static==5.2.0",
+                         "PowerShell 7", "Node.js 20", "Bahnschrift", "speech.platform.bing.com"):
+            self.assertIn(required, dependencies)
+        for root in (PLUGIN_ROOT, PLUGIN_ROOT.parent):
+            self.assertIn("video-generator", (root / "requirements.txt").read_text(encoding="utf-8"))
 
     def test_shared_runtime_is_packaged(self) -> None:
         for name in (

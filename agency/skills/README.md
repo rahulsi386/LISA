@@ -1,6 +1,6 @@
 # LISA skill suite
 
-This directory contains the ten local skills that implement the **LISA Copilot Agent Delivery (CAD)** lifecycle. This reference explains what each skill is, what it does, the inputs and outputs it consumes and produces, how it executes, where it runs in the orchestrator, how failure is handled, and how to extend it without regressions.
+This directory contains ten **LISA Copilot Agent Delivery (CAD)** lifecycle skills plus the standalone, explicitly invoked `video-generator` (eleven skills total). The CAD route is unchanged. This reference explains the lifecycle and the independent video capability.
 
 > [!IMPORTANT]
 > A skill is more than the script files in its `scripts/` directory. Some stages combine deterministic scripts with model-guided architecture work, browser interaction, human review, remote-system reconciliation, and checkpointing. Running one script directly does not necessarily execute the complete skill.
@@ -38,6 +38,24 @@ The orchestrator route is **agent-directed** by [`cad-orchestrator/SKILL.md`](ca
 | 7 | `artifact-generator` | artifacts | `artifact-generation-manifest.json` | Publication must not start. |
 | 8 | `artifact-publisher` | publication | `publication-record.json` after fresh remote verification | Never report `PUBLISHED`; partial remote writes remain for reconciliation. |
 | 9, optional | `postpublish-cleanup` | cleanup | Empty preserved `<basePath>/output` root and external checkpoint | Report partial deletion safely; never infer completion. |
+
+## Standalone video generation
+
+[`video-generator/SKILL.md`](video-generator/SKILL.md) is invoked only through
+`/video-generator` (Copilot) or `/lisa:video-generator` (Claude). Its frontmatter disables
+automatic model invocation. It is **not** in the stage map or `cad-orchestrator` route.
+
+The hosting agent grounds a developer-centered marketing story in an existing solution's
+evidence, supplies current sanitized visuals, and reviews the output. Packaged Node/PowerShell
+code initializes an isolated solution-local production project, validates the storyboard,
+generates neural narration, renders MP4/captions, and verifies decoding and audio levels.
+Visual inspection, factual review, and speech-service authorization remain agent-directed.
+
+LISA projects use `<basePath>/output/video/<solution-slug>/<run-id>/`; other solutions use an
+explicit output location outside the plugin. There is no video lifecycle marker, checkpoint,
+or automatic SharePoint upload. Its artifact contract declares per-production file paths
+under the `video` category solely for shared contract-definition validation.
+See [video requirements](video-generator/requirements.txt) for optional installation.
 
 ## Shared configuration, paths, contracts, and recovery
 
@@ -78,7 +96,7 @@ python "<m-skills-root>\resolve_skill_inputs.py" --skill agent-builder --config 
 
 ### Artifact contracts
 
-[`artifact-contract.schema.json`](artifact-contract.schema.json) defines the common contract format for all ten skills: stage, root, inputs, statuses, fixed files, directories, naming patterns, run-ID patterns, result schemas, and forbidden paths.
+[`artifact-contract.schema.json`](artifact-contract.schema.json) defines the common contract format for all eleven skills: artifact category, root, inputs, statuses, fixed files, directories, naming patterns, run-ID patterns, result schemas, and forbidden paths. The standalone `video` category does not register a CAD workflow stage.
 
 [`validate_artifact_contracts.py`](validate_artifact_contracts.py) validates one or all skill contracts, verifies folder identity and lowercase roots, checks duplicate fixed files, resolves declared fixed/result schemas, compiles regexes, and safely migrates a single case-only legacy stage directory:
 
