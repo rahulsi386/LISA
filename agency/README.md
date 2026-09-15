@@ -1,8 +1,8 @@
 # LISA Agency plugin
 
-This directory packages the ten LISA Copilot Agent Delivery skills as one Agency plugin. It is a
-self-contained distribution copied from `m-skills`; the original Scout installation remains
-unchanged.
+This directory packages eleven skills as one Agency plugin: the ten LISA Copilot Agent Delivery
+skills and the explicitly invoked standalone `video-generator`. The CAD distribution is copied
+from `m-skills`; `video-generator` is Agency-only. The original Scout installation remains unchanged.
 
 ## Included components
 
@@ -139,6 +139,38 @@ form documented by Agency:
 ```powershell
 agency plugin install market:lisa@<marketplace-repository>
 ```
+
+## Standalone marketing videos
+
+Invoke `/video-generator` in Agency Copilot or `/lisa:video-generator` in Agency Claude,
+with a solution name/configuration path and any current screenshots or approved assets:
+
+```text
+/video-generator Create a developer-focused marketing video for the solution in
+C:\Projects\MySolution\lisa-config.json using the supplied current UI screenshots.
+```
+
+This skill is **explicit-only** (`disable-model-invocation: true`). It is never called by
+`cad-orchestrator`, does not create a workflow checkpoint, and is not a gate for building,
+evaluating, publishing, or cleanup. It can use evidence from any existing solution, not only
+Copilot Studio agents, and does not build or deploy that solution as a side effect.
+
+It creates a project-local editable production folder with a reusable renderer, neural
+narration, captions, a thumbnail, a watch page, and a verified 1080p MP4. Defaults learned from
+the LISA video workflow are a developer journey, current UI evidence, no repository links,
+and energetic Ava neural narration. Reconstructed screens and sample results are labeled.
+
+See [the skill](skills/video-generator/SKILL.md) and its complete
+[requirements manifest](skills/video-generator/requirements.txt). Video setup is optional and
+separate: the standard prerequisite checker does not install video dependencies. The generated
+production directory uses pinned npm dependencies plus an isolated `edge-tts==7.2.7` environment.
+Online speech requires approved nonsensitive narration and `-AllowOnlineSpeech`; the runtime
+never silently substitutes the old Windows desktop voice.
+
+The skill's `video` artifact category is declared in the shared artifact schema for validation,
+but is absent from the CAD checkpoint registry. Video files under `output/video/` are local
+outputs; a later explicitly approved full-output cleanup can remove them, so preserve any
+delivery folder that must survive cleanup.
 
 ## Browser authentication and security
 

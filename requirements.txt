@@ -97,3 +97,22 @@ networkx==3.6.1
 # - Rights-aware Microsoft 365 or Office access for protected source documents.
 # - No requests, pytest, OCR engine, LibreOffice, ImageMagick, or test framework
 #   is required by the packaged standard path; tests use unittest.
+
+# ---------------------------------------------------------------------------
+# Agency-only optional video-generator (explicit invocation, outside CAD)
+# ---------------------------------------------------------------------------
+# Complete pip-compatible inventory: agency/skills/video-generator/requirements.txt.
+# Python speech dependency: edge-tts==7.2.7; install into the generated production
+# folder's work/speech-env venv, not the Scout or shared CAD Python environment.
+# Node.js 20+, npm; template pins @napi-rs/canvas==0.1.80 and ffmpeg-static==5.2.0.
+# Optional custom UI icon package: lucide-static==0.468.0 when a production uses it.
+# PowerShell 7+, Windows 11 fonts Bahnschrift/Segoe UI/Segoe UI Bold/Consolas.
+# FFmpeg H.264/AAC is provided by ffmpeg-static, with binary download during npm ci.
+# Network access to approved npm/PyPI indexes, binary host and Microsoft Edge
+# speech.platform.bing.com HTTPS/WSS; send only approved nonsensitive narration.
+# Default synthetic female voice: en-US-AvaMultilingualNeural, +14%, natural pitch.
+# Recommended 4 GB available RAM, 2 GB free disk and approved brand/UI assets.
+# Browser screenshot tooling is optional when screenshots are supplied. Review
+# speech service, FFmpeg/native package and asset terms before external distribution.
+# No paid service, tenant operation or cad-orchestrator invocation is authorized.
+# Root prerequisite installation intentionally does not install this optional stack.

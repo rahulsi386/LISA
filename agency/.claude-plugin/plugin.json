@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin.json",
   "name": "lisa",
-  "description": "LISA Copilot Agent Delivery lifecycle for analyzing requirements, designing, building, evaluating, optimizing, generating, and publishing Microsoft agent solutions.",
+  "description": "LISA Copilot Agent Delivery lifecycle for Microsoft agent solutions, plus explicitly invoked standalone video-generator marketing videos.",
   "keywords": [
     "lisa",
     "copilot-studio",

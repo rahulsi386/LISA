@@ -1,0 +1,16 @@
+{
+  "name": "solution-marketing-video",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "preview": "node render.mjs --preview",
+    "render": "node render.mjs",
+    "verify": "node render.mjs --verify"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "0.1.80",
+    "ffmpeg-static": "5.2.0"
+  }
+}

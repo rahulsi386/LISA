@@ -1,3 +1,8 @@
+# LISA Agency prerequisite manifest (pip-compatible).
+# Base CAD packages below are installed by Test-LisaAgencyPrerequisites.ps1.
+# Host: Windows 11, Agency 1.0+, Python 3.11+, PowerShell 7+, Node.js 20+, npm/npx.
+# Cloud stages additionally require modern PAC, matching tenant authentication,
+# licensing/capacity and scoped permissions; see README.md. No auth is installed.
 jsonschema[format-nongpl]>=4.23,<5
 pypdf>=6.0,<7
 python-docx>=1.2,<2
@@ -6,3 +11,21 @@ Pillow>=11,<13
 openpyxl>=3.1,<4
 tzdata>=2024.1
 networkx==3.6.1
+
+# OPTIONAL EXPLICIT-ONLY VIDEO GENERATOR (never installed or invoked by CAD):
+# Complete authoritative inventory: skills/video-generator/requirements.txt.
+# Initialize a production directory with video-generator/scripts/initialize.mjs;
+# install the copied requirements.txt into that production's work/speech-env venv.
+# Python: edge-tts==7.2.7 (online neural narration and declared transitive packages).
+# npm: @napi-rs/canvas==0.1.80, ffmpeg-static==5.2.0; use generated npm ci/lockfile.
+# Optional custom UI icons: lucide-static==0.468.0, only when used by a production.
+# Windows fonts: Bahnschrift, Segoe UI, Segoe UI Bold, Consolas.
+# FFmpeg H.264/AAC executable is downloaded by ffmpeg-static; no global ffmpeg needed.
+# Recommended 4 GB available RAM and 2 GB free disk; rights to all visual assets.
+# Network: approved npm/PyPI indexes, FFmpeg binary downloads, and Microsoft Edge
+# speech.platform.bing.com HTTPS/WSS. Only approved nonsensitive narration text
+# may be sent; no API key or tenant login needed for default online speech.
+# Neural default: en-US-AvaMultilingualNeural, +14% rate, +0Hz pitch. Synthetic voice.
+# Review community edge-tts/service and FFmpeg/asset license terms before sharing.
+# No SAPI, MoviePy, ffmpeg-python, paid cloud resource or automatic remote writes.
+# Playwright screenshot tools are optional when current screenshots are supplied.
