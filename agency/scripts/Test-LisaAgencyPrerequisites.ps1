@@ -3,7 +3,8 @@ param(
     [switch]$InstallPythonPackages,
     [switch]$RestoreRenderer,
     [switch]$RequireCloudStages,
-    [switch]$RequireAzureMcp
+    [switch]$RequireAzureMcp,
+    [switch]$RequireGepa
 )
 
 Set-StrictMode -Version Latest
@@ -60,6 +61,17 @@ if ($InstallPythonPackages) {
 }
 
 $imports = 'jsonschema', 'pypdf', 'docx', 'pptx', 'PIL', 'openpyxl', 'tzdata', 'networkx'
+if ($RequireGepa) {
+    if ($InstallPythonPackages) {
+        & python -m pip install -r (Join-Path $pluginRoot 'skills\agent-optimizer\requirements-gepa.txt')
+        if ($LASTEXITCODE -ne 0) { $failures.Add('Optional GEPA installation failed.') }
+    }
+    & python -c 'import sys; from importlib.metadata import version; assert (3,11) <= sys.version_info[:2] < (3,15); assert version("gepa") == "0.1.4"; import gepa'
+    if ($LASTEXITCODE -ne 0) {
+        $failures.Add('Agency GEPA requires Python 3.11-3.14 and gepa==0.1.4; install its optional requirements.')
+    }
+    else { Write-Host 'OK  Agency GEPA core; live shadow isolation and reflection approval are checked per run.' -ForegroundColor Green }
+}
 $importProbe = 'import importlib.util,sys; missing=[x for x in sys.argv[1:] if importlib.util.find_spec(x) is None]; print("\n".join(missing)); raise SystemExit(bool(missing))'
 $missingImports = (& python -c $importProbe @imports 2>&1 | Out-String).Trim()
 if ($LASTEXITCODE -ne 0) {

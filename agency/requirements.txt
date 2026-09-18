@@ -12,6 +12,11 @@ openpyxl>=3.1,<4
 tzdata>=2024.1
 networkx==3.6.1
 
+# Optional Agency GEPA pilot: skills/agent-optimizer/requirements-gepa.txt.
+# Install only when enabled; Test-LisaAgencyPrerequisites.ps1 -RequireGepa checks
+# the pinned core. Python 3.11-3.14; no provider SDK, DSPy, or credentials required
+# by the bridge. Agency services model/browser requests under approved policy.
+
 # OPTIONAL EXPLICIT-ONLY VIDEO GENERATOR (never installed or invoked by CAD):
 # Complete authoritative inventory: skills/video-generator/requirements.txt.
 # Initialize a production directory with video-generator/scripts/initialize.mjs;

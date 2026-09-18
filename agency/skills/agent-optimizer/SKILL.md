@@ -1,6 +1,6 @@
 ---
 name: "agent-optimizer"
-description: "Harness-aware Microsoft Copilot Studio optimizer. Runs a mandatory read-only instruction-design audit, then applies minimal evidence-backed changes through the correct harness surface, preserves requirements and rollback safety, and delegates every retest back to agent-evaluator."
+description: "Harness-aware Microsoft Copilot Studio optimizer with opt-in GEPA instruction evolution for Agency Standard and GitHub Copilot (GHCP) harnesses. Audits builder instructions, delegates candidate and target scoring to agent-evaluator, preserves rollback safety, and reports measured optimization impact."
 ---
 
 # Agent Optimizer
@@ -130,12 +130,33 @@ Prefer configuration and instruction fixes before new components or custom code.
 
 ### 3. Snapshot and rollback
 
+When `optimization.gepa.enabled=true` in configuration, execute the Agency GEPA protocol in
+`resources\gepa-execution.md` after the audit and plan, before a target mutation. GEPA is an
+instruction-only capability inside this skill, not another lifecycle stage. It currently supports
+one Standard or GitHub Copilot-harness agent and a distinct, verified, read-only shadow agent of
+the same harness in the same test environment. GHCP additionally requires verified Copilot Credits,
+the CliCopilot live signature, the pinned preview canvas, and an explicit memory isolation policy.
+Unsupported scope or missing prerequisites produces an explicit blocker, never a
+silent fallback. With GEPA disabled or absent, preserve the existing evidence-guided workflow.
+
+Use the pinned library through `scripts\gepa_optimize.py`; do not simulate GEPA with hand-ranked
+rewrites. The CLI returns requests for this session's model and browser tools. Candidate execution
+and scoring belong to `agent-evaluator`; keep the active workflow stage as optimization throughout
+candidate work. Do not call `start-stage evaluation` for candidate evaluations. Shadow operations
+require the same remote intent, identity verification and read-back receipts as target operations.
+
+Only `ready-for-promotion` permits proposing the selected candidate as the next normal target
+round. Record `gepaCandidateId` and `gepaRunSha256` on that round in both plan and change log.
+Search acceptance is not deployment approval. After promotion, delegate the full frozen dataset,
+rubric and baseline to Evaluator; require `instructionSha256` on final observations. On failure,
+restore and verify the before-state. Preserve all candidate and target evidence even on rollback.
+
 Before editing, create the next immutable `rounds\round-NNN\` directory. Pull/download the live definition, export the current solution/package, and store them under that round's `snapshots\before\` directory. Write `before-state-manifest.json` with hashes plus live-state inventory. Record the current instruction version/hash, component IDs, connections, harness, channels, and published state. A reversible before-state snapshot is mandatory.
 
 ### 4. Apply through the harness-correct path
 
 - **Standard harness:** pull the PAC workspace, make the minimal supported YAML/component change, validate, push, publish to the validated test target, and pull again to verify persistence. Use the Copilot Studio UI only for components PAC cannot manage.
-- **GitHub Copilot harness:** use the new agent UI; for rich-text instructions use real keyboard insertion, Save, reload, and verify the Dataverse configuration. Update skills/tools/knowledge/connected agents only when the plan requires it.
+- **GitHub Copilot harness:** follow Builder Section B's verified `cli-copilot` workspace path: pull, change only approved instructions, push/publish, then pull to verify persistence and the `CliCopilot` / `CLICopilotRecognizer` / `cliagent-1.0.0` signature. If the instruction surface is not supported by PAC, use the new agent UI with real keyboard insertion, Save, reload, and verify the Dataverse configuration. Never convert it to a Standard agent. For GEPA, record the chosen authoring path, keep skills/tools/knowledge/connected agents unchanged, and follow the GHCP memory and preview-surface checks in the execution protocol.
 - **Copilot chat harness:** edit the agent from the Microsoft 365 Copilot agent page, not by changing a Standard-harness channel. Save/reload, publish internally, and verify the correct M365 Copilot agent resource.
 
 Never combine unrelated changes in one batch. After persistence verification, store the verified state under the same round and write `after-state-manifest.json`. If the batch is rejected, restore the before-state, verify it remotely, and write `rollback-state-manifest.json`. Resolve build errors, live-state drift, and missing dependencies before retesting.
@@ -202,6 +223,14 @@ Store every optimizer-owned artifact under exactly:
 ```
 
 Never write optimizer artifacts to the output root, `build`, `evaluation`, requirements/input folders, or external temporary folders. Do not copy or rewrite evaluator artifacts. Never store credentials, tokens, cookies, or secrets.
+
+GEPA optimizer state lives in `gepa\` and `gepa-run.json`. Candidate evaluator results and frozen
+evaluation inputs are owned and written only by Evaluator under `output\evaluation\gepa\OPT-*\`.
+The atomic publisher generates `optimization-outcome.json`, `optimization-impact.md`, and a
+`GEPA Execution and Overall Impact` section in `optimization-run-report.md` on every publication,
+including disabled, blocked and rolled-back runs. Never hand-edit the computed outcome.
+These records separate search impact from final target impact, record lineage, selection,
+evaluator run IDs, measured/unknown costs and instruction-size changes. Unknown is not zero.
 
 ### Standard run, files, and rounds
 

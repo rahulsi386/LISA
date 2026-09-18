@@ -410,6 +410,23 @@ class ArtifactContractTests(unittest.TestCase):
         self.publish_fixture()
         self.assertEqual(validate(self.root)["status"], "passed")
 
+    def test_outcome_is_generated_without_claiming_gepa_execution(self) -> None:
+        self.publish_fixture()
+        outcome = load_object(self.root / "optimization-outcome.json")
+        self.assertEqual("not-used", outcome["gepa"]["status"])
+        self.assertEqual("not-measured", outcome["overallImpact"]["status"])
+        self.assertIn("GEPA Execution and Overall Impact",
+                      (self.root / "optimization-run-report.md").read_text(encoding="utf-8"))
+
+    def test_enabled_gepa_cannot_complete_without_target_evidence(self) -> None:
+        plan = load_object(self.root / "optimization-plan.json")
+        plan["policy"]["gepa"] = {"enabled": True}
+        write_json(self.root / "optimization-plan.json", plan)
+        with self.assertRaisesRegex(ArtifactError, "final target PASS"):
+            self.publish_fixture()
+        publish(self.root, "blocked", "GEPA not started", [])
+        self.assertEqual("not-started", load_object(self.root / "optimization-outcome.json")["gepa"]["status"])
+
     def test_hash_tampering_is_rejected(self) -> None:
         self.publish_fixture()
         report = next(self.root.glob("*-run-report.md"), None)

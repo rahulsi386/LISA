@@ -103,6 +103,7 @@ class AgencyPluginTests(unittest.TestCase):
             "workflow-checkpoint.schema.json",
             "workflow-checkpointing.md",
             "lifecycle_artifacts.py",
+            "gepa_runtime.py",
             "analysis_handoff.py",
             "review_batches.py",
             "artifact-contract.schema.json",
@@ -110,6 +111,16 @@ class AgencyPluginTests(unittest.TestCase):
             "Platform-Decision.md",
         ):
             self.assertTrue((PLUGIN_ROOT / "skills" / name).is_file(), name)
+
+    def test_gepa_is_opt_in_inside_optimizer(self) -> None:
+        config = json.loads((PLUGIN_ROOT / "lisa-config.example.json").read_text(encoding="utf-8"))
+        self.assertIs(False, config["optimization"]["gepa"]["enabled"])
+        optimizer = PLUGIN_ROOT / "skills" / "agent-optimizer"
+        self.assertEqual("gepa==0.1.4", (optimizer / "requirements-gepa.txt").read_text().strip())
+        self.assertTrue((optimizer / "scripts" / "gepa_optimize.py").is_file())
+        self.assertTrue((PLUGIN_ROOT / "skills" / "agent-evaluator" / "scripts" / "gepa_candidate.py").is_file())
+        base_dependencies = (PLUGIN_ROOT / "requirements.txt").read_text()
+        self.assertNotRegex(base_dependencies, r"(?m)^gepa[=<>]")
 
     def test_scout_runtime_tokens_are_removed(self) -> None:
         forbidden = (

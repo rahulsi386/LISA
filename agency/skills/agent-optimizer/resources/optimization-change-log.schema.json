@@ -30,6 +30,8 @@
         ],
         "properties": {
           "roundId": {"type": "string", "pattern": "^round-[0-9]{3}$"},
+          "gepaCandidateId": {"type": "string", "pattern": "^candidate-[a-f0-9]{64}$"},
+          "gepaRunSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
           "roundNumber": {"type": "integer", "minimum": 1},
           "appliedAt": {"type": ["string", "null"], "format": "date-time"},
           "findingIds": {"type": "array", "items": {"type": "string"}},

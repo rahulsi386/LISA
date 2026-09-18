@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lisa:agency:gepa-run:1.0",
+  "type": "object",
+  "required": ["schemaVersion", "runId", "engine", "engineVersion", "status", "sessionSha256", "execution"],
+  "properties": {
+    "schemaVersion": {"const": "1.0"},
+    "runId": {"type": "string", "pattern": "^OPT-[0-9]{8}-[0-9]{6}-[A-F0-9]{8}$"},
+    "engine": {"const": "gepa"},
+    "engineVersion": {"const": "0.1.4"},
+    "status": {"enum": ["awaiting-host", "ready-for-promotion", "no-improvement", "holdout-rejected", "budget-exhausted", "blocked"]},
+    "sessionSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "selectedCandidateId": {"type": "string", "pattern": "^candidate-[a-f0-9]{64}$"},
+    "reason": {"type": "string"},
+    "execution": {
+      "type": "object",
+      "required": ["metricCalls", "reflectionCalls", "knownReflectionCostUsd", "unknownCostCalls", "evaluatorRunIds"],
+      "properties": {
+        "harness": {"enum": ["Standard", "GitHub Copilot"]},
+        "shadowAgentId": {"type": "string", "minLength": 1},
+        "testSurface": {"const": "preview-canvas"},
+        "memoryMode": {"enum": ["disabled", "reset-between-tests"]},
+        "metricCalls": {"type": "integer", "minimum": 0},
+        "reflectionCalls": {"type": "integer", "minimum": 0},
+        "knownReflectionCostUsd": {"type": "number", "minimum": 0},
+        "unknownCostCalls": {"type": "integer", "minimum": 0},
+        "evaluatorRunIds": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^EVAL-[0-9]{8}-[0-9]{6}-[A-F0-9]{8}$"}}
+      }
+    },
+    "impact": {"type": "object"},
+    "candidates": {"type": "array"},
+    "paretoFront": {"type": "object"}
+  },
+  "allOf": [{
+    "if": {"properties": {"status": {"enum": ["ready-for-promotion", "no-improvement", "holdout-rejected"]}}},
+    "then": {"required": ["selectedCandidateId", "impact", "candidates", "paretoFront"]}
+  }]
+}
