@@ -1,44 +1,172 @@
 # LISA Agency plugin
 
-This directory packages eleven skills as one Agency plugin: the ten LISA Copilot Agent Delivery
-skills and the explicitly invoked standalone `video-generator`. The CAD distribution is copied
-from `m-skills`; `video-generator` is Agency-only. The original Scout installation remains unchanged.
+LISA packages eleven skills for designing, building, evaluating, optimizing, and publishing
+Microsoft agent solutions. The same plugin can be used in either of these hosts:
 
-## Included components
+- **Agency**, with its GitHub Copilot or Claude engine.
+- **GitHub Copilot CLI directly**, without Agency.
 
-- `agency.json`: Agency engine, category, and draft governance metadata.
-- `plugin.json`: Copilot plugin manifest registering the shared skills directory.
-- `.claude-plugin/plugin.json`: Claude-compatible manifest registering the same skills directory.
-- `.mcp.json`: Playwright, local Azure MCP, and remote Microsoft Learn MCP registrations for the
-  Copilot engine.
-- `.claude-plugin/plugin.json` also embeds the same MCP registrations for the Claude engine.
-- `skills/`: all LISA skills, shared Python modules, contracts, resources, tests, renderer, fonts,
-  icons, and the Python layout router.
-- `scripts/Test-LisaAgencyPrerequisites.ps1`: prerequisite validation and optional dependency
-  restoration.
-- `lisa-config.example.json`: project-relative configuration template.
+The plugin contains ten Copilot Agent Delivery (CAD) lifecycle skills and the standalone,
+explicitly invoked `video-generator` skill. Use `cad-orchestrator` for the complete lifecycle or
+invoke an individual skill when you need only one stage.
 
-The Agency copy replaces Scout-specific skill loading, question, and root-path terminology. The
-stage implementations, contracts, checkpoint format, artifact schemas, and safety gates are
-otherwise preserved.
+> [!IMPORTANT]
+> LISA is not a read-only documentation tool. A complete run can create or update cloud resources,
+> test a deployed agent, upload files to SharePoint, and, only after explicit consent, delete local
+> output. Review the [prerequisites](#prerequisites) and [limitations and safety](#limitations-and-safety)
+> before starting.
 
-## Requirements
+## Start here
 
-- Windows 11
-- Agency 1.0 or newer
-- Python 3.11 or newer, including the pinned NetworkX dependency in `requirements.txt`
-- PowerShell 7 or newer
-- Node.js 20 or newer, npm, and npx (use a currently supported Node.js LTS release)
-- Microsoft Edge for the bundled Playwright MCP configuration
-- Internet access to PyPI and the configured npm registry during dependency restoration and
-  MCP package resolution and setup
-- Access to `https://learn.microsoft.com/api/mcp` when using Microsoft Learn MCP
-- Modern Power Platform CLI (`pac`) for Copilot Studio build, evaluation, and optimization stages
-- Valid Microsoft tenant, Copilot Studio, SharePoint, and browser authentication for cloud stages
-- An authenticated Azure identity with the appropriate Azure RBAC permissions for Azure MCP
-  operations; Azure CLI is the recommended local sign-in method
+1. Install the plugin in [Agency](#install-in-agency) or
+   [GitHub Copilot CLI](#install-in-github-copilot-cli).
+2. Run the [prerequisite checker](#install-runtime-dependencies).
+3. [Prepare a project](#prepare-a-lisa-project) with requirements, evaluation data, and a valid
+   `lisa-config.json`.
+4. Sign in to the required Microsoft tenant and cloud tools.
+5. Start your chosen host and invoke `/cad-orchestrator`.
 
-Run the prerequisite checker from the repository root:
+### CAD delivery route
+
+Each rounded card groups a delivery phase. **Amber gates are mandatory human decisions**; they are
+the only points where the route pauses. Dotted lines show short revision loops.
+
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Segoe UI, Arial, sans-serif","fontSize":"14px","lineColor":"#94A3B8","edgeLabelBackground":"#FFFFFF"},"flowchart":{"curve":"basis","nodeSpacing":18,"rankSpacing":24}}}%%
+flowchart LR
+  DISCOVER(["DISCOVER<br/>01 Analyze  ·  02 Classify"])
+  CLASS_GATE{{"HUMAN REVIEW<br/>Classification"}}
+  CREATE(["CREATE<br/>03 Design  ·  04 Build"])
+  BUILD_GATE{{"HUMAN REVIEW<br/>Build"}}
+  PROVE(["PROVE<br/>05 Evaluate  ↔  06 Optimize"])
+  DELIVER(["DELIVER<br/>07 Artifacts  ·  08 Publish"])
+  CLEAN_GATE{{"HUMAN CONSENT<br/>Cleanup"}}
+  CLEANUP(["09 CLEANUP<br/>Type DELETE OUTPUT"])
+  DONE(["COMPLETE"])
+
+  DISCOVER --> CLASS_GATE
+  CLASS_GATE -->|Accept| CREATE
+  CREATE --> BUILD_GATE
+  BUILD_GATE -->|Accept| PROVE
+  PROVE --> DELIVER
+  DELIVER -->|Verified| CLEAN_GATE
+  CLEAN_GATE -->|Keep| DONE
+
+  CLASS_GATE -.->|Revise| DISCOVER
+  BUILD_GATE -.->|Revise| CREATE
+  CLEAN_GATE -->|Delete| CLEANUP
+  CLEANUP --> DONE
+
+  classDef discover fill:#E0F2FE,color:#0C4A6E,stroke:#38BDF8,stroke-width:1.5px
+  classDef create fill:#ECFDF5,color:#065F46,stroke:#34D399,stroke-width:1.5px
+  classDef prove fill:#F3E8FF,color:#581C87,stroke:#A78BFA,stroke-width:1.5px
+  classDef deliver fill:#EEF2FF,color:#3730A3,stroke:#818CF8,stroke-width:1.5px
+  classDef human fill:#FFF7D6,color:#713F12,stroke:#F59E0B,stroke-width:2.5px
+  classDef complete fill:#DCFCE7,color:#14532D,stroke:#4ADE80,stroke-width:2px
+
+  class DISCOVER discover
+  class CREATE create
+  class PROVE prove
+  class DELIVER,CLEANUP deliver
+  class CLASS_GATE,BUILD_GATE,CLEAN_GATE human
+  class DONE complete
+```
+
+Classification and build require **Accept**, **Revise**, or **Cancel**. Cleanup adds a second,
+irreversible confirmation: local output is deleted only after the exact phrase `DELETE OUTPUT`.
+A failed validation, blocked stage, rejected review, or unverified publication stops the workflow
+without silently discarding completed work or remote resources.
+
+## Installation
+
+Choose one host and one source. A **local installation** is best while developing or reviewing the
+plugin. A **GitHub installation** is simpler for normal use and installs the plugin from the
+`agency/` directory of `rahulsi386/LISA`.
+
+### Get the repository locally
+
+This checkout is required for a local plugin installation and is also the easiest way to run the
+prerequisite checker and copy the example configuration.
+
+```powershell
+git clone https://github.com/rahulsi386/LISA.git
+Set-Location .\LISA
+```
+
+### Install in Agency
+
+Confirm that Agency is available:
+
+```powershell
+agency --version
+```
+
+**From the local checkout:**
+
+```powershell
+Set-Location <path-to-LISA>
+agency plugin install local:.\agency
+agency plugin list
+```
+
+**Directly from the GitHub repository:**
+
+```powershell
+agency plugin install github:rahulsi386/LISA:agency
+agency plugin list
+```
+
+Both manifests are installed by default. To restrict the installation to Agency's Copilot engine,
+add `--engine copilot` before the plugin source.
+
+For a one-session local trial that does not install the plugin, run:
+
+```powershell
+agency copilot --plugin local:.\agency
+```
+
+### Install in GitHub Copilot CLI
+
+LISA's `plugin.json`, skill folders, and MCP configuration are compatible with **GitHub Copilot
+CLI**, so Agency is optional when Copilot CLI is your preferred host.
+
+Confirm that Copilot CLI 1.0 or newer is installed and authenticated:
+
+```powershell
+copilot version
+copilot login
+```
+
+**From the local checkout:**
+
+```powershell
+Set-Location <path-to-LISA>
+copilot plugin install .\agency
+copilot plugin list
+```
+
+**Directly from the GitHub repository:**
+
+```powershell
+copilot plugin install rahulsi386/LISA:agency
+copilot plugin list
+```
+
+The `:agency` suffix is required because the plugin is in a repository subdirectory. For a
+one-session local trial that does not install or copy the plugin, run:
+
+```powershell
+copilot --plugin-dir .\agency
+```
+
+See the official [GitHub Copilot CLI plugin reference](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-plugin-reference)
+for plugin management, updates, and enterprise policy behavior.
+
+### Install runtime dependencies
+
+Installing the plugin does not install Python, Node.js, the diagram renderer, PAC CLI, or cloud
+credentials. From a local LISA checkout, install the base Python packages and renderer, and verify
+the tools needed by cloud stages:
 
 ```powershell
 pwsh -File .\agency\scripts\Test-LisaAgencyPrerequisites.ps1 `
@@ -47,47 +175,49 @@ pwsh -File .\agency\scripts\Test-LisaAgencyPrerequisites.ps1 `
   -RequireCloudStages
 ```
 
-Omit `-RequireCloudStages` when using only local analysis, classification, design, artifact, and
-cleanup capabilities. Add `-RequireAzureMcp` to require Azure CLI for the recommended Azure MCP
-sign-in flow; it is independent of the PAC-dependent `-RequireCloudStages` switch. The script
-does not authenticate Agency, PAC, Azure, Microsoft 365, Copilot Studio, or SharePoint.
+Use these optional switches only when the corresponding capability is needed:
 
-Solution Designer routes diagrams with `skills/solution-designer/scripts/layout_engine.py`
-and NetworkX. No layout executable, .NET runtime, SDK, or compiler is required. Install the
-Python dependencies during setup, not during a design run. Node.js/resvg still renders the PNGs.
-When invoking the diagram scripts directly, `LISA_PYTHON` can select a Python executable;
-otherwise they use `python` on PATH. The Python orchestrator forwards its own interpreter.
+- `-RequireAzureMcp` checks for Azure CLI. Azure sign-in is still separate.
+- `-RequireGepa` checks the optional GEPA optimizer and requires Python 3.11 through 3.14. Combine
+  it with `-InstallPythonPackages` to install the pinned GEPA package.
+- Omit `-RequireCloudStages` for local analysis, classification, design, artifact, and cleanup work.
 
-The router preserves fixed card positions, orthogonal connections, port sides and offsets,
-obstacle avoidance, and collision-checked labels. Routes may differ from the former MSAGL
-implementation; generation, geometry validation, raster checks, and rendered inspection remain
-mandatory. Infeasible routes or labels fail rather than producing invented geometry.
+The checker validates dependencies but does not sign in to Agency, GitHub, PAC, Azure,
+Copilot Studio, Microsoft 365, or SharePoint.
 
-## Solution Designer delivery workflow
+## Prerequisites
 
-The designer uses one canonical model and a gated **Draw.io -> Mermaid -> presentation**
-workflow. It first creates a two-page editable `Design_<ScenarioSlug>.drawio`, verifies the
-nodes and directed interactions, then creates the architecture and sequence `.mmd` sources.
-Only validated sources proceed to presentation composition, SVG generation, PNG rendering,
-and local preview inspection. It does not send topology to an online editor or convert one
-lossy diagram format into another.
+### Local runtime
 
-The output still represents exactly two semantic diagrams: solution architecture and sequence.
-Editable sources, rendered files, the offline preview, candidate diagnostics, and inspection
-evidence are published together under the configured `output\design\artifacts` directory.
-Keep that folder together when sharing it. Generated Draw.io source is an editable structural
-draft; the SVG/PNG pair is the presentation output.
+- Windows 11.
+- Agency with plugin support, or GitHub Copilot CLI 1.0 or newer with an active Copilot plan.
+- PowerShell 7 or newer.
+- Python 3.11 or newer and the packages in `agency/requirements.txt`.
+- Node.js 20 or newer, npm, and npx.
+- Microsoft Edge and the restored Solution Designer renderer.
+- Internet access to the configured npm registry, PyPI, Microsoft Learn MCP, and any cloud services
+  used by the selected skills.
 
-Passing geometry alone is insufficient. The pipeline evaluates multiple composition/profile
-candidates, chooses the highest passing measured-quality score, and still requires browser
-evidence and an explicit visual judgment. Source tampering, contradictory execution modes,
-missing required decision contracts, stale evidence, or failed readability/routing gates
-prevent publication. Existing published designs are not silently changed by a skill update.
+### Complete cloud workflow
 
-## Project configuration
+- Modern Power Platform CLI (`pac`).
+- A valid Microsoft tenant with the required Copilot Studio or Microsoft 365 licensing, capacity,
+  environments, and test surfaces.
+- An identity authorized to create, publish, test, export, and package the intended agent resources.
+- Browser access to the same tenant through Microsoft Edge.
+- SharePoint write access to the configured **Agent Library** and **Agent Artifact** libraries.
+- Azure CLI and suitable Azure RBAC permissions only when Azure MCP operations are needed.
 
-LISA data belongs in the target project, not in the installed plugin directory. Create these items
-in the repository where Agency will run:
+### Optional capabilities
+
+- GEPA optimization requires Python 3.11 through 3.14, `gepa==0.1.4`, an approved isolated shadow
+  target, a fixed evaluation budget, and explicit reflection-cost approval.
+- Video generation has separate Python and Node dependencies listed in
+  `skills/video-generator/requirements.txt`; the base checker does not install them.
+
+## Prepare a LISA project
+
+Keep project data outside the installed plugin. Create one project directory per solution:
 
 ```text
 <project>/
@@ -97,273 +227,181 @@ in the repository where Agency will run:
 `-- output/
 ```
 
-Start from `lisa-config.example.json`. Keep `basePath` set to `.` when the configuration is in the
-project root, or use another path relative to the configuration file. Fill in tenant and library
-values before running cloud stages. Do not use the Scout-specific `%USERPROFILE%\.scout\LISA`
-default.
-
-Validate routing before invoking a stage:
+From a local checkout, copy the template and create the input folders:
 
 ```powershell
-python "$env:AGENCY_PLUGIN_DIR\skills\lisa_path_resolver.py" `
-  --config "$env:AGENCY_REPO_DIR\lisa-config.json"
+$project = "C:\Projects\MySolution"
+New-Item -ItemType Directory -Force $project, "$project\requirements", "$project\evalData", "$project\output"
+Copy-Item .\agency\lisa-config.example.json "$project\lisa-config.json"
 ```
 
-When the Claude-compatible engine exposes `CLAUDE_PLUGIN_ROOT` instead, use that variable for the
-plugin root. Every stage accepts an explicit configuration path through its documented command.
+Before execution:
 
-## Local use
+- Keep `basePath` as `.` when `lisa-config.json` is in the project root.
+- Set `custName`, `timeZone`, the Copilot Studio environment URL and ID, and the SharePoint site.
+- Add every approved knowledge source to `knowledgeSources`.
+- Put at least one readable source file in `requirements/` and source-grounded test material in
+  `evalData/`.
+- Keep `output/` empty for a new workflow unless you intend to resume an existing checkpoint.
+- Use only one customer scenario per project run.
 
-From this directory, launch either Agency engine with the local plugin:
+Validate the project paths from the LISA checkout:
 
 ```powershell
-Set-Location .\agency
-agency claude --plugin local:.
+python .\agency\skills\lisa_path_resolver.py `
+  --config "C:\Projects\MySolution\lisa-config.json"
 ```
 
-The equivalent Copilot engine can be used when supported by the installed Agency version:
+## Execution
+
+### Before the first run
+
+For local-only stages, the runtime dependency check and a prepared project are sufficient. For the
+complete cloud workflow, also confirm all of the following:
+
+- PAC CLI is authenticated to the exact tenant and environment in `lisa-config.json`.
+- The signed-in identity can create, publish, test, export, and package the intended agent.
+- The same tenant identity is signed in through Microsoft Edge for Playwright-driven stages.
+- The identity can write to the configured **Agent Library** and **Agent Artifact** SharePoint
+  libraries.
+- Required Copilot Studio licenses, capacity, features, and test surfaces are available.
+- Azure CLI is signed in to the intended tenant and subscription when Azure MCP operations are
+  needed.
+
+Typical identity checks are:
 
 ```powershell
-agency copilot --plugin local:.
+pac auth create --environment "https://<environment>.crm.dynamics.com"
+pac env who
+az login --tenant "<tenant-id>"       # Only when Azure MCP is needed
+az account show --output table
 ```
 
-Invoke `/cad-orchestrator` in Copilot or `/lisa:cad-orchestrator` in Claude for the complete
-workflow, and include the full path to `lisa-config.json` when it is outside the current project.
-Use `/skills info cad-orchestrator` in Copilot to verify discovery before starting. The
-orchestrator executes sibling skills in the current session and falls back to reading their
-packaged `SKILL.md` files when the engine does not expose direct skill invocation.
+### Run with Agency
 
-After publishing this plugin through an Agency marketplace, installation follows the marketplace
-form documented by Agency:
+Start Agency from the prepared project so relative project paths are intuitive:
 
 ```powershell
-agency plugin install market:lisa@<marketplace-repository>
+Set-Location C:\Projects\MySolution
+agency copilot
 ```
 
-## Standalone marketing videos
-
-Invoke `/video-generator` in Agency Copilot or `/lisa:video-generator` in Agency Claude,
-with a solution name/configuration path and any current screenshots or approved assets:
+In the interactive session, verify discovery and start or resume the lifecycle:
 
 ```text
-/video-generator Create a developer-focused marketing video for the solution in
-C:\Projects\MySolution\lisa-config.json using the supplied current UI screenshots.
+/skills info cad-orchestrator
+/cad-orchestrator Run LISA using C:\Projects\MySolution\lisa-config.json
 ```
 
-This skill is **explicit-only** (`disable-model-invocation: true`). It is never called by
-`cad-orchestrator`, does not create a workflow checkpoint, and is not a gate for building,
-evaluating, publishing, or cleanup. It can use evidence from any existing solution, not only
-Copilot Studio agents, and does not build or deploy that solution as a side effect.
+Agency's Claude engine is also supported. Start it with `agency claude` and invoke
+`/lisa:cad-orchestrator`.
 
-It creates a project-local editable production folder with a reusable renderer, neural
-narration, captions, a thumbnail, a watch page, and a verified 1080p MP4. Defaults learned from
-the LISA video workflow are a developer journey, current UI evidence, no repository links,
-and energetic Ava neural narration. Reconstructed screens and sample results are labeled.
+### Run with GitHub Copilot CLI
 
-See [the skill](skills/video-generator/SKILL.md) and its complete
-[requirements manifest](skills/video-generator/requirements.txt). Video setup is optional and
-separate: the standard prerequisite checker does not install video dependencies. The generated
-production directory uses pinned npm dependencies plus an isolated `edge-tts==7.2.7` environment.
-Online speech requires approved nonsensitive narration and `-AllowOnlineSpeech`; the runtime
-never silently substitutes the old Windows desktop voice.
-
-The skill's `video` artifact category is declared in the shared artifact schema for validation,
-but is absent from the CAD checkpoint registry. Video files under `output/video/` are local
-outputs; a later explicitly approved full-output cleanup can remove them, so preserve any
-delivery folder that must survive cleanup.
-
-## Browser authentication and security
-
-The bundled Playwright MCP server launches Microsoft Edge with a persistent workspace-specific
-profile. Sign in interactively to the required Microsoft tenant before running browser-dependent
-stages. Keep Agency, PAC, Copilot Studio, and SharePoint on the same tenant identity.
-
-Artifact Publisher executes the packaged `fast-sharepoint-publisher.js` through Playwright MCP's
-`browser_run_code_unsafe` tool. This is arbitrary code execution in the Playwright server process.
-The MCP configuration also enables `--allow-unrestricted-file-access` so the server can load the
-runner from the installed plugin directory. Install this plugin only from a trusted source and
-review changes to the runner and MCP configuration before updating it.
-
-The publisher still requires explicit manifest validation, checkpointed remote intents, fresh
-SharePoint read-back, and the existing publication guard before it can report `PUBLISHED`.
-
-## Bundled Azure MCP server
-
-Both engines register `azure-mcp` as a local stdio server using the official `@azure/mcp` npm
-package and the `npx` launcher:
+Start Copilot CLI directly from the prepared project:
 
 ```powershell
-npx -y @azure/mcp@latest server start --mode namespace
+Set-Location C:\Projects\MySolution
+copilot
 ```
 
-This bundles the launch configuration, not platform binaries. The engine starts the server over
-stdio. `@azure/mcp@latest` selects the version assigned to the configured npm registry's `latest`
-tag. npm can reuse cached packages and metadata according to its normal cache settings.
-`-y` accepts npm's package-install prompt; it does not disable Azure MCP user confirmation.
+Then use the same Copilot skill commands:
 
-There is no fixed Azure MCP version or global tool installation. Registry access is needed to
-resolve and download packages that are not cached. Updates take effect when the MCP process
-restarts, not while it is running; automatic updates can introduce behavior changes or newer
-runtime requirements. A separate .NET SDK is not required for this npm launcher.
-
-The existing Copilot manifest points to `.mcp.json`; the Claude-compatible manifest embeds the
-matching registration. No separate per-user MCP configuration is required for this plugin
-registration. Updating the plugin does not modify an existing global Azure MCP entry.
-
-Azure MCP telemetry is disabled through `AZURE_MCP_COLLECT_TELEMETRY=false` in the server
-environment. This does not disable user confirmation or suppress server failures.
-
-The **full toolset** is exposed through namespace-based discovery: there is no read-only,
-namespace, or individual-tool restriction. This includes operations that can create, update, or
-delete Azure resources, subject to your Azure permissions. Full tool exposure is **not**
-permission to perform those operations. Obtain explicit approval and confirm the tenant,
-subscription, target resources, and expected effects before cloud changes. Do not disable the
-server's user-confirmation prompts or the client's approval controls.
-
-Authenticate outside the plugin before using Azure resources, for example:
-
-```powershell
-az login --tenant "<tenant-id>"
-az account show --query "{tenantId:tenantId,subscriptionId:id,name:name}" -o json
+```text
+/skills info cad-orchestrator
+/cad-orchestrator Run LISA using C:\Projects\MySolution\lisa-config.json
 ```
 
-Azure MCP uses Azure Identity and can also authenticate through supported developer credentials,
-such as Visual Studio, Azure PowerShell, or Azure Developer CLI. PAC and browser sign-in do not
-replace Azure authentication. Never put client secrets, access tokens, connection strings, or
-tenant-specific credentials in the plugin manifests. Specify the intended subscription in
-requests instead of assuming that the current default is correct.
+Stay available for permission prompts and the mandatory classification and build reviews. Invoke a
+single stage by its slash-command name only when you intentionally want a standalone stage run, for
+example `/requirement-analyzer`. Standalone execution does not automatically provide the complete
+orchestrator sequence.
 
-Restart the Agency session after updating a local plugin; update or reinstall a marketplace
-copy before restarting it. The bundled server supplements PAC and Playwright rather than
-replacing them. Local skills retain their offline execution and approval requirements.
+`video-generator` is independent of CAD and never runs automatically:
 
-To resolve and check the runtime selected by the `latest` tag without invoking an Azure operation:
-
-```powershell
-npx -y @azure/mcp@latest server start --help
+```text
+/video-generator Create a developer-focused video for the solution described by
+C:\Projects\MySolution\lisa-config.json using the approved current screenshots.
 ```
 
-Use the organization's configured npm registry and trust settings. Resolve registry access or
-certificate errors without disabling TLS verification. Node.js/npm are shared prerequisites
-for Azure MCP, Playwright, and the diagram renderer.
+## Skills
 
-Official references:
+| Skill name | Description | What constitutes it | Pre-requisite to run | Outcome |
+|---|---|---|---|---|
+| `cad-orchestrator` | Runs or resumes the complete LISA CAD lifecycle in stage order. | Host-guided sibling-skill routing, hash-protected checkpoints, validation gates, and human reviews. | A valid project plus every dependency, identity, permission, and approval needed by the stages being run. | A resumable workflow ending in verified publication, optional cleanup, or an explicit stopped/blocked result. |
+| `requirement-analyzer` | Converts source requirements into traceable findings. | Python extraction and validation, model-guided evidence review, schemas, hashes, and cache controls. | Valid config, Python dependencies, a non-empty `requirements/` folder, and manual review of visual or incomplete extraction targets. | Validated Markdown analysis, structured evidence ledger, and analysis manifest. |
+| `complexity-classifier` | Designs the solution, measures buildable coverage, and assigns complexity. | Microsoft-platform research, model-guided architecture, deterministic topology validation, scoring, and a review gate. | Validated requirement analysis and access to current approved platform references or the packaged offline reference set. | Classification JSON/Markdown, canonical topology, platform and harness decision, and accepted or revised delivery scope. |
+| `solution-designer` | Creates architecture and sequence diagrams from the approved topology. | Editable Draw.io, Mermaid, Python/NetworkX routing, Node/resvg rendering, geometry checks, and browser inspection. | Accepted classification, Python and renderer dependencies, and Edge/Playwright for final visual inspection. | Two validated editable and presentation-ready diagram sets plus `current-design.json`. |
+| `agent-builder` | Builds the approved agent solution and reconciles every planned component. | Host-guided PAC and browser work, persisted-state verification, package handling, handoff contracts, and manifest validation. | Accepted classification/design, supported tenant and harness, PAC/browser authentication, licenses, capacity, and create/publish permissions. | Built agent evidence, instructions, live-state and handoff files, one solution package when applicable, and a complete or blocked manifest. |
+| `agent-evaluator` | Tests the built agent on its supported harness and records evidence. | Source-grounded test generation, Playwright execution, observation capture, deterministic scoring, and lifecycle validation. | Complete build handoff, evaluation material, a deployed supported test surface, and matching browser/tenant identity. | Evaluation dataset, per-test observations and evidence, scores, PASS/FAIL decision, and evaluation manifest. |
+| `agent-optimizer` | Audits and improves instructions while preserving rollback safety. | Instruction audit, evaluator-delegated retests, snapshots, bounded change rounds, rollback controls, and optional GEPA evolution. | Valid evaluation, authoring access to the same test agent, and evaluator availability; GEPA additionally needs its pinned package, budget, and shadow-isolation approvals. | Accepted improvement, verified no-change, blocked result, or rollback, with measured impact and an optimization manifest. |
+| `artifact-generator` | Builds the final delivery documentation from lifecycle evidence. | Deterministic lifecycle input resolution, document generation, interactive execution-tree generation, and artifact validation. | Valid terminal artifacts from the required completed lifecycle stages. | Final solution document, interactive LISA execution tree, supporting files, and generation manifest. |
+| `artifact-publisher` | Publishes the approved package and artifacts to SharePoint. | Manifest categorization, Playwright-hosted SharePoint REST upload, checkpoints, remote reconciliation, and fresh read-back. | Generated artifacts, deployable package where required, authenticated browser session, correct libraries, and SharePoint write permission. | Agent-linked SharePoint folders/files and a verified `publication-record.json`; otherwise an explicit partial or failed result. |
+| `postpublish-cleanup` | Safely removes local generated output after delivery. | Fingerprinted inventory, path containment checks, publication verification, two consent gates, and exact-phrase confirmation. | Verified publication plus explicit approval and the exact phrase `DELETE OUTPUT`. | Contents removed from the configured `output/` directory while the output root and external workflow checkpoint are preserved. |
+| `video-generator` | Creates or revises a developer-focused marketing video for an existing solution. | Explicit host guidance, isolated Node renderer, neural narration, captions, media checks, thumbnail, and watch page. | Existing solution evidence, approved current visuals, optional video dependencies, and explicit authorization for online speech when used. | Editable production project, captions, thumbnail, watch page, and verified 1080p MP4. |
 
-- Azure MCP package: `https://www.npmjs.com/package/@azure/mcp`
-- Local configuration and authentication: `https://learn.microsoft.com/en-us/azure/developer/azure-mcp-server/how-to/github-copilot-cli`
-- Server modes, permissions, and confirmation: `https://learn.microsoft.com/en-us/azure/developer/azure-mcp-server/tools/`
-- Telemetry configuration: `https://github.com/microsoft/mcp/blob/main/servers/Azure.Mcp.Server/README.md#telemetry-configuration`
+For implementation details, stage-specific commands, artifact contracts, and recovery behavior, see
+the [complete skills reference](skills/README.md).
 
-## Bundled Microsoft Learn MCP server
+## Limitations and safety
 
-Both engines also register `microsoft-learn` using the official remote Streamable HTTP endpoint:
+- The packaged LISA distribution is currently Windows-oriented. Python diagram routing itself is
+  portable, but the complete workflow depends on Windows PowerShell conventions, PAC CLI, and Edge.
+- Agency and GitHub Copilot CLI host the skills; neither host replaces tenant authentication,
+  licensing, permissions, or human approvals.
+- Enterprise policy can block third-party plugins, MCP servers, tools, or remote sources in GitHub
+  Copilot CLI. Resolve policy restrictions with the organization administrator.
+- The complete publication route assumes a supported deployed Microsoft agent test surface and,
+  where required, a deployable solution package. Cowork-only solutions currently end as a
+  documented handoff rather than completing evaluator, optimizer, and publisher stages.
+- `video-generator` is explicit-only and is not part of `cad-orchestrator` or its checkpoint.
+- Optional GEPA optimization is a bounded pilot for one Standard or GitHub Copilot harness agent.
+  Local synthetic tests do not prove live Copilot Studio effectiveness, and provider or Copilot
+  credit costs may remain unmeasured.
+- The bundled Azure MCP exposes its full discovered toolset, including state-changing operations,
+  but your Azure permissions and explicit approval still govern every action.
+- Artifact Publisher runs a packaged SharePoint publisher in the Playwright MCP process with
+  unrestricted file access. Install LISA only from a trusted source and review plugin updates.
+- The Azure MCP launcher uses the npm registry's current `@azure/mcp@latest` version, so a restarted
+  session may pick up new behavior or runtime requirements.
+- Cleanup is intentionally destructive only after publication verification, two decisions, and the
+  exact confirmation phrase. It never treats missing confirmation as consent.
 
-```json
-{
-  "type": "http",
-  "url": "https://learn.microsoft.com/api/mcp"
-}
-```
+## Troubleshooting
 
-This is a remote HTTPS service, not another local executable. No npm/.NET package, Azure login,
-API key, or authorization header is needed for this server. It provides official documentation
-search, complete article retrieval, and code sample search. Network access to the endpoint is
-required; use an MCP client rather than opening it as a normal browser page.
+- Confirm plugin discovery with `agency plugin list` or `copilot plugin list`.
+- In a Copilot session, run `/skills info cad-orchestrator`. A same-named project or personal skill
+  can take precedence over the plugin copy.
+- Start a new host session after installing or updating the plugin. During local Copilot CLI
+  development, use `copilot --plugin-dir .\agency` so edits are loaded from the checkout.
+- Re-run `Test-LisaAgencyPrerequisites.ps1` after a runtime update or dependency error.
+- Confirm `pac env who`, browser identity, configuration environment, and SharePoint tenant all
+  refer to the same intended tenant before a cloud stage.
+- Do not put credentials, access tokens, connection strings, or client secrets in plugin manifests
+  or `lisa-config.json`.
 
-The Azure MCP `documentation` router and the direct `microsoft-learn` server may expose similar
-documentation capabilities. They remain separately named registrations. Their availability does
-not override any skill's offline execution rules.
+The plugin also bundles Playwright, Azure MCP, and Microsoft Learn MCP configuration. Microsoft
+Learn requires network access but no API key. Azure MCP requires a separately authenticated Azure
+identity. See the [Azure MCP documentation](https://learn.microsoft.com/en-us/azure/developer/azure-mcp-server/how-to/github-copilot-cli)
+and [Microsoft Learn MCP documentation](https://learn.microsoft.com/en-us/training/support/mcp)
+for current service-specific guidance.
 
-Official reference: `https://learn.microsoft.com/en-us/training/support/mcp`
+## Validation for contributors
 
-## Evidence accuracy and bounded review
-
-Requirement analysis and classification share a hash-linked publication boundary. The analyzer
-publishes its validated manifest last; classification and the shared input resolver reject
-missing, pending, mismatched, or modified handoffs rather than silently selecting older evidence.
-For existing analyses without this marker, prepare a new run and publish it through the updated
-analyzer; do not manufacture a validation marker by editing the files.
-
-Model-facing evidence is provided in lossless JSON batches, with a compact overview and paginated
-index. Review every required batch and every fragment of a split record. Full machine inventories
-remain available on disk, but should not be pasted into the model alongside the same evidence
-again. Batch limits are measured in UTF-8 bytes, not assumed tokenizer-specific token counts.
-Content hashes permit unchanged processing artifacts to be reused without treating earlier
-analysis prose as fresh source evidence.
-
-## Validation
-
-Run the plugin and shared evidence-contract tests:
+From the `agency/` directory, run the plugin tests:
 
 ```powershell
 python -m unittest discover -s .\tests -p "test_*.py" -v
-```
 
-Run all copied Python tests from the plugin root:
-
-```powershell
 Get-ChildItem .\skills -Recurse -Filter "test*.py" | ForEach-Object {
   python $_.FullName
   if ($LASTEXITCODE -ne 0) { throw "Test failed: $($_.FullName)" }
 }
-```
 
-Run the Artifact Publisher JavaScript tests and Solution Designer renderer self-test:
-
-```powershell
 node .\skills\artifact-publisher\tests\test_fast_publisher.js
 npm --prefix .\skills\solution-designer\renderer test
 ```
 
-## Current limitations
-
-- This distribution is Windows-oriented because LISA uses Windows-specific PowerShell invocation,
-  PAC CLI, and Microsoft Edge. The Python layout router itself is platform-independent.
-- Agency does not replace tenant authentication. Cloud stages stop if PAC and browser identities do
-  not match the configured environment.
-- Human approval remains mandatory after classification and build. Cleanup still requires the
-  exact phrase `DELETE OUTPUT` for the fingerprinted inventory.
-- The Scout schedule in `m-automations/automations.json` is not included. Configure scheduling with
-  an Agency-supported automation mechanism after validating the interactive workflow.
-- `agency.json` uses draft layer-4 governance metadata. Marketplace owners must replace or certify
-  that metadata according to their internal review process before broad distribution.
-
-## Updating the copy
-
-### Agency-first GEPA pilot
-
-GEPA is an opt-in instruction optimization capability inside Agent Optimizer for a single
-Standard or GitHub Copilot (GHCP)-harness agent and a verified read-only shadow of the same harness
-in the configured test environment. GHCP pins the preview canvas, live CliCopilot signature,
-approved Copilot Credits and an explicit memory reset policy. See [the execution protocol](skills/agent-optimizer/resources/gepa-execution.md)
-for configuration, exact CLI steps, response contracts, budgets, and outcome semantics.
-
-Install the optional pinned core with `python -m pip install -r skills/agent-optimizer/requirements-gepa.txt`.
-The prerequisite checker accepts `-RequireGepa` and, when installation is requested,
-`-InstallPythonPackages`. Base CAD installation does not install GEPA. The bridge uses Agency's
-existing model and browser tools, not a new MCP server or provider credential store.
-
-For this feature only, Agency is the temporary implementation source. Do not overwrite GEPA
-files with Scout copies during refresh. Scout skills, root configuration and installer remain
-unchanged. After live acceptance, selectively port the runtime, affected contracts/tests,
-host-facing instructions and prerequisites; do not bulk-copy the Agency distribution.
-
-Acceptance requires repeated held-out gains against the builder seed and a comparable-budget
-existing-optimizer run, zero protected regressions, verified shadow isolation and target rollback,
-interruption recovery, fresh installation, and Agency-disabled compatibility. Local synthetic
-host tests exercise the real pinned GEPA engine but are not proof of Copilot Studio effectiveness.
-Copilot chat, Cowork, multi-agent changes and state-changing tools are
-not part of this pilot. Unknown Copilot Credits/provider costs are reported as unmeasured.
-
-Treat `m-skills` as the implementation source. When refreshing this distribution, copy maintained
-files while excluding generated `node_modules`, `bin`, `obj`, cache, and virtual-environment
-directories; then reapply the Agency adaptations in `cad-orchestrator`, `requirement-analyzer`,
-`complexity-classifier`, `agent-builder`, `artifact-publisher`, and `postpublish-cleanup`, including
-the shared `analysis_handoff.py`, `review_batches.py`, and input resolver changes. Run the full
-validation commands above before publishing.
-
-Preserve the Agency-only Python routing adaptation in `solution-designer`. Do not copy
-`solution-designer/layout-engine/` or `solution-designer/resources/layout-engine/` from Scout
-back into this plugin. Keep `layout_engine.py`, its NetworkX requirement, renderer launch,
-cache fingerprint, and prerequisite check together. The plugin tests enforce the observed
-Agency GitHub downloader's 32 MiB per-file limit, excluding generated dependency/build folders.
+Run per-stage Python test discovery separately because different skill folders can contain modules
+with the same name. Contributors updating the Agency copy must preserve its Python/NetworkX diagram
+router and GEPA pilot adaptations rather than overwriting them with the Scout copies in `m-skills`.
