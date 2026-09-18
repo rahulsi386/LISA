@@ -20,7 +20,10 @@
     {"relativePath": "optimization-change-log.json", "required": true, "schema": "optimization-change-log.schema.json"},
     {"relativePath": "optimization-run-report.md", "required": true, "schema": null},
     {"relativePath": "instruction-audit.json", "required": true, "schema": null},
-    {"relativePath": "instruction-audit.md", "required": true, "schema": null}
+    {"relativePath": "instruction-audit.md", "required": true, "schema": null},
+    {"relativePath": "gepa-run.json", "required": false, "schema": "gepa-run.schema.json"},
+    {"relativePath": "optimization-outcome.json", "required": false, "schema": "optimization-outcome.schema.json"},
+    {"relativePath": "optimization-impact.md", "required": false, "schema": null}
   ],
   "directories": [
     {"relativePath": "rounds", "required": true}

@@ -89,6 +89,8 @@ def inventory(root: Path, manifest_name: str) -> dict[str, Path]:
     result: dict[str, Path] = {}
     for path in root.rglob("*"):
         relative = path.relative_to(root).as_posix()
+        if root.name == "evaluation" and (relative == "gepa" or relative.startswith("gepa/")):
+            continue
         if relative == manifest_name:
             continue
         if path.is_symlink():
@@ -255,6 +257,9 @@ def validate_stage(
     else:
         plan = load_object(root / "optimization-plan.json")
         change_log = load_object(root / "optimization-change-log.json")
+        from gepa_runtime import validate_outcome
+
+        validate_outcome(root, manifest["status"])
         if plan["runId"] != run_id:
             raise ArtifactError("Optimization plan run ID does not match the manifest")
         if change_log["runId"] != run_id:
@@ -577,6 +582,10 @@ def publish(
     if status not in contract["allowedStatuses"]:
         raise ArtifactError(f"Invalid {contract['stage']} status: {status}")
     manifest = root / contract["manifest"]
+    if contract["stage"] == "optimization":
+        from gepa_runtime import write_outcome
+
+        write_outcome(root)
     previous = manifest.read_bytes() if manifest.is_file() else None
     candidate = build_manifest(root, contract, status, summary, source_runs)
     temporary = manifest.with_name(f".{manifest.name}.tmp")

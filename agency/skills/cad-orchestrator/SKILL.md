@@ -111,6 +111,10 @@ Notes that affect routing only:
   evaluator output is an execution failure.
 - **agent-optimizer decides its own scope** from evaluator evidence, and declines findings that
   are platform or authentication blockers. Let it make that call.
+- **Agency GEPA is opt-in within optimization.** Service its host requests in this session;
+  candidate evaluations do not start or commit a new top-level evaluation stage. Keep the
+  optimization checkpoint cursor at the exact candidate/request ID. A search-ready result
+  cannot advance delivery: require the optimizer manifest and final target evaluator gate.
 - **Only fresh remote verification may report PUBLISHED** in the publication stage.
 
 If a stage fails, stop the pipeline, report the exact failing stage and reason, and leave every

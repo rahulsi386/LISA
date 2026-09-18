@@ -34,12 +34,19 @@ basePath-relative marker. Use `BLOCKED` only for a deliberate validated gate out
 | design | prepare, sources, generate, inspect, finalize | source stage, candidate, or inspection ID |
 | build | verify-environment, specify, construct, publish, verify-live, package, manifest | component or remote operation ID |
 | evaluation | prepare, dataset, rubric, execute-test, score-test, aggregate, manifest | exact test and attempt ID |
-| optimization | audit, plan, before-snapshot, apply, verify, retest, accept-or-rollback, manifest | round and operation ID |
+| optimization | audit, plan, gepa-prepare, gepa-apply, gepa-evaluate, gepa-reflect, gepa-select, before-snapshot, apply, verify, retest, accept-or-rollback, manifest | round, candidate, request and operation ID |
 | artifacts | snapshot-inputs, render, validate, publish-set, manifest | artifact name |
 | publication | preflight, build-manifest, publish-zip, propagate-metadata, publish-artifact, verify-remote, record | manifest artifact key |
 | cleanup | inventory, delete-entry, verify-empty | inventory index and relative path |
 
 ## Recovery rules
+
+Agency GEPA candidate evaluations retain the optimization stage and use separate evaluator
+receipts; they never commit the canonical evaluation stage. Resume using the pending request
+and immutable session receipt, not by selecting the latest file. Reconcile each shadow write
+before sealing its evaluation. Do not remove a stale lock or replay an uncertain remote write
+without reconciling its operation receipt. Search replay uses pinned GEPA/seed and sealed host
+responses, never provider calls or upstream pickle checkpoints.
 
 1. Read `recover`; do not recursively scan stage output.
 2. Verify that config and input marker hashes still match.

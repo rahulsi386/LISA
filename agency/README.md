@@ -330,6 +330,31 @@ npm --prefix .\skills\solution-designer\renderer test
 
 ## Updating the copy
 
+### Agency-first GEPA pilot
+
+GEPA is an opt-in instruction optimization capability inside Agent Optimizer for a single
+Standard or GitHub Copilot (GHCP)-harness agent and a verified read-only shadow of the same harness
+in the configured test environment. GHCP pins the preview canvas, live CliCopilot signature,
+approved Copilot Credits and an explicit memory reset policy. See [the execution protocol](skills/agent-optimizer/resources/gepa-execution.md)
+for configuration, exact CLI steps, response contracts, budgets, and outcome semantics.
+
+Install the optional pinned core with `python -m pip install -r skills/agent-optimizer/requirements-gepa.txt`.
+The prerequisite checker accepts `-RequireGepa` and, when installation is requested,
+`-InstallPythonPackages`. Base CAD installation does not install GEPA. The bridge uses Agency's
+existing model and browser tools, not a new MCP server or provider credential store.
+
+For this feature only, Agency is the temporary implementation source. Do not overwrite GEPA
+files with Scout copies during refresh. Scout skills, root configuration and installer remain
+unchanged. After live acceptance, selectively port the runtime, affected contracts/tests,
+host-facing instructions and prerequisites; do not bulk-copy the Agency distribution.
+
+Acceptance requires repeated held-out gains against the builder seed and a comparable-budget
+existing-optimizer run, zero protected regressions, verified shadow isolation and target rollback,
+interruption recovery, fresh installation, and Agency-disabled compatibility. Local synthetic
+host tests exercise the real pinned GEPA engine but are not proof of Copilot Studio effectiveness.
+Copilot chat, Cowork, multi-agent changes and state-changing tools are
+not part of this pilot. Unknown Copilot Credits/provider costs are reported as unmeasured.
+
 Treat `m-skills` as the implementation source. When refreshing this distribution, copy maintained
 files while excluding generated `node_modules`, `bin`, `obj`, cache, and virtual-environment
 directories; then reapply the Agency adaptations in `cad-orchestrator`, `requirement-analyzer`,

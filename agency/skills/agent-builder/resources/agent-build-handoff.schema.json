@@ -139,6 +139,19 @@
         }
       }
     },
+    "instructionOptimization": {
+      "type": "object", "additionalProperties": false,
+      "required": ["seedSha256", "editableSections", "protectedClauses", "maxInstructionBytes", "allowedComponentNames"],
+      "properties": {
+        "seedSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "editableSections": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {
+          "enum": ["Objectives", "Knowledge and grounding", "Tool and delegation policy", "Decision and action policy", "Response contract", "Examples", "Runtime context handling"]
+        }},
+        "protectedClauses": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "maxInstructionBytes": {"type": "integer", "minimum": 1},
+        "allowedComponentNames": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      }
+    },
     "componentInventory": {
       "type": "array",
       "items": {

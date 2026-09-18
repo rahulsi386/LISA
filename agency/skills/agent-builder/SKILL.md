@@ -315,6 +315,23 @@ Before publishing the build for evaluation:
 5. Save, reload, pull/download, and verify the exact persisted instructions remotely.
 6. Do not grade behavior or modify instructions from observed responses. Produce the evaluator handoff and let `agent-evaluator` run the behavioral gates.
 
+When Agency configuration enables `optimization.gepa.enabled`, include `instructionOptimization`
+in the build handoff: `seedSha256` for exact persisted UTF-8 instructions, `editableSections` using
+the Section 5 heading names, `protectedClauses` copied verbatim from mandatory safety/authority/
+approval rules, `maxInstructionBytes` within the verified platform limit, and
+`allowedComponentNames` from the live inventory. Identity, scope and security sections are not
+editable. Record protection for mandatory rules even when they occur inside an editable section.
+This is construction metadata, not behavioral optimization. GEPA requires a new validated build
+handoff if the contract is missing; do not silently retrofit a committed build artifact.
+
+For an Agency GitHub Copilot (GHCP) GEPA build, retain the Section B harness signature and exact
+configured skill/tool/knowledge inventory in construction evidence. Set the approved
+`optimization.gepa.githubCopilot.memoryMode` before initial evaluation. Use `disabled` only when
+memory is not required; otherwise verify a supported `reset-between-tests` procedure. Never
+disable a required capability just to make the shadow testable. If state cannot be isolated,
+record a GEPA blocker. Copilot Credits, native file/sandbox state and autonomous triggers must be
+checked for both the original and shadow agent before GEPA execution.
+
 ---
 
 ## Section A — Standard-harness build (PAC CLI / classic authoring)
