@@ -1,5 +1,10 @@
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
-param()
+param(
+    [ValidateSet('Scout', 'CopilotCli', 'Agency')]
+    [string]$Platform,
+    [string]$ProjectPath,
+    [switch]$SkipProjectSetup
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -7,30 +12,19 @@ $script:InstallerCmdlet = $PSCmdlet
 $script:InstalledPackages = New-Object System.Collections.Generic.List[string]
 $script:VerifiedComponents = New-Object System.Collections.Generic.List[string]
 
-$rootSkillsPath = Join-Path $PSScriptRoot 'm-skills'
-if (Test-Path -LiteralPath $rootSkillsPath -PathType Container) {
-    $DistributionRoot = $PSScriptRoot
-    $SourceSkillsRoot = $rootSkillsPath
-}
-elseif ((Split-Path $PSScriptRoot -Leaf) -ieq 'm-skills') {
-    # Compatibility for installed/development copies created before the root layout.
-    $DistributionRoot = Split-Path $PSScriptRoot -Parent
-    $SourceSkillsRoot = $PSScriptRoot
-}
-else {
-    $DistributionRoot = $PSScriptRoot
-    $SourceSkillsRoot = $rootSkillsPath
-}
+$DistributionRoot = $PSScriptRoot
+$ScoutSkillsRoot = Join-Path $DistributionRoot 'scout\m-skills'
+$PluginRoot = Join-Path $DistributionRoot 'github-copilot-cli'
 $RequirementsPath = Join-Path $DistributionRoot 'requirements.txt'
-if (-not (Test-Path -LiteralPath $RequirementsPath -PathType Leaf) -and
-    $SourceSkillsRoot -eq $PSScriptRoot) {
-    $RequirementsPath = Join-Path $PSScriptRoot 'requirements.txt'
-}
+. (Join-Path $PluginRoot 'scripts\Get-LisaRuntimePrerequisites.ps1')
 $userProfile = [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile)
 if ([string]::IsNullOrWhiteSpace($userProfile)) {
     throw 'The current Windows user profile directory cannot be resolved.'
 }
 $ScoutRoot = Join-Path $userProfile '.scout'
+$script:TargetPlatform = $Platform
+# Both distributions share the same solution-designer subtree, so one skills root drives every check.
+$script:SourceSkillsRoot = $null
 
 function Write-Section {
     param([Parameter(Mandatory = $true)][string]$Message)
@@ -103,34 +97,6 @@ function Install-WinGetPackage {
     Update-ProcessPath
 }
 
-function Get-VersionFromCommand {
-    param(
-        [Parameter(Mandatory = $true)][string]$Command,
-        [Parameter(Mandatory = $true)][string[]]$Arguments,
-        [Parameter(Mandatory = $true)][string]$Pattern
-    )
-
-    $resolved = Get-Command $Command -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($null -eq $resolved) {
-        return $null
-    }
-
-    try {
-        $output = (& $resolved.Source @Arguments 2>&1 | Out-String).Trim()
-        if ($LASTEXITCODE -ne 0 -or $output -notmatch $Pattern) {
-            return $null
-        }
-        return [pscustomobject]@{
-            Path    = $resolved.Source
-            Version = [version]$Matches.version
-            Output  = $output
-        }
-    }
-    catch {
-        return $null
-    }
-}
-
 function Ensure-WinGet {
     if ($null -eq (Get-Command winget -ErrorAction SilentlyContinue)) {
         throw 'WinGet is required. Install or update Microsoft App Installer, reopen PowerShell, and run this script again.'
@@ -140,7 +106,7 @@ function Ensure-WinGet {
 
 function Ensure-Python {
     $python = Get-VersionFromCommand -Command 'python' -Arguments @('--version') -Pattern 'Python\s+(?<version>\d+\.\d+\.\d+)'
-    if ($null -eq $python -or $python.Version -lt [version]'3.11.0') {
+    if ($null -eq $python -or $python.Version -lt $LisaRuntimeVersions.Python) {
         Install-WinGetPackage -Id 'Python.Python.3.13' -DisplayName 'Python 3.13'
         Update-ProcessPath
         $python = Get-VersionFromCommand -Command 'python' -Arguments @('--version') -Pattern 'Python\s+(?<version>\d+\.\d+\.\d+)'
@@ -152,7 +118,7 @@ function Ensure-Python {
         }
         throw 'Python 3.11 or newer was not found after installation. Open a new terminal and rerun this script.'
     }
-    if ($python.Version -lt [version]'3.11.0') {
+    if ($python.Version -lt $LisaRuntimeVersions.Python) {
         throw "Python 3.11 or newer is required; found $($python.Version) at $($python.Path)."
     }
     Write-Host "Python $($python.Version): $($python.Path)"
@@ -162,7 +128,8 @@ function Ensure-Python {
 
 function Ensure-Node {
     $node = Get-VersionFromCommand -Command 'node' -Arguments @('--version') -Pattern 'v(?<version>\d+\.\d+\.\d+)'
-    if ($null -eq $node -or $node.Version -lt [version]'18.0.0') {
+    $missingCommands = @($LisaNodeCommands | Where-Object { $null -eq (Get-Command $_ -ErrorAction SilentlyContinue) })
+    if ($null -eq $node -or $node.Version -lt $LisaRuntimeVersions.Node -or $missingCommands.Count -gt 0) {
         Install-WinGetPackage -Id 'OpenJS.NodeJS.LTS' -DisplayName 'Node.js LTS'
         Update-ProcessPath
         $node = Get-VersionFromCommand -Command 'node' -Arguments @('--version') -Pattern 'v(?<version>\d+\.\d+\.\d+)'
@@ -172,13 +139,15 @@ function Ensure-Node {
             Write-Warning 'Node.js verification is deferred because -WhatIf skipped installation.'
             return $false
         }
-        throw 'Node.js 18 or newer was not found after installation. Open a new terminal and rerun this script.'
+        throw 'Node.js 20 or newer was not found after installation. Open a new terminal and rerun this script.'
     }
-    if ($node.Version -lt [version]'18.0.0') {
-        throw "Node.js 18 or newer is required; found $($node.Version)."
+    if ($node.Version -lt $LisaRuntimeVersions.Node) {
+        throw "Node.js 20 or newer is required; found $($node.Version)."
     }
-    if ($null -eq (Get-Command npm -ErrorAction SilentlyContinue)) {
-        throw 'npm was not installed with Node.js.'
+    foreach ($command in $LisaNodeCommands) {
+        if ($null -eq (Get-Command $command -ErrorAction SilentlyContinue)) {
+            throw "$command was not installed with Node.js."
+        }
     }
     Write-Host "Node.js $($node.Version): $($node.Path)"
     $script:VerifiedComponents.Add("Node.js $($node.Version)")
@@ -194,7 +163,7 @@ function Ensure-PowerShell {
     }
 
     $powerShell = Get-VersionFromCommand -Command 'pwsh' -Arguments @('--version') -Pattern 'PowerShell\s+(?<version>\d+\.\d+\.\d+)'
-    if ($null -eq $powerShell -or $powerShell.Version -lt [version]'7.0.0') {
+    if ($null -eq $powerShell -or $powerShell.Version -lt $LisaRuntimeVersions.PowerShell) {
         Install-WinGetPackage -Id 'Microsoft.PowerShell' -DisplayName 'PowerShell 7'
         Update-ProcessPath
         $powerShell = Get-VersionFromCommand -Command 'pwsh' -Arguments @('--version') -Pattern 'PowerShell\s+(?<version>\d+\.\d+\.\d+)'
@@ -543,13 +512,12 @@ function Test-RendererPrerequisite {
 
 function Get-PrerequisiteState {
     $python = Get-VersionFromCommand -Command 'python' -Arguments @('--version') -Pattern 'Python\s+(?<version>\d+\.\d+\.\d+)'
-    $node = Get-VersionFromCommand -Command 'node' -Arguments @('--version') -Pattern 'v(?<version>\d+\.\d+\.\d+)'
-    $powerShell = Get-VersionFromCommand -Command 'pwsh' -Arguments @('--version') -Pattern 'PowerShell\s+(?<version>\d+\.\d+\.\d+)'
+    $runtime = @(Get-LisaRuntimePrerequisites)
     $windowsPowerShell = Get-VersionFromCommand -Command 'powershell' -Arguments @(
         '-NoLogo', '-NoProfile', '-Command', '$PSVersionTable.PSVersion.ToString()'
     ) -Pattern '(?<version>\d+\.\d+(?:\.\d+){0,2})'
     $dotnet = Get-VersionFromCommand -Command 'dotnet' -Arguments @('--version') -Pattern '(?<version>\d+\.\d+\.\d+)'
-    $pythonLibraries = if ($null -ne $python -and $python.Version -ge [version]'3.11.0') {
+    $pythonLibraries = if ($null -ne $python -and $python.Version -ge $LisaRuntimeVersions.Python) {
         Test-PythonLibraries -PythonPath $python.Path
     }
     else {
@@ -558,6 +526,8 @@ function Get-PrerequisiteState {
     $renderer = Test-RendererPrerequisite
     $layoutRouter = Join-Path $SourceSkillsRoot 'solution-designer\scripts\layout_engine.py'
     $scout = Get-ScoutExecutable
+    $copilotCli = Get-Command copilot -ErrorAction SilentlyContinue | Select-Object -First 1
+    $agencyCli = Get-Command agency -ErrorAction SilentlyContinue | Select-Object -First 1
     $modernPac = Test-ModernPac
 
     return @(
@@ -567,10 +537,26 @@ function Get-PrerequisiteState {
             Details = 'Required to install missing Windows applications.'
             InstallAction = 'Install Microsoft App Installer from Microsoft Store.'
         }
-        [pscustomobject]@{
-            Key = 'Scout'; Requirement = 'Microsoft Scout'; Installed = $null -ne $scout
-            Details = if ($null -ne $scout) { $scout } else { 'Scout executable was not found.' }
-            InstallAction = 'WinGet package Microsoft.ScoutAgent.'
+        if ($script:TargetPlatform -eq 'Scout') {
+            [pscustomobject]@{
+                Key = 'Scout'; Requirement = 'Microsoft Scout'; Installed = $null -ne $scout
+                Details = if ($null -ne $scout) { $scout } else { 'Scout executable was not found.' }
+                InstallAction = 'WinGet package Microsoft.ScoutAgent.'
+            }
+        }
+        if ($script:TargetPlatform -eq 'CopilotCli') {
+            [pscustomobject]@{
+                Key = 'CopilotCli'; Requirement = 'GitHub Copilot CLI'; Installed = $null -ne $copilotCli
+                Details = if ($null -ne $copilotCli) { $copilotCli.Source } else { 'The copilot executable was not found on PATH.' }
+                InstallAction = 'WinGet package GitHub.Copilot; sign in with copilot /login.'
+            }
+        }
+        if ($script:TargetPlatform -eq 'Agency') {
+            [pscustomobject]@{
+                Key = 'Agency'; Requirement = 'Microsoft Agency (internal Microsoft only)'; Installed = $null -ne $agencyCli
+                Details = if ($null -ne $agencyCli) { $agencyCli.Source } else { 'The agency executable was not found on PATH.' }
+                InstallAction = 'Install Microsoft Agency through its internal Microsoft channel.'
+            }
         }
         [pscustomobject]@{
             Key = 'WindowsPowerShell'; Requirement = 'Windows PowerShell 5.1+'
@@ -578,28 +564,11 @@ function Get-PrerequisiteState {
             Details = if ($null -ne $windowsPowerShell) { "$($windowsPowerShell.Version) at $($windowsPowerShell.Path)" } else { 'Not found.' }
             InstallAction = 'Enable Windows PowerShell as a Windows component.'
         }
-        [pscustomobject]@{
-            Key = 'PowerShell'; Requirement = 'PowerShell 7+'
-            Installed = $null -ne $powerShell -and $powerShell.Version -ge [version]'7.0.0'
-            Details = if ($null -ne $powerShell) { "$($powerShell.Version) at $($powerShell.Path)" } else { 'Not found.' }
-            InstallAction = 'WinGet package Microsoft.PowerShell.'
-        }
-        [pscustomobject]@{
-            Key = 'Python'; Requirement = 'Python 3.11+'
-            Installed = $null -ne $python -and $python.Version -ge [version]'3.11.0'
-            Details = if ($null -ne $python) { "$($python.Version) at $($python.Path)" } else { 'Not found.' }
-            InstallAction = 'WinGet package Python.Python.3.13.'
-        }
+        $runtime
         [pscustomobject]@{
             Key = 'PythonLibraries'; Requirement = 'LISA Python libraries'
             Installed = [bool]$pythonLibraries.Installed; Details = $pythonLibraries.Details
             InstallAction = "Install from $RequirementsPath with pip."
-        }
-        [pscustomobject]@{
-            Key = 'Node'; Requirement = 'Node.js 18+ and npm'
-            Installed = $null -ne $node -and $node.Version -ge [version]'18.0.0' -and $null -ne (Get-Command npm -ErrorAction SilentlyContinue)
-            Details = if ($null -ne $node) { "$($node.Version) at $($node.Path)" } else { 'Not found.' }
-            InstallAction = 'WinGet package OpenJS.NodeJS.LTS.'
         }
         [pscustomobject]@{
             Key = 'Renderer'; Requirement = 'Solution Designer npm dependencies'
@@ -654,6 +623,12 @@ function Install-MissingPrerequisites {
     if ($missingKeys -contains 'Scout') {
         Install-WinGetPackage -Id 'Microsoft.ScoutAgent' -DisplayName 'Microsoft Scout'
     }
+    if ($missingKeys -contains 'CopilotCli') {
+        Install-WinGetPackage -Id 'GitHub.Copilot' -DisplayName 'GitHub Copilot CLI'
+    }
+    if ($missingKeys -contains 'Agency') {
+        throw 'Microsoft Agency must be installed from its internal Microsoft channel before running this installer.'
+    }
 
     $python = Get-VersionFromCommand -Command 'python' -Arguments @('--version') -Pattern 'Python\s+(?<version>\d+\.\d+\.\d+)'
     if ($missingKeys -contains 'Python') {
@@ -694,6 +669,70 @@ function Confirm-Exact {
     return $answer.Trim() -ceq $Expected
 }
 
+function Select-TargetPlatform {
+    $options = [ordered]@{
+        '1' = [pscustomobject]@{ Key = 'Scout'; Name = 'Microsoft Scout Desktop' }
+        '2' = [pscustomobject]@{ Key = 'CopilotCli'; Name = 'GitHub Copilot CLI' }
+        '3' = [pscustomobject]@{ Key = 'Agency'; Name = 'Microsoft Agency (internal Microsoft only)' }
+    }
+    Write-Host 'Where should LISA be installed?' -ForegroundColor Cyan
+    foreach ($entry in $options.GetEnumerator()) {
+        Write-Host ("  [{0}] {1}" -f $entry.Key, $entry.Value.Name)
+    }
+    while ($true) {
+        $answer = (Read-Host 'Enter 1, 2 or 3').Trim()
+        if ($options.Contains($answer)) {
+            return $options[$answer].Key
+        }
+        Write-Warning 'Enter 1, 2 or 3.'
+    }
+}
+
+function Get-PlatformName {
+    param([Parameter(Mandatory = $true)][string]$TargetPlatform)
+    switch ($TargetPlatform) {
+        'Scout' { 'Microsoft Scout Desktop' }
+        'CopilotCli' { 'GitHub Copilot CLI' }
+        default { 'Microsoft Agency (internal Microsoft only)' }
+    }
+}
+
+function Resolve-SourceSkillsRoot {
+    param([Parameter(Mandatory = $true)][string]$TargetPlatform)
+    $path = if ($TargetPlatform -eq 'Scout') { $ScoutSkillsRoot } else { Join-Path $PluginRoot 'skills' }
+    if (-not (Test-Path -LiteralPath $path -PathType Container)) {
+        throw "The LISA distribution is incomplete; expected skills under: $path"
+    }
+    return $path
+}
+
+function Install-LisaPlugin {
+    param([Parameter(Mandatory = $true)][string]$TargetPlatform)
+
+    $executable = if ($TargetPlatform -eq 'CopilotCli') { 'copilot' } else { 'agency' }
+    $arguments = if ($TargetPlatform -eq 'CopilotCli') {
+        @('plugin', 'install', $PluginRoot)
+    }
+    else {
+        @('plugin', 'install', "local:$PluginRoot")
+    }
+    Write-Warning @"
+The installer will register the LISA plugin from:
+  $PluginRoot
+with $executable. An existing installation of the same plugin is replaced.
+"@
+    if (-not (Confirm-Exact -Prompt 'Type INSTALL PLUGIN to register the LISA plugin, or press Enter to skip' -Expected 'INSTALL PLUGIN')) {
+        Write-Warning 'Plugin registration was skipped. Register it later with the command shown above.'
+        return $false
+    }
+    if (-not $script:InstallerCmdlet.ShouldProcess($PluginRoot, "Register the LISA plugin with $executable")) {
+        return $false
+    }
+    Invoke-NativeCommand -FilePath $executable -Arguments $arguments
+    $script:InstalledPackages.Add("LISA plugin registered with $executable")
+    return $true
+}
+
 function Confirm-ScoutSignIn {
     $scout = Get-ScoutExecutable
     if ($null -eq $scout) {
@@ -729,15 +768,19 @@ connected.
 }
 
 function Initialize-LisaProject {
-    $lisaRoot = Join-Path $ScoutRoot 'LISA'
-    if (Test-Path -LiteralPath $lisaRoot) {
-        $lisaItem = Get-Item -LiteralPath $lisaRoot -Force
-        if (-not $lisaItem.PSIsContainer) {
-            throw "The LISA path exists but is not a folder: $lisaRoot"
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param([Parameter(Mandatory = $true)][string]$ProjectRoot)
+
+    $lisaRoot = [IO.Path]::GetFullPath($ProjectRoot)
+    $ancestor = $lisaRoot
+    while (-not [string]::IsNullOrWhiteSpace($ancestor)) {
+        if (Test-Path -LiteralPath $ancestor) {
+            $item = Get-Item -LiteralPath $ancestor -Force
+            if (-not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+                throw "The project path must contain only real directories: $ancestor"
+            }
         }
-        if ($lisaItem.Attributes -band [IO.FileAttributes]::ReparsePoint) {
-            throw "Refusing to use a reparse point as the LISA project folder: $lisaRoot"
-        }
+        $ancestor = Split-Path $ancestor -Parent
     }
 
     $folders = @('requirements', 'output', 'evalData') | ForEach-Object {
@@ -746,20 +789,33 @@ function Initialize-LisaProject {
     foreach ($path in $folders) {
         if (Test-Path -LiteralPath $path) {
             $item = Get-Item -LiteralPath $path -Force
-            if (-not $item.PSIsContainer) {
-                throw "The required project path exists but is not a folder: $path"
-            }
-            if (@(Get-ChildItem -LiteralPath $path -Force).Count -gt 0) {
-                throw "The required project folder is not empty. Back up or clear it before installation: $path"
+            if (-not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+                throw "The required project path is not a real folder: $path"
             }
         }
     }
 
-    $null = New-Item -ItemType Directory -Path $lisaRoot -Force
-    foreach ($path in $folders) {
-        $null = New-Item -ItemType Directory -Path $path -Force
+    $configPath = Join-Path $lisaRoot 'lisa-config.json'
+    if (Test-Path -LiteralPath $configPath) {
+        $item = Get-Item -LiteralPath $configPath -Force
+        if ($item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw "The project configuration is not a regular file: $configPath"
+        }
     }
-    Write-Host "Created empty LISA project folders under $lisaRoot" -ForegroundColor Green
+    if ($PSCmdlet.ShouldProcess($lisaRoot, 'Create missing project folders and configuration; preserve existing data')) {
+        foreach ($path in @($lisaRoot) + $folders) {
+            if (-not (Test-Path -LiteralPath $path)) {
+                $null = New-Item -ItemType Directory -Path $path -Force
+            }
+        }
+        if (-not (Test-Path -LiteralPath $configPath)) {
+            $template = [IO.File]::ReadAllBytes((Join-Path $DistributionRoot 'lisa-config.json'))
+            $stream = [IO.File]::Open($configPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write)
+            try { $stream.Write($template, 0, $template.Length) }
+            finally { $stream.Dispose() }
+        }
+        Write-Host "Project ready at $lisaRoot; existing configuration and data preserved." -ForegroundColor Green
+    }
     return $lisaRoot
 }
 
@@ -776,29 +832,25 @@ function Resolve-Codebase {
         throw "The LISA codebase path is not a folder: $root"
     }
 
-    $skills = Join-Path $root 'm-skills'
+    $skills = Join-Path $root 'scout\m-skills'
     if (-not (Test-Path -LiteralPath $skills -PathType Container) -or
         @(Get-ChildItem -LiteralPath $skills -Force).Count -eq 0) {
-        throw "The mandatory m-skills folder is missing or empty: $skills"
+        throw "The mandatory scout\m-skills folder is missing or empty: $skills"
     }
     $skillDefinitions = @(Get-ChildItem -LiteralPath $skills -Directory -Force | Where-Object {
         Test-Path -LiteralPath (Join-Path $_.FullName 'SKILL.md') -PathType Leaf
     })
     if ($skillDefinitions.Count -eq 0) {
-        throw "The m-skills folder contains no skill directories with SKILL.md: $skills"
+        throw "The scout\m-skills folder contains no skill directories with SKILL.md: $skills"
     }
     if (-not (Test-Path -LiteralPath (Join-Path $skills 'sync_skills_metadata.py') -PathType Leaf)) {
-        throw "The source m-skills folder does not contain sync_skills_metadata.py: $skills"
+        throw "The source scout\m-skills folder does not contain sync_skills_metadata.py: $skills"
     }
-    if (-not (Test-Path -LiteralPath (Join-Path $skills 'skills-metadata.json') -PathType Leaf)) {
-        throw "The source m-skills folder does not contain skills-metadata.json: $skills"
-    }
-
-    $automations = Join-Path $root 'm-automations'
+    $automations = Join-Path $root 'scout\m-automations'
     $automationsAvailable = (Test-Path -LiteralPath $automations -PathType Container) -and
         @(Get-ChildItem -LiteralPath $automations -Force).Count -gt 0
     if (-not $automationsAvailable) {
-        Write-Warning 'The optional m-automations folder is missing or empty. Skill installation can continue.'
+        Write-Warning 'The optional scout\m-automations folder is missing or empty. Skill installation can continue.'
     }
 
     $configPath = Join-Path $root 'lisa-config.json'
@@ -824,6 +876,7 @@ function Resolve-Codebase {
         AutomationsAvailable = $automationsAvailable
         ConfigPath           = $configPath
         SkillCount           = $skillDefinitions.Count
+        SkillNames           = @($skillDefinitions | Select-Object -ExpandProperty Name)
     }
 }
 
@@ -846,7 +899,7 @@ function Install-LisaSkills {
     $staging = Join-Path $ScoutRoot ('.lisa-skills-install-{0}' -f [guid]::NewGuid().ToString('N'))
     try {
         $null = New-Item -ItemType Directory -Path $staging
-        Get-ChildItem -LiteralPath $SourceSkillsPath -Force | ForEach-Object {
+        Get-ChildItem -LiteralPath $SourceSkillsPath -Force | Where-Object { $_.Name -ne 'skills-metadata.json' } | ForEach-Object {
             Copy-Item -LiteralPath $_.FullName -Destination $staging -Recurse -Force
         }
 
@@ -877,13 +930,22 @@ if (-not (Test-Path -LiteralPath $RequirementsPath -PathType Leaf)) {
     throw "The prerequisite manifest is missing: $RequirementsPath"
 }
 
-Write-Section '1. Check installed prerequisites'
+Write-Section '1. Select the LISA target platform'
+if ([string]::IsNullOrWhiteSpace($script:TargetPlatform)) {
+    $script:TargetPlatform = Select-TargetPlatform
+}
+$script:SourceSkillsRoot = Resolve-SourceSkillsRoot -TargetPlatform $script:TargetPlatform
+$platformName = Get-PlatformName -TargetPlatform $script:TargetPlatform
+Write-Host "Target platform: $platformName" -ForegroundColor Green
+Write-Host "Skill source:    $script:SourceSkillsRoot"
+
+Write-Section '2. Check installed prerequisites'
 $state = @(Get-PrerequisiteState)
 Show-PrerequisiteState -State $state
 $missing = @($state | Where-Object { -not $_.Installed })
 
 if ($missing.Count -gt 0) {
-    Write-Section '2. Missing prerequisites'
+    Write-Section '3. Missing prerequisites'
     Write-Host 'The following requirements must be installed:' -ForegroundColor Yellow
     foreach ($item in $missing) {
         Write-Host "`n$($item.Requirement)"
@@ -892,7 +954,7 @@ if ($missing.Count -gt 0) {
     }
 
     if ($WhatIfPreference) {
-        Write-Host "`n-WhatIf was specified; no prerequisites, folders, or skills will be changed."
+        Write-Host "`n-WhatIf was specified; no prerequisites, folders, skills, or plugins will be changed."
         return
     }
     if (-not (Confirm-Exact -Prompt 'Type INSTALL to install all missing prerequisites, or press Enter to cancel' -Expected 'INSTALL')) {
@@ -900,7 +962,7 @@ if ($missing.Count -gt 0) {
         return
     }
 
-    Write-Section '3. Install prerequisites'
+    Write-Section '4. Install prerequisites'
     Install-MissingPrerequisites -State $state
     Update-ProcessPath
 
@@ -914,22 +976,30 @@ if ($missing.Count -gt 0) {
 else {
     Write-Host 'All machine prerequisites are already installed.' -ForegroundColor Green
     if ($WhatIfPreference) {
-        Write-Host '-WhatIf was specified; sign-in, folder creation, skill copy, and metadata synchronization were not performed.'
+        Write-Host '-WhatIf was specified; sign-in, folder creation, skill copy, plugin registration, and metadata synchronization were not performed.'
         return
     }
 }
 
-Write-Section '4. Sign in to Microsoft Scout'
-Confirm-ScoutSignIn
+$projectRoot = switch ($script:TargetPlatform) {
+    'Scout' { Join-Path $ScoutRoot 'LISA' }
+    'Agency' { Join-Path $userProfile '.agency\LISA' }
+    default { Join-Path $userProfile '.lisa\LISA' }
+}
+if (-not [string]::IsNullOrWhiteSpace($ProjectPath)) {
+    $projectRoot = [IO.Path]::GetFullPath([Environment]::ExpandEnvironmentVariables($ProjectPath))
+}
+$lisaRoot = $null
 
-Write-Section '5. Create the LISA project folders'
-$lisaRoot = Initialize-LisaProject
+if ($script:TargetPlatform -eq 'Scout') {
+    Write-Section '5. Sign in to Microsoft Scout'
+    Confirm-ScoutSignIn
 
-Write-Section '6. Select and validate the downloaded LISA codebase'
-$codebase = Resolve-Codebase
+    Write-Section '7. Select and validate the downloaded LISA codebase'
+    $codebase = Resolve-Codebase
 
-Write-Section '7. Confirm LISA skill installation'
-Write-Warning @"
+    Write-Section '8. Confirm LISA skill installation'
+    Write-Warning @"
 The installer will copy every item from:
   $($codebase.SkillsPath)
 to Scout's active skill directory:
@@ -937,41 +1007,79 @@ to Scout's active skill directory:
 
 Any destination file or top-level folder with the same name will be replaced.
 Take a backup before continuing if existing skills or support files must be kept.
-The optional m-automations folder and lisa-config.json are validated but are not copied.
+The optional scout\m-automations folder and lisa-config.json are validated but are not copied.
 "@
-if (-not (Confirm-Exact -Prompt 'Type INSTALL SKILLS to replace matching items and continue' -Expected 'INSTALL SKILLS')) {
-    Write-Warning 'LISA skill installation was not approved. Installation has been terminated.'
-    return
+    if (-not (Confirm-Exact -Prompt 'Type INSTALL SKILLS to replace matching items and continue' -Expected 'INSTALL SKILLS')) {
+        Write-Warning 'LISA skill installation was not approved. Installation has been terminated.'
+        return
+    }
+
+    Write-Section '9. Install LISA skills'
+    $activeSkillsRoot = Install-LisaSkills -SourceSkillsPath $codebase.SkillsPath
+
+    Write-Section '10. Synchronize the Scout skill registry'
+    $python = Get-VersionFromCommand -Command 'python' -Arguments @('--version') -Pattern 'Python\s+(?<version>\d+\.\d+\.\d+)'
+    if ($null -eq $python -or $python.Version -lt [version]'3.11.0') {
+        throw 'Python 3.11 or newer is unavailable after prerequisite installation.'
+    }
+    $synchronizer = Join-Path $activeSkillsRoot 'sync_skills_metadata.py'
+    if (-not (Test-Path -LiteralPath $synchronizer -PathType Leaf)) {
+        throw "The installed skill synchronizer is missing: $synchronizer"
+    }
+    $registryPath = Join-Path $activeSkillsRoot 'skills-metadata.json'
+    if ((Test-Path -LiteralPath $registryPath) -and
+        ((Get-Item -LiteralPath $registryPath -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw "Refusing to update a reparse point registry: $registryPath"
+    }
+    Invoke-NativeCommand -FilePath $python.Path -Arguments (@($synchronizer, '--initialize', '--skills') + $codebase.SkillNames)
+
+    if (-not $SkipProjectSetup) {
+        Write-Section 'Prepare the LISA project (preserve existing data)'
+        $lisaRoot = Initialize-LisaProject -ProjectRoot $projectRoot
+    }
+    Write-Section 'Installation complete'
+    Write-Host "Target platform: $platformName"
+    Write-Host 'Microsoft Scout account: verified'
+    Write-Host "LISA project folder: $lisaRoot"
+    Write-Host "Installed skills: $($codebase.SkillCount)"
+    Write-Host 'Skill registry: synchronized'
+    if ($null -ne $lisaRoot) { Write-Host "Review $lisaRoot\lisa-config.json and complete its tenant values before running LISA." }
+    Write-Host 'Restart Microsoft Scout so it reloads the installed skill registry.' -ForegroundColor Yellow
+
+    [pscustomobject]@{
+        Status               = 'Installed'
+        TargetPlatform       = $platformName
+        ScoutRoot            = $ScoutRoot
+        LisaRoot             = $lisaRoot
+        SourceCodebase       = $codebase.Root
+        ActiveSkillsRoot     = $activeSkillsRoot
+        InstalledSkillCount  = $codebase.SkillCount
+        AutomationsAvailable = $codebase.AutomationsAvailable
+        SkillRegistrySynced  = $true
+    }
 }
+else {
+    Write-Section '5. Register the LISA plugin'
+    $registered = Install-LisaPlugin -TargetPlatform $script:TargetPlatform
 
-Write-Section '8. Install LISA skills'
-$activeSkillsRoot = Install-LisaSkills -SourceSkillsPath $codebase.SkillsPath
+    if ($registered -and -not $SkipProjectSetup) {
+        Write-Section 'Prepare the LISA project (preserve existing data)'
+        $lisaRoot = Initialize-LisaProject -ProjectRoot $projectRoot
+    }
+    Write-Section 'Installation complete'
+    Write-Host "Target platform: $platformName"
+    Write-Host "LISA project folder: $lisaRoot"
+    Write-Host "Plugin source: $PluginRoot"
+    Write-Host "Plugin registered: $registered"
+    if ($null -ne $lisaRoot) { Write-Host "Review $lisaRoot\lisa-config.json and complete its tenant values before running LISA." -ForegroundColor Yellow }
+    Write-Host 'Start a new session from the project folder, then invoke /cad-orchestrator.' -ForegroundColor Yellow
 
-Write-Section '9. Synchronize the Scout skill registry'
-$python = Get-VersionFromCommand -Command 'python' -Arguments @('--version') -Pattern 'Python\s+(?<version>\d+\.\d+\.\d+)'
-if ($null -eq $python -or $python.Version -lt [version]'3.11.0') {
-    throw 'Python 3.11 or newer is unavailable after prerequisite installation.'
-}
-$synchronizer = Join-Path $activeSkillsRoot 'sync_skills_metadata.py'
-if (-not (Test-Path -LiteralPath $synchronizer -PathType Leaf)) {
-    throw "The installed skill synchronizer is missing: $synchronizer"
-}
-Invoke-NativeCommand -FilePath $python.Path -Arguments @($synchronizer)
-
-Write-Section 'Installation complete'
-Write-Host 'Microsoft Scout account: verified'
-Write-Host "LISA project folder: $lisaRoot"
-Write-Host "Installed skills: $($codebase.SkillCount)"
-Write-Host 'Skill registry: synchronized'
-Write-Host 'Restart Microsoft Scout so it reloads the installed skill registry.' -ForegroundColor Yellow
-
-[pscustomobject]@{
-    Status               = 'Installed'
-    ScoutRoot            = $ScoutRoot
-    LisaRoot             = $lisaRoot
-    SourceCodebase       = $codebase.Root
-    ActiveSkillsRoot     = $activeSkillsRoot
-    InstalledSkillCount  = $codebase.SkillCount
-    AutomationsAvailable = $codebase.AutomationsAvailable
-    SkillRegistrySynced  = $true
+    [pscustomobject]@{
+        Status          = if ($registered) { 'Installed' } else { 'PrerequisitesReady' }
+        TargetPlatform  = $platformName
+        LisaRoot        = $lisaRoot
+        PluginRoot      = $PluginRoot
+        PluginRegistered = $registered
+        SkillsRoot      = $script:SourceSkillsRoot
+    }
 }

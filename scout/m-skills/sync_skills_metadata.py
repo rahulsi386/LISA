@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import re
@@ -63,21 +64,32 @@ def atomic_write(path: Path, value: list[dict[str, Any]]) -> None:
             pass
 
 
-def synchronize() -> dict[str, Any]:
-    metadata = json.loads(METADATA_PATH.read_text(encoding="utf-8"))
+def synchronize(*, initialize: bool = False, skills: list[str] | None = None) -> dict[str, Any]:
+    metadata = [] if initialize and not METADATA_PATH.exists() else json.loads(METADATA_PATH.read_text(encoding="utf-8"))
     if not isinstance(metadata, list):
         raise MetadataError("skills-metadata.json must contain an array")
-    entries = {
-        item.get("name"): item
-        for item in metadata
-        if isinstance(item, dict) and isinstance(item.get("name"), str)
-    }
+    entries: dict[str, dict[str, Any]] = {}
+    for item in metadata:
+        if not isinstance(item, dict) or not isinstance(item.get("name"), str) or not item["name"]:
+            raise MetadataError("Every registry entry must have a skill name")
+        if item["name"] in entries:
+            raise MetadataError(f"Duplicate metadata entry: {item['name']}")
+        entries[item["name"]] = item
+    definitions = [(path, *read_skill(path)) for path in sorted(ROOT.glob("*/SKILL.md"))
+                   if skills is None or path.parent.name in skills]
+    if skills is not None and set(skills) != {path.parent.name for path, *_ in definitions}:
+        raise MetadataError("A requested skill directory is missing its SKILL.md")
+    names = [name for _, name, _, _ in definitions]
+    if len(names) != len(set(names)):
+        raise MetadataError("Duplicate skill names in SKILL.md files")
     updated: list[str] = []
-    for skill_path in sorted(ROOT.glob("*/SKILL.md")):
-        name, description, instructions = read_skill(skill_path)
+    for _, name, description, instructions in definitions:
         entry = entries.get(name)
         if entry is None:
-            raise MetadataError(f"No metadata registry entry exists for {name}")
+            if not initialize:
+                raise MetadataError(f"No metadata registry entry exists for {name}")
+            entry = {"id": f"local-{name}", "name": name, "enabled": True, "createdAt": "", "scope": "local"}
+            metadata.append(entry)
         entry["description"] = description
         entry["instructions"] = instructions
         updated.append(name)
@@ -86,4 +98,8 @@ def synchronize() -> dict[str, Any]:
 
 
 if __name__ == "__main__":
-    print(json.dumps(synchronize(), indent=2))
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--initialize", action="store_true", help="Create missing local registry entries during installation")
+    parser.add_argument("--skills", nargs="+", help="Synchronize only these installed skill directories")
+    args = parser.parse_args()
+    print(json.dumps(synchronize(initialize=args.initialize, skills=args.skills), indent=2))

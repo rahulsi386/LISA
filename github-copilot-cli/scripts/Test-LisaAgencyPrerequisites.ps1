@@ -11,45 +11,19 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $pluginRoot = Split-Path $PSScriptRoot -Parent
+. (Join-Path $PSScriptRoot 'Get-LisaRuntimePrerequisites.ps1')
 $failures = [System.Collections.Generic.List[string]]::new()
-
-function Test-CommandVersion {
-    param(
-        [Parameter(Mandatory = $true)][string]$Command,
-        [Parameter(Mandatory = $true)][string[]]$Arguments,
-        [Parameter(Mandatory = $true)][string]$Pattern,
-        [Parameter(Mandatory = $true)][version]$Minimum
-    )
-
-    $resolved = Get-Command $Command -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($null -eq $resolved) {
-        $failures.Add("$Command was not found on PATH.")
-        return
-    }
-    $output = (& $resolved.Source @Arguments 2>&1 | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0 -or $output -notmatch $Pattern) {
-        $failures.Add("Cannot determine the $Command version from: $output")
-        return
-    }
-    $actual = [version]$Matches.version
-    if ($actual -lt $Minimum) {
-        $failures.Add("$Command $Minimum or newer is required; found $actual.")
-        return
-    }
-    Write-Host "OK  $Command $actual" -ForegroundColor Green
-}
 
 if (-not $IsWindows) {
     $failures.Add('The packaged LISA Agency distribution currently supports Windows only.')
 }
 
-Test-CommandVersion -Command 'python' -Arguments @('--version') -Pattern 'Python\s+(?<version>\d+\.\d+\.\d+)' -Minimum ([version]'3.11.0')
-Test-CommandVersion -Command 'node' -Arguments @('--version') -Pattern 'v(?<version>\d+\.\d+\.\d+)' -Minimum ([version]'20.0.0')
-Test-CommandVersion -Command 'pwsh' -Arguments @('--version') -Pattern 'PowerShell\s+(?<version>\d+\.\d+\.\d+)' -Minimum ([version]'7.0.0')
-
-foreach ($command in 'npm', 'npx') {
-    if ($null -eq (Get-Command $command -ErrorAction SilentlyContinue)) {
-        $failures.Add("$command is required for Azure MCP, Playwright MCP, and renderer restoration but was not found on PATH.")
+foreach ($requirement in Get-LisaRuntimePrerequisites) {
+    if (-not $requirement.Installed) {
+        $failures.Add("$($requirement.Requirement): $($requirement.Details)")
+    }
+    else {
+        Write-Host "OK  $($requirement.Requirement)" -ForegroundColor Green
     }
 }
 

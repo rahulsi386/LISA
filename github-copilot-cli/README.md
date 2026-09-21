@@ -1,4 +1,4 @@
-# LISA Agency plugin
+# LISA plugin for GitHub Copilot CLI and Agency
 
 LISA packages eleven skills for designing, building, evaluating, optimizing, and publishing
 Microsoft agent solutions. The same plugin can be used in either of these hosts:
@@ -81,7 +81,7 @@ without silently discarding completed work or remote resources.
 
 Choose one host and one source. A **local installation** is best while developing or reviewing the
 plugin. A **GitHub installation** is simpler for normal use and installs the plugin from the
-`agency/` directory of `rahulsi386/LISA`.
+`github-copilot-cli/` directory of `rahulsi386/LISA`.
 
 ### Get the repository locally
 
@@ -105,14 +105,14 @@ agency --version
 
 ```powershell
 Set-Location <path-to-LISA>
-agency plugin install local:.\agency
+agency plugin install local:.\github-copilot-cli
 agency plugin list
 ```
 
 **Directly from the GitHub repository:**
 
 ```powershell
-agency plugin install github:rahulsi386/LISA:agency
+agency plugin install github:rahulsi386/LISA:github-copilot-cli
 agency plugin list
 ```
 
@@ -122,7 +122,7 @@ add `--engine copilot` before the plugin source.
 For a one-session local trial that does not install the plugin, run:
 
 ```powershell
-agency copilot --plugin local:.\agency
+agency copilot --plugin local:.\github-copilot-cli
 ```
 
 ### Install in GitHub Copilot CLI
@@ -141,22 +141,22 @@ copilot login
 
 ```powershell
 Set-Location <path-to-LISA>
-copilot plugin install .\agency
+copilot plugin install .\github-copilot-cli
 copilot plugin list
 ```
 
 **Directly from the GitHub repository:**
 
 ```powershell
-copilot plugin install rahulsi386/LISA:agency
+copilot plugin install rahulsi386/LISA:github-copilot-cli
 copilot plugin list
 ```
 
-The `:agency` suffix is required because the plugin is in a repository subdirectory. For a
+The `:github-copilot-cli` suffix is required because the plugin is in a repository subdirectory. For a
 one-session local trial that does not install or copy the plugin, run:
 
 ```powershell
-copilot --plugin-dir .\agency
+copilot --plugin-dir .\github-copilot-cli
 ```
 
 See the official [GitHub Copilot CLI plugin reference](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-plugin-reference)
@@ -165,11 +165,24 @@ for plugin management, updates, and enterprise policy behavior.
 ### Install runtime dependencies
 
 Installing the plugin does not install Python, Node.js, the diagram renderer, PAC CLI, or cloud
-credentials. From a local LISA checkout, install the base Python packages and renderer, and verify
-the tools needed by cloud stages:
+credentials. From a full checkout, use the common root installer and select GitHub Copilot CLI or
+Microsoft Agency (internal Microsoft only):
 
 ```powershell
-pwsh -File .\agency\scripts\Test-LisaAgencyPrerequisites.ps1 `
+powershell.exe -ExecutionPolicy Bypass -File .\Install-LISA-Prerequisites.ps1
+```
+
+Use `-Platform CopilotCli` or `-Platform Agency` to select a host explicitly. Add
+`-ProjectPath "C:\Projects\MySolution"` for a custom project, or `-SkipProjectSetup` to register
+the plugin without setting up a project. Existing projects and configuration are never cleared or
+overwritten. The installer creates missing folders and copies the common config only when absent.
+
+For a standalone plugin install without the repository root, the packaged checker remains available
+to restore Python/renderer dependencies. It shares the common installer's runtime checks; it does
+not install the host, Python, Node.js, or PAC. From the installed plugin directory:
+
+```powershell
+pwsh -File .\scripts\Test-LisaAgencyPrerequisites.ps1 `
   -InstallPythonPackages `
   -RestoreRenderer `
   -RequireCloudStages
@@ -192,7 +205,8 @@ Copilot Studio, Microsoft 365, or SharePoint.
 - Windows 11.
 - Agency with plugin support, or GitHub Copilot CLI 1.0 or newer with an active Copilot plan.
 - PowerShell 7 or newer.
-- Python 3.11 or newer and the packages in `agency/requirements.txt`.
+- Python 3.11 or newer and the packages in the [common requirements](../requirements.txt).
+  Standalone installs include a matching [packaged copy](requirements.txt).
 - Node.js 20 or newer, npm, and npx.
 - Microsoft Edge and the restored Solution Designer renderer.
 - Internet access to the configured npm registry, PyPI, Microsoft Learn MCP, and any cloud services
@@ -229,13 +243,18 @@ Keep project data outside the installed plugin. Create one project directory per
 `-- output/
 ```
 
-From a local checkout, copy the template and create the input folders:
+The common installer prepares the project for you. For manual setup from a repository checkout,
+create the folders and copy the common template only if no project config exists:
 
 ```powershell
 $project = "C:\Projects\MySolution"
 New-Item -ItemType Directory -Force $project, "$project\requirements", "$project\evalData", "$project\output"
-Copy-Item .\agency\lisa-config.example.json "$project\lisa-config.json"
+if (-not (Test-Path "$project\lisa-config.json")) {
+  Copy-Item .\lisa-config.json "$project\lisa-config.json"
+}
 ```
+
+For a standalone install, use the plugin's matching [config template](lisa-config.example.json).
 
 Before execution:
 
@@ -250,7 +269,7 @@ Before execution:
 Validate the project paths from the LISA checkout:
 
 ```powershell
-python .\agency\skills\lisa_path_resolver.py `
+python .\github-copilot-cli\skills\lisa_path_resolver.py `
   --config "C:\Projects\MySolution\lisa-config.json"
 ```
 
@@ -377,7 +396,7 @@ the [complete skills reference](skills/README.md).
 - In a Copilot session, run `/skills info cad-orchestrator`. A same-named project or personal skill
   can take precedence over the plugin copy.
 - Start a new host session after installing or updating the plugin. During local Copilot CLI
-  development, use `copilot --plugin-dir .\agency` so edits are loaded from the checkout.
+  development, use `copilot --plugin-dir .\github-copilot-cli` so edits are loaded from the checkout.
 - Re-run `Test-LisaAgencyPrerequisites.ps1` after a runtime update or dependency error.
 - Confirm `pac env who`, browser identity, configuration environment, and SharePoint tenant all
   refer to the same intended tenant before a cloud stage.
@@ -392,7 +411,7 @@ for current service-specific guidance.
 
 ## Validation for contributors
 
-From the `agency/` directory, run the plugin tests:
+From the `github-copilot-cli/` directory, run the plugin tests:
 
 ```powershell
 python -m unittest discover -s .\tests -p "test_*.py" -v

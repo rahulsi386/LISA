@@ -157,6 +157,18 @@ class AgencyPluginTests(unittest.TestCase):
             (PLUGIN_ROOT / "lisa-config.example.json").read_text(encoding="utf-8")
         )
         self.assertEqual(".", config["basePath"])
+        shared_config = PLUGIN_ROOT.parent / "lisa-config.json"
+        if shared_config.is_file():
+            self.assertEqual(config, json.loads(shared_config.read_text(encoding="utf-8")))
+
+    def test_packaged_base_requirements_match_shared_manifest(self) -> None:
+        shared = PLUGIN_ROOT.parent / "requirements.txt"
+        if not shared.is_file():
+            self.skipTest("Standalone plugin has no repository requirements")
+        def packages(path):
+            return sorted(line.strip() for line in path.read_text(encoding="utf-8").splitlines()
+                          if line.strip() and not line.lstrip().startswith("#"))
+        self.assertEqual(packages(shared), packages(PLUGIN_ROOT / "requirements.txt"))
 
     def test_both_engines_register_matching_mcp_servers(self) -> None:
         copilot = json.loads((PLUGIN_ROOT / "plugin.json").read_text(encoding="utf-8"))
@@ -200,10 +212,12 @@ class AgencyPluginTests(unittest.TestCase):
 
     def test_prerequisites_cover_bundled_mcp_runtime(self) -> None:
         script = (PLUGIN_ROOT / "scripts" / "Test-LisaAgencyPrerequisites.ps1").read_text(encoding="utf-8")
-        self.assertIn("-Command 'node'", script)
-        self.assertIn("-Minimum ([version]'20.0.0')", script)
+        shared = (PLUGIN_ROOT / "scripts" / "Get-LisaRuntimePrerequisites.ps1").read_text(encoding="utf-8")
+        self.assertIn("Get-LisaRuntimePrerequisites.ps1", script)
+        self.assertIn("Get-LisaRuntimePrerequisites", script)
+        self.assertIn("Node = [version]'20.0.0'", shared)
         self.assertNotIn("-Command 'dotnet'", script)
-        self.assertIn("foreach ($command in 'npm', 'npx')", script)
+        self.assertIn("@('npm', 'npx')", shared)
         self.assertIn("[switch]$RequireAzureMcp", script)
         self.assertIn("Get-Command 'az'", script)
         self.assertNotIn("& az login", script)
