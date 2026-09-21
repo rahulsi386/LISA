@@ -138,7 +138,7 @@ Current limitations that extensions must not overlook:
 ### Architecture policy and skill registry
 
 - [`Platform-Decision.md`](Platform-Decision.md) is the architecture policy used mainly by Complexity Classifier. It defines permitted local build tools, mandatory gates, work types, honest PoC coverage, action-impact controls, state/evidence rules, and gate-before-score behavior.
-- [`sync_skills_metadata.py`](sync_skills_metadata.py) parses every child `SKILL.md` and atomically synchronizes `name`, `description`, and instructions into `skills-metadata.json`. The registry file is not present in this repository snapshot, so the script requires the installed Scout runtime registry (or a restored repository registry) before it can run successfully.
+- [`sync_skills_metadata.py`](sync_skills_metadata.py) atomically synchronizes skill descriptions and instructions. During installation, `--initialize --skills <directories>` creates missing local registry entries while preserving existing IDs, enabled settings, and unrelated entries. Ordinary synchronization remains strict about unknown skills.
 
 ## 1. Requirement Analyzer
 
@@ -1034,7 +1034,7 @@ These are important when operating or extending the suite:
 - **Remote content reconciliation is incomplete:** Publisher can skip same-size changed files where remote hashes are unavailable.
 - **Checkpoint input replay protection is incomplete:** input markers are not populated/verified and stale-valid primary checkpoint selection is possible.
 - **Artifact Generator trusts upstream content:** it does not fully revalidate upstream schemas and hashes.
-- **Registry dependency:** `sync_skills_metadata.py` needs `skills-metadata.json`, which is absent from this repository snapshot.
+- **Registry initialization:** the root installer creates missing Scout registry entries; normal synchronization requires an initialized registry.
 
 ## Test suites
 

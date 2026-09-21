@@ -83,13 +83,13 @@ See [video requirements](video-generator/requirements.txt) for optional installa
 Validate path resolution before a run:
 
 ```powershell
-python "<m-skills-root>\lisa_path_resolver.py" --config "<path>\lisa-config.json"
+python "<plugin-skills-root>\lisa_path_resolver.py" --config "<path>\lisa-config.json"
 ```
 
 [`resolve_skill_inputs.py`](resolve_skill_inputs.py) returns canonical inputs for individual stages and prevents caller-selected child paths. It supports Requirement Analyzer through Post-Publish Cleanup, except that `cad-orchestrator` itself has no router entry:
 
 ```powershell
-python "<m-skills-root>\resolve_skill_inputs.py" --skill agent-builder --config "<path>\lisa-config.json"
+python "<plugin-skills-root>\resolve_skill_inputs.py" --skill agent-builder --config "<path>\lisa-config.json"
 ```
 
 “Latest” selection is not globally uniform. The shared resolver uses filesystem modification time with filename as a tie-breaker, while parts of publication use filename ordering and internal generators may use timestamp strings. Avoid touching old lifecycle files; preserve immutable stage outputs and rely on current pointers/manifests where available.
@@ -101,8 +101,8 @@ python "<m-skills-root>\resolve_skill_inputs.py" --skill agent-builder --config 
 [`validate_artifact_contracts.py`](validate_artifact_contracts.py) validates one or all skill contracts, verifies folder identity and lowercase roots, checks duplicate fixed files, resolves declared fixed/result schemas, compiles regexes, and safely migrates a single case-only legacy stage directory:
 
 ```powershell
-python "<m-skills-root>\validate_artifact_contracts.py"
-python "<m-skills-root>\validate_artifact_contracts.py" --skill agent-builder
+python "<plugin-skills-root>\validate_artifact_contracts.py"
+python "<plugin-skills-root>\validate_artifact_contracts.py" --skill agent-builder
 ```
 
 This validates **contract definitions**, not every arbitrary output file. Each stage must still run its own schema, semantic, hash, and terminal-marker validation.
@@ -130,13 +130,13 @@ State is kept in `.lisa/current.json`, A/B workflow snapshots, A/B active-stage 
 Supported commands are:
 
 ```powershell
-python "<m-skills-root>\workflow_checkpoint.py" --config "<CONFIG>" init
-python "<m-skills-root>\workflow_checkpoint.py" --config "<CONFIG>" show
-python "<m-skills-root>\workflow_checkpoint.py" --config "<CONFIG>" recover
-python "<m-skills-root>\workflow_checkpoint.py" --config "<CONFIG>" start-stage --stage "<STAGE>" --stage-run-id "<RUN-ID>" --phase "<PHASE>" --unit-id "<UNIT>"
-python "<m-skills-root>\workflow_checkpoint.py" --config "<CONFIG>" checkpoint --phase "<PHASE>" --unit-id "<NEXT-UNIT>" --status RUNNING
-python "<m-skills-root>\workflow_checkpoint.py" --config "<CONFIG>" complete-stage --marker "<BASE-RELATIVE-PATH>" --marker-sha256 "<SHA256>" --stage-status COMMITTED
-python "<m-skills-root>\workflow_checkpoint.py" --config "<CONFIG>" finish --status COMPLETED
+python "<plugin-skills-root>\workflow_checkpoint.py" --config "<CONFIG>" init
+python "<plugin-skills-root>\workflow_checkpoint.py" --config "<CONFIG>" show
+python "<plugin-skills-root>\workflow_checkpoint.py" --config "<CONFIG>" recover
+python "<plugin-skills-root>\workflow_checkpoint.py" --config "<CONFIG>" start-stage --stage "<STAGE>" --stage-run-id "<RUN-ID>" --phase "<PHASE>" --unit-id "<UNIT>"
+python "<plugin-skills-root>\workflow_checkpoint.py" --config "<CONFIG>" checkpoint --phase "<PHASE>" --unit-id "<NEXT-UNIT>" --status RUNNING
+python "<plugin-skills-root>\workflow_checkpoint.py" --config "<CONFIG>" complete-stage --marker "<BASE-RELATIVE-PATH>" --marker-sha256 "<SHA256>" --stage-status COMMITTED
+python "<plugin-skills-root>\workflow_checkpoint.py" --config "<CONFIG>" finish --status COMPLETED
 ```
 
 Before a remote write, a stage should checkpoint `RECONCILING` with `--pending-operation-json`; after a fresh read-back it should save `--receipt-json`. Recovery returns either `continue-phase` or `reconcile-remote-operation`.
@@ -156,7 +156,7 @@ Current limitations that extensions must not overlook:
 ### Architecture policy and skill registry
 
 - [`Platform-Decision.md`](Platform-Decision.md) is the architecture policy used mainly by Complexity Classifier. It defines permitted local build tools, mandatory gates, work types, honest PoC coverage, action-impact controls, state/evidence rules, and gate-before-score behavior.
-- [`sync_skills_metadata.py`](sync_skills_metadata.py) parses every child `SKILL.md` and atomically synchronizes `name`, `description`, and instructions into `skills-metadata.json`. The registry file is not present in this repository snapshot, so the script requires the installed Scout runtime registry (or a restored repository registry) before it can run successfully.
+- `sync_skills_metadata.py` is a **Microsoft Scout-only** registry tool and ships in the Scout distribution, not in this plugin. GitHub Copilot CLI and Agency discover skills directly from `plugin.json` and the `skills/` folders, so no registry synchronization step is required here.
 
 ## 1. Requirement Analyzer
 
@@ -457,7 +457,7 @@ Supported build paths are:
 Resolve them with:
 
 ```powershell
-python "<m-skills-root>\resolve_skill_inputs.py" --skill agent-builder --config "<CONFIG>"
+python "<plugin-skills-root>\resolve_skill_inputs.py" --skill agent-builder --config "<CONFIG>"
 ```
 
 **Required outputs under `<basePath>/output/build/`**
@@ -551,7 +551,7 @@ It must not modify the agent. A failed behavioral gate is valid evaluation data 
 Resolve with:
 
 ```powershell
-python "<m-skills-root>\resolve_skill_inputs.py" --skill agent-evaluator --config "<CONFIG>"
+python "<plugin-skills-root>\resolve_skill_inputs.py" --skill agent-evaluator --config "<CONFIG>"
 ```
 
 **Required outputs under `<basePath>/output/evaluation/`**
@@ -660,7 +660,7 @@ It never changes requirements, expected answers, rubrics, thresholds, or baselin
 Resolve with:
 
 ```powershell
-python "<m-skills-root>\resolve_skill_inputs.py" --skill agent-optimizer --config "<CONFIG>"
+python "<plugin-skills-root>\resolve_skill_inputs.py" --skill agent-optimizer --config "<CONFIG>"
 ```
 
 **Outputs under `<basePath>/output/optimization/`**
@@ -1037,7 +1037,7 @@ These are important when operating or extending the suite:
 - **Remote content reconciliation is incomplete:** Publisher can skip same-size changed files where remote hashes are unavailable.
 - **Checkpoint input replay protection is incomplete:** input markers are not populated/verified and stale-valid primary checkpoint selection is possible.
 - **Artifact Generator trusts upstream content:** it does not fully revalidate upstream schemas and hashes.
-- **Registry dependency:** `sync_skills_metadata.py` needs `skills-metadata.json`, which is absent from this repository snapshot.
+- **Skill discovery:** this plugin uses its manifest directly; Scout registry initialization is not needed.
 
 ## Test suites
 
