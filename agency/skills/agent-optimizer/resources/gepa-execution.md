@@ -4,9 +4,12 @@ GEPA 0.1.4 supplies actual reflective evolution and per-validation-example Paret
 The host supplies proposals and Evaluator supplies measurements. No provider SDK, remote
 endpoint, credential file, synthetic runtime score, or hidden reasoning is used by the driver.
 The pilot optimizes only existing instructions, not tools, code, requirements, rubrics or agent
-architecture. It is disabled by default. Missing prerequisites when enabled are blockers.
-Supported harness values are `Standard` and `GitHub Copilot` (GHCP means the Copilot Studio
-harness, not a separate model provider). The target and shadow must use the same canonical value.
+architecture. LISA decides eligibility from the harness, evaluator evidence and dataset shape; it
+is never end-user configuration, and missing prerequisites for an eligible run are blockers.
+Supported harness values are `Standard`, `GitHub Copilot` and `Copilot chat` (GHCP means the
+Copilot Studio harness, not a separate model provider). The target and shadow must use the same
+canonical value. Microsoft Cowork is out of scope and is always recorded as `unsupported-harness`,
+because it has no instruction authoring path and no evaluator test surface.
 
 ## Prepare
 
@@ -14,11 +17,13 @@ harness, not a separate model provider). The target and shadow must use the same
 2. Validate the canonical build and evaluation. Builder must emit `instructionOptimization`
    in its handoff. Pull live instructions, confirm they match the builder seed, and complete
    the mandatory audit. Eligible evaluator findings must identify the `instructions` surface.
-3. Create `optimization-plan.json` normally. Add `policy.gepa` matching `gepa-policy.schema.json`.
-   Copy configured `optimization.gepa` values exactly. Choose disjoint `trainIds`,
-   `validationIds`, `holdoutIds`, and `protectedTestIds` covering the frozen dataset; put every
-   critical case in the protected set. Split by scenario/source family, not just random
-   paraphrases. Freeze the metric before search: arithmetic mean of applicable mandatory gate
+3. Create `optimization-plan.json` normally, then run `gepa_optimize.py decide --config <CONFIG>`.
+   It writes the immutable `gepa-eligibility.json` decision and reason code. Continue only when it
+   reports `eligible`; otherwise keep the evidence-guided workflow and publish the recorded reason.
+   Add `policy.gepa` with host-supplied inputs only. `init` derives and persists the seed, budgets
+   and the disjoint `trainIds`, `validationIds`, `holdoutIds` and `protectedTestIds` from the frozen
+   dataset, placing every critical case in the protected set. Do not hand-tune those values. The
+   metric is frozen before search: arithmetic mean of applicable mandatory gate
    scores divided by their rubric maximum, in [0,1]. Never tune normalization between candidates.
 4. Add exact `shadowAgent` identity, `reflectionProvider`, `reflectionModel`, `reflectionApproved`,
   `isolationVerified`, and `isolationEvidence`. Confirm shadow and target are different agents of
@@ -32,22 +37,10 @@ harness, not a separate model provider). The target and shadow must use the same
 6. Optimizer runs `gepa_optimize.py init --config <CONFIG>`. The driver pins the config, build,
    frozen evaluation, seed, contract, budget and policy in a hash-bound session.
 
-Example plan policy (replace verified values and use actual dataset IDs):
+Example host-supplied plan policy (LISA adds `enabled`, `seed`, the budgets and the partitions):
 
 ```json
 {
-  "enabled": true,
-  "seed": 7,
-  "searchMetricCalls": 24,
-  "maxMetricCalls": 60,
-  "maxReflectionCalls": 6,
-  "maxElapsedSeconds": 7200,
-  "minimumImprovement": 0.05,
-  "maxReflectionCostUsd": null,
-  "trainIds": ["EVAL-001"],
-  "validationIds": ["EVAL-002"],
-  "holdoutIds": ["EVAL-003"],
-  "protectedTestIds": ["EVAL-004"],
   "shadowAgent": {"agentId": "verified-shadow-id", "environmentId": "verified-env-id", "harness": "Standard"},
   "isolationVerified": true,
   "isolationEvidence": "Reference the verified trigger, connection, identity and component inventory evidence.",
@@ -57,8 +50,8 @@ Example plan policy (replace verified values and use actual dataset IDs):
 }
 ```
 
-For GHCP, change `shadowAgent.harness` to `GitHub Copilot` and add this to `policy.gepa` and the
-configured `optimization.gepa` before the initial build/evaluation:
+For GHCP, set `shadowAgent.harness` to `GitHub Copilot` and add this to `policy.gepa`
+before the initial build/evaluation:
 
 ```json
 "githubCopilot": {
@@ -81,6 +74,7 @@ The pilot still excludes multi-agent optimization and binding/state-changing too
 |---|---|---|
 | Standard | Existing PAC pull/change/push/publish/pull path | Existing harness-correct evaluator routing, normally `/bots/<agentId>/overview` |
 | GitHub Copilot | Builder Section B's `cli-copilot` workspace; verify PAC support and live signature before push/publish/pull. If unsupported, new-agent UI keyboard insertion, Save/reload and Dataverse read-back | Pinned `/environments/<environmentId>/agents/<agentId>/preview` on `copilotstudio.preview.microsoft.com`; `surfaceUsed: preview-canvas` |
+| Copilot chat | Builder Section C's Microsoft 365 Copilot agent page: edit, Save/reload, publish internally, then read back the M365 Copilot agent resource. Never convert it to a Standard agent | Published Microsoft 365 Copilot channel; `surfaceUsed: m365-copilot` |
 
 Before provisioning a GHCP shadow, verify `pac copilot init help` exposes `--authoring-mode`
 and `cli-copilot`. Use `--authoring-mode cli-copilot` when creating through PAC, not the Standard
@@ -212,6 +206,7 @@ cleanup/deletion requires separate explicit consent and must not delete target r
 
 ## Outcome Files
 
+- `gepa-eligibility.json`: LISA's immutable decision, reason code and the source evaluation it used.
 - `gepa-run.json`: engine/version, seed, status, candidate lineage, Pareto membership, selected hash,
   search and held-out deltas, instruction bytes, evaluator runs and measured/unknown cost.
   Execution records identify the harness and shadow ID; GHCP adds preview surface and memory mode.
@@ -225,7 +220,10 @@ cleanup/deletion requires separate explicit consent and must not delete target r
   `gepaRunSha256` to the promoted round; preserve all ordinary round/snapshot/rollback records.
 - `optimization-manifest.json`: final hash inventory, including the GEPA outcome files.
 
-Publish through the existing optimizer `generate_manifest.py`. It computes the outcome and
-refuses `complete` until the accepted target round matches selected instructions and a fresh
-Evaluator PASS on the frozen dataset/rubric. Blocked runs still publish an honest outcome.
+Publish through the existing optimizer `generate_manifest.py`. It computes the outcome and refuses
+`complete` for an eligible run without a finished GEPA attempt, and refuses `complete` after a
+`ready-for-promotion` search unless the accepted target round matches the selected instructions and
+a fresh Evaluator PASS on the frozen dataset/rubric. `no-improvement`, `holdout-rejected` and
+`budget-exhausted` leave the target unchanged and do not block completion on their own. Blocked
+runs still publish an honest outcome.
 Do not create a new skill or alter Scout files for this Agency pilot.

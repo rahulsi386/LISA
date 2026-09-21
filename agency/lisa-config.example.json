@@ -4,18 +4,6 @@
   "timeZone": "UTC",
   "basePath": ".",
   "knowledgeSources": [],
-  "optimization": {
-    "gepa": {
-      "enabled": false,
-      "seed": 7,
-      "searchMetricCalls": 24,
-      "maxMetricCalls": 60,
-      "maxReflectionCalls": 6,
-      "maxElapsedSeconds": 7200,
-      "minimumImprovement": 0.05,
-      "maxReflectionCostUsd": null
-    }
-  },
   "copilotStudio": {
     "envUrl": "https://<your-environment>.crm.dynamics.com",
     "envId": "<environment-id>"

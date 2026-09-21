@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import math
 import os
+import random
 import re
 import shutil
 from contextlib import contextmanager
@@ -20,6 +22,8 @@ from lifecycle_artifacts import ArtifactError, load_object, safe_path, sha256, v
 SKILLS = Path(__file__).resolve().parent
 RESOURCES = SKILLS / "agent-optimizer" / "resources"
 FROZEN_FILES = ("evaluation-dataset.json", "evaluation-rubric.json", "evaluation-observations.json", "regression-baseline.json")
+# Microsoft Cowork is excluded: it has no instruction authoring path and no evaluator test surface.
+GEPA_HARNESSES = ("Standard", "GitHub Copilot", "Copilot chat")
 
 
 class AwaitingHost(BaseException):
@@ -365,12 +369,112 @@ def run_identity(paths) -> tuple[dict, Path, Path]:
     return plan, paths.optimization / "gepa", paths.evaluation / "gepa" / plan["runId"]
 
 
+def derive_seed(run_id: str) -> int:
+    return int(hashlib.sha256(run_id.encode("utf-8")).hexdigest()[:8], 16)
+
+
+def derive_partitions(dataset: dict, seed: int) -> dict[str, list[str]]:
+    cases = dataset.get("testCases", [])
+    identifiers = [item["id"] for item in cases]
+    if len(identifiers) != len(set(identifiers)):
+        raise ArtifactError("Evaluation dataset has duplicate case identifiers")
+    critical = sorted(item["id"] for item in cases if item.get("severity") == "critical")
+    pool = sorted(value for value in identifiers if value not in set(critical))
+    protected = critical or pool[:1]
+    pool = [value for value in pool if value not in set(protected)]
+    if not protected or len(pool) < 3:
+        raise ArtifactError("GEPA needs at least four cases: one protected plus train, validation and holdout")
+    random.Random(seed).shuffle(pool)
+    reserve = max(1, len(pool) // 4)
+    return {"trainIds": sorted(pool[2 * reserve:]), "validationIds": sorted(pool[reserve:2 * reserve]),
+            "holdoutIds": sorted(pool[:reserve]), "protectedTestIds": sorted(protected)}
+
+
+def derive_budgets(partitions: dict) -> dict:
+    train, validation = len(partitions["trainIds"]), len(partitions["validationIds"])
+    holdout, protected = len(partitions["holdoutIds"]), len(partitions["protectedTestIds"])
+    search = max(8, min(400, 4 * (train + validation) + 2 * protected))
+    iteration = 2 * (min(3, train) + protected) + validation + protected
+    return {"searchMetricCalls": search,
+            "maxMetricCalls": min(2000, search + iteration + 2 * (holdout + protected)),
+            "maxReflectionCalls": max(2, min(100, 2 * train + 2)),
+            "maxElapsedSeconds": 7200, "minimumImprovement": 0.05, "maxReflectionCostUsd": None}
+
+
+def derive_policy(plan: dict, dataset: dict) -> dict:
+    supplied = plan.get("policy", {}).get("gepa", {})
+    partitions = derive_partitions(dataset, derive_seed(plan["runId"]))
+    policy = {"enabled": True, "seed": derive_seed(plan["runId"]), **derive_budgets(partitions), **partitions}
+    for key in ("shadowAgent", "isolationVerified", "isolationEvidence", "reflectionApproved",
+                "reflectionProvider", "reflectionModel", "githubCopilot"):
+        if key in supplied:
+            policy[key] = supplied[key]
+    return policy
+
+
+def decide_eligibility(plan: dict, evaluation_root: Path) -> dict:
+    """LISA owns this decision; it is never exposed as end-user configuration."""
+
+    def decision(reason: str, detail: str) -> dict:
+        return {"eligible": reason == "eligible", "reason": reason, "detail": detail}
+
+    harness = plan.get("agent", {}).get("harness")
+    if harness not in GEPA_HARNESSES:
+        return decision("unsupported-harness",
+                        f"GEPA supports {', '.join(GEPA_HARNESSES)}; this agent reports {harness!r}.")
+    observations_path = evaluation_root / "evaluation-observations.json"
+    dataset_path = evaluation_root / "evaluation-dataset.json"
+    if not observations_path.is_file() or not dataset_path.is_file():
+        return decision("evaluation-unavailable", "Evaluator observations and dataset must exist before optimization.")
+    observations = load_object(observations_path)
+    if observations.get("runId") != plan["sourceEvaluation"]["runId"]:
+        return decision("evaluation-unavailable", "Evaluator observations do not match the planned source evaluation.")
+    handoff = observations.get("optimizerHandoff", {})
+    if handoff.get("eligibleForOptimization") is not True:
+        return decision("evaluation-ineligible", "Evaluator reported a platform, surface or authentication blocker.")
+    findings = [item for item in handoff.get("findings", [])
+                if not item.get("doNotOptimizeReason") and item.get("suspectedChangeSurface") == "instructions"]
+    if not findings:
+        return decision("no-instruction-finding", "No evidence-backed instruction finding is available to optimize.")
+    try:
+        derive_partitions(load_object(dataset_path), derive_seed(plan["runId"]))
+    except ArtifactError as exc:
+        return decision("dataset-too-small", str(exc))
+    if importlib.util.find_spec("gepa") is None:
+        return decision("engine-unavailable", "The pinned gepa engine is absent from this interpreter.")
+    return decision("eligible", f"{len(findings)} instruction finding(s) on a {harness} agent.")
+
+
+def assess_eligibility(paths) -> dict:
+    plan, _, _ = run_identity(paths)
+    path = paths.optimization / "gepa-eligibility.json"
+    if path.is_file():
+        return load_object(path)
+    record = {"schemaVersion": "1.0", "runId": plan["runId"],
+              "decidedAt": datetime.now(timezone.utc).isoformat(),
+              "harness": plan["agent"]["harness"],
+              "sourceEvaluationRunId": plan["sourceEvaluation"]["runId"],
+              **decide_eligibility(plan, paths.evaluation)}
+    validate_schema(record, RESOURCES / "gepa-eligibility.schema.json", "GEPA eligibility")
+    write_json(path, record, immutable=True)
+    return record
+
+
+def recorded_eligibility(root: Path) -> dict:
+    path = root / "gepa-eligibility.json"
+    if not path.is_file():
+        return {"eligible": False, "reason": "not-assessed",
+                "detail": "LISA recorded no GEPA eligibility decision for this optimization run."}
+    return load_object(path)
+
+
 def freeze_evaluation(paths) -> dict:
     from lifecycle_artifacts import validate
 
     plan, root, evaluation = run_identity(paths)
-    if paths.config.get("optimization", {}).get("gepa", {}).get("enabled") is not True:
-        raise ArtifactError("GEPA is not enabled in the Agency configuration")
+    eligibility = recorded_eligibility(paths.optimization)
+    if eligibility.get("eligible") is not True:
+        raise ArtifactError(f"GEPA is not eligible for this run: {eligibility.get('reason', 'not-assessed')}")
     validate(paths.evaluation, SKILLS / "agent-evaluator")
     observations = load_object(paths.evaluation / "evaluation-observations.json")
     if observations["runId"] != plan["sourceEvaluation"]["runId"]:
@@ -395,16 +499,18 @@ def initialize(paths) -> dict:
     from lifecycle_artifacts import validate
 
     plan, root, evaluation = run_identity(paths)
-    configured = paths.config.get("optimization", {}).get("gepa", {})
-    if configured.get("enabled") is not True:
-        raise ArtifactError("GEPA is not enabled in the Agency configuration")
-    policy = plan["policy"].get("gepa", {})
-    validate_schema(policy, RESOURCES / "gepa-policy.schema.json", "GEPA policy")
-    for key, value in configured.items():
-        if policy.get(key) != value:
-            raise ArtifactError(f"GEPA plan differs from configured {key}")
+    eligibility = recorded_eligibility(paths.optimization)
+    if eligibility.get("eligible") is not True:
+        raise ArtifactError(f"GEPA is not eligible for this run: {eligibility.get('reason', 'not-assessed')}")
     if (root / "session.json").exists():
         return verified_session(paths)
+    if not (evaluation / "baseline" / "evaluation-dataset.json").is_file():
+        raise ArtifactError("Freeze the evaluator inputs before initializing GEPA")
+    policy = derive_policy(plan, load_object(evaluation / "baseline" / "evaluation-dataset.json"))
+    validate_schema(policy, RESOURCES / "gepa-policy.schema.json", "GEPA policy")
+    if plan["policy"].get("gepa") != policy:
+        plan["policy"]["gepa"] = policy
+        write_json(paths.optimization / "optimization-plan.json", plan)
     validate(paths.build, SKILLS / "agent-builder")
     handoff = load_object(paths.build / "agent-build-handoff.json")
     contract = handoff.get("instructionOptimization")
@@ -414,8 +520,8 @@ def initialize(paths) -> dict:
     audit = load_object(paths.optimization / "instruction-audit.json")
     if audit.get("instructionSha256") != text_hash(seed) or contract["seedSha256"] != text_hash(seed):
         raise ArtifactError("Builder seed and live instruction audit must match")
-    if plan["agent"]["harness"] not in ("Standard", "GitHub Copilot"):
-        raise ArtifactError("GEPA supports only Standard and GitHub Copilot harnesses")
+    if plan["agent"]["harness"] not in GEPA_HARNESSES:
+        raise ArtifactError(f"GEPA supports only {', '.join(GEPA_HARNESSES)} harnesses")
     if policy["shadowAgent"]["harness"] != plan["agent"]["harness"]:
         raise ArtifactError("GEPA shadow harness must match the target harness")
     if policy["shadowAgent"]["agentId"] == plan["agent"]["agentId"]:
@@ -538,9 +644,12 @@ def accept_host_response(paths, owner: str) -> dict:
 
 def outcome(root: Path) -> dict:
     plan = load_object(root / "optimization-plan.json")
-    enabled = plan["policy"].get("gepa", {}).get("enabled") is True
+    eligibility = recorded_eligibility(root)
+    enabled = eligibility.get("eligible") is True
     result = {"schemaVersion": "1.0", "runId": plan["runId"],
               "strategy": "gepa" if enabled else "evidence-guided",
+              "gepaEligibility": {"eligible": enabled, "reason": eligibility.get("reason", "not-assessed"),
+                                  "detail": eligibility.get("detail", "")},
               "gepa": {"status": "not-started" if enabled else "not-used"},
               "overallImpact": {"status": "not-measured", "deploymentGate": "NOT_RUN",
                                 "reason": "No version-bound final target evaluation has been verified."}}
@@ -548,7 +657,7 @@ def outcome(root: Path) -> dict:
     if not run_path.exists():
         return result
     if not enabled:
-        raise ArtifactError("GEPA artifacts exist but GEPA policy is disabled")
+        raise ArtifactError("GEPA artifacts exist for a run LISA did not mark eligible")
     run = load_object(run_path)
     validate_schema(run, RESOURCES / "gepa-run.schema.json", "GEPA run")
     session = load_object(root / "gepa" / "session.json")
@@ -656,7 +765,10 @@ def write_outcome(root: Path) -> dict:
     write_json(root / "optimization-outcome.json", value)
     gepa = value["gepa"]
     impact = value["overallImpact"]
-    lines = ["# Optimization Impact", "", f"Strategy: {value['strategy']}", f"GEPA status: {gepa['status']}",
+    eligibility = value["gepaEligibility"]
+    lines = ["# Optimization Impact", "", f"Strategy: {value['strategy']}",
+             f"GEPA eligibility: {eligibility['reason']} - {eligibility['detail']}",
+             f"GEPA status: {gepa['status']}",
              f"Target impact: {impact['status']}", f"Deployment gate: {impact['deploymentGate']}", impact["reason"]]
     if "execution" in gepa:
         execution = gepa["execution"]
@@ -693,15 +805,21 @@ def validate_outcome(root: Path, manifest_status: str) -> None:
     path = root / "optimization-outcome.json"
     if path.exists() and load_object(path) != expected:
         raise ArtifactError("Optimization outcome disagrees with GEPA/evaluator evidence")
-    if expected["strategy"] == "gepa":
-        plan = load_object(root / "optimization-plan.json")
-        if len(plan["rounds"]) > plan["policy"].get("maxOptimizationRounds", 3):
-            raise ArtifactError("GEPA target rounds exceed maxOptimizationRounds")
-        if not path.exists():
-            raise ArtifactError("GEPA optimization requires an outcome artifact")
-        if manifest_status == "complete" and (expected["overallImpact"]["status"] != "measured"
-                                               or expected["overallImpact"]["deploymentGate"] != "PASS"):
-            raise ArtifactError("GEPA completion requires a version-bound final target PASS")
+    if expected["strategy"] != "gepa":
+        return
+    plan = load_object(root / "optimization-plan.json")
+    if len(plan["rounds"]) > plan["policy"].get("maxOptimizationRounds", 3):
+        raise ArtifactError("GEPA target rounds exceed maxOptimizationRounds")
+    if not path.exists():
+        raise ArtifactError("GEPA optimization requires an outcome artifact")
+    if manifest_status != "complete":
+        return
+    if expected["gepa"]["status"] in ("not-started", "awaiting-host"):
+        raise ArtifactError("LISA marked this run GEPA-eligible; completion requires a finished GEPA attempt")
+    if expected["gepa"]["status"] == "ready-for-promotion" and (
+            expected["overallImpact"]["status"] != "measured"
+            or expected["overallImpact"]["deploymentGate"] != "PASS"):
+        raise ArtifactError("GEPA promotion requires a version-bound final target PASS")
 
 
 @contextmanager

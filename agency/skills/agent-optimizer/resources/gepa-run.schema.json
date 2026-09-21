@@ -16,7 +16,7 @@
       "type": "object",
       "required": ["metricCalls", "reflectionCalls", "knownReflectionCostUsd", "unknownCostCalls", "evaluatorRunIds"],
       "properties": {
-        "harness": {"enum": ["Standard", "GitHub Copilot"]},
+        "harness": {"enum": ["Standard", "GitHub Copilot", "Copilot chat"]},
         "shadowAgentId": {"type": "string", "minLength": 1},
         "testSurface": {"const": "preview-canvas"},
         "memoryMode": {"enum": ["disabled", "reset-between-tests"]},
