@@ -414,18 +414,35 @@ class ArtifactContractTests(unittest.TestCase):
         self.publish_fixture()
         outcome = load_object(self.root / "optimization-outcome.json")
         self.assertEqual("not-used", outcome["gepa"]["status"])
+        self.assertEqual("not-assessed", outcome["gepaEligibility"]["reason"])
         self.assertEqual("not-measured", outcome["overallImpact"]["status"])
         self.assertIn("GEPA Execution and Overall Impact",
                       (self.root / "optimization-run-report.md").read_text(encoding="utf-8"))
 
-    def test_enabled_gepa_cannot_complete_without_target_evidence(self) -> None:
-        plan = load_object(self.root / "optimization-plan.json")
-        plan["policy"]["gepa"] = {"enabled": True}
-        write_json(self.root / "optimization-plan.json", plan)
-        with self.assertRaisesRegex(ArtifactError, "final target PASS"):
+    def eligible_decision(self) -> None:
+        write_json(
+            self.root / "gepa-eligibility.json",
+            {
+                "schemaVersion": "1.0",
+                "runId": RUN_IDS["optimization"],
+                "decidedAt": "2026-08-18T14:00:00Z",
+                "harness": AGENT["harness"],
+                "sourceEvaluationRunId": RUN_IDS["evaluation"],
+                "eligible": True,
+                "reason": "eligible",
+                "detail": "One instruction finding on a Standard agent.",
+            },
+        )
+
+    def test_eligible_run_cannot_complete_without_a_gepa_attempt(self) -> None:
+        self.eligible_decision()
+        with self.assertRaisesRegex(ArtifactError, "finished GEPA attempt"):
             self.publish_fixture()
-        publish(self.root, "blocked", "GEPA not started", [])
-        self.assertEqual("not-started", load_object(self.root / "optimization-outcome.json")["gepa"]["status"])
+        publish(self.root, "blocked", "GEPA shadow unavailable", [])
+        outcome = load_object(self.root / "optimization-outcome.json")
+        self.assertEqual("gepa", outcome["strategy"])
+        self.assertEqual("not-started", outcome["gepa"]["status"])
+        self.assertTrue(outcome["gepaEligibility"]["eligible"])
 
     def test_hash_tampering_is_rejected(self) -> None:
         self.publish_fixture()

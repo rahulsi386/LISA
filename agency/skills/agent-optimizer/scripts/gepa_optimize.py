@@ -8,18 +8,22 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from gepa_runtime import ArtifactError, abort_search, accept_host_response, advance, initialize, session_lock
+from gepa_runtime import (ArtifactError, abort_search, accept_host_response, advance, assess_eligibility,
+                          initialize, session_lock)
 from lisa_path_resolver import LisaConfigError, resolve_lisa_config
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["init", "advance", "seal-reflection", "abort"])
+    parser.add_argument("action", choices=["decide", "init", "advance", "seal-reflection", "abort"])
     parser.add_argument("--config", required=True)
     parser.add_argument("--reason")
     args = parser.parse_args()
     try:
         paths = resolve_lisa_config(Path(args.config))
+        if args.action == "decide":
+            print(json.dumps(assess_eligibility(paths), indent=2))
+            return 0
         with session_lock(paths):
             if args.action == "init":
                 session = initialize(paths)

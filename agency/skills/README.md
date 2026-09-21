@@ -627,8 +627,12 @@ Source: [`agent-optimizer/SKILL.md`](agent-optimizer/SKILL.md)
 
 Agent Optimizer is an **agent-directed post-evaluation mutation and rollback methodology** with deterministic plan/change/state schemas and lifecycle inventory validation. It has no packaged audit engine, live mutator, rollback executor, or evaluator-invocation program.
 
-Agency also includes an opt-in **GEPA 0.1.4 instruction-search driver** in `gepa_runtime.py`.
-It supports matching Standard or GitHub Copilot (GHCP) target/shadow pairs. GHCP requires the
+Agency also includes a LISA-decided **GEPA 0.1.4 instruction-search driver** in `gepa_runtime.py`.
+`decide_eligibility` records an immutable decision and reason code in `gepa-eligibility.json`; there
+is no end-user GEPA setting, and the driver derives its own seed, budgets and dataset partitions.
+It supports matching Standard, GitHub Copilot (GHCP) or Copilot chat target/shadow pairs, and
+excludes Microsoft Cowork, which has no instruction authoring path or evaluator test surface.
+GHCP requires the
 CliCopilot live signature, pinned preview canvas, verified Credits and per-case memory isolation;
 the outcome report identifies these execution conditions alongside measured impact.
 It emits hash-bound requests for host reflection and evaluator-owned shadow tests, with bounded

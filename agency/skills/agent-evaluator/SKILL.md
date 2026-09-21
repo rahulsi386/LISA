@@ -44,7 +44,7 @@ For the final target retest after GEPA promotion, use normal evaluation mode on 
 target with the full frozen dataset and rubric unchanged. Include `instructionSha256` from live
 read-back in observations. Candidate-mode scores can never authorize deployment.
 
-For Agency GHCP GEPA runs, use `optimization.gepa.githubCopilot.memoryMode` consistently from the
+For Agency GHCP GEPA runs, use the optimizer's `policy.gepa.githubCopilot.memoryMode` consistently from the
 initial evaluation through candidate tests and final target retest. Require the live CliCopilot
 signature and the pinned `/environments/<envId>/agents/<agentId>/preview` URL; no Standard test-pane
 fallback is allowed. On initial and final observations, include `gepaExecution` with

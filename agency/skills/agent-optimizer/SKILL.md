@@ -1,6 +1,6 @@
 ---
 name: "agent-optimizer"
-description: "Harness-aware Microsoft Copilot Studio optimizer with opt-in GEPA instruction evolution for Agency Standard and GitHub Copilot (GHCP) harnesses. Audits builder instructions, delegates candidate and target scoring to agent-evaluator, preserves rollback safety, and reports measured optimization impact."
+description: "Harness-aware Microsoft Copilot Studio optimizer with LISA-decided GEPA instruction evolution for Standard, GitHub Copilot (GHCP) and Copilot chat harnesses. Audits builder instructions, delegates candidate and target scoring to agent-evaluator, preserves rollback safety, and reports measured optimization impact."
 ---
 
 # Agent Optimizer
@@ -130,14 +130,17 @@ Prefer configuration and instruction fixes before new components or custom code.
 
 ### 3. Snapshot and rollback
 
-When `optimization.gepa.enabled=true` in configuration, execute the Agency GEPA protocol in
-`resources\gepa-execution.md` after the audit and plan, before a target mutation. GEPA is an
-instruction-only capability inside this skill, not another lifecycle stage. It currently supports
-one Standard or GitHub Copilot-harness agent and a distinct, verified, read-only shadow agent of
-the same harness in the same test environment. GHCP additionally requires verified Copilot Credits,
+LISA decides whether GEPA runs; it is never end-user configuration. After the audit and plan, run
+`scripts\gepa_optimize.py decide --config <CONFIG>` to record the immutable decision and reason
+code in `gepa-eligibility.json`. When it reports `eligible`, execute the Agency GEPA protocol in
+`resources\gepa-execution.md` before a target mutation; otherwise preserve the evidence-guided
+workflow and let the recorded reason stand as the audit trail. GEPA is an instruction-only
+capability inside this skill, not another lifecycle stage. It supports one Standard, GitHub Copilot
+or Copilot chat-harness agent and a distinct, verified, read-only shadow agent of the same harness
+in the same test environment. Microsoft Cowork is out of scope because it has no instruction
+authoring path and no evaluator test surface. GHCP additionally requires verified Copilot Credits,
 the CliCopilot live signature, the pinned preview canvas, and an explicit memory isolation policy.
-Unsupported scope or missing prerequisites produces an explicit blocker, never a
-silent fallback. With GEPA disabled or absent, preserve the existing evidence-guided workflow.
+Missing prerequisites for an eligible run produce an explicit blocker, never a silent fallback.
 
 Use the pinned library through `scripts\gepa_optimize.py`; do not simulate GEPA with hand-ranked
 rewrites. The CLI returns requests for this session's model and browser tools. Candidate execution

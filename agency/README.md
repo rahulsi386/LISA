@@ -210,8 +210,10 @@ Copilot Studio, Microsoft 365, or SharePoint.
 
 ### Optional capabilities
 
-- GEPA optimization requires Python 3.11 through 3.14, `gepa==0.1.4`, an approved isolated shadow
-  target, a fixed evaluation budget, and explicit reflection-cost approval.
+- GEPA optimization requires Python 3.11 through 3.14, `gepa==0.1.4`, and an approved isolated
+  shadow target. LISA decides when it runs and derives its own budgets, so there is no GEPA
+  setting in `lisa-config.json`. Without the engine installed, LISA records `engine-unavailable`
+  and keeps the evidence-guided workflow.
 - Video generation has separate Python and Node dependencies listed in
   `skills/video-generator/requirements.txt`; the base checker does not install them.
 
@@ -334,7 +336,7 @@ C:\Projects\MySolution\lisa-config.json using the approved current screenshots.
 | `solution-designer` | Creates architecture and sequence diagrams from the approved topology. | Editable Draw.io, Mermaid, Python/NetworkX routing, Node/resvg rendering, geometry checks, and browser inspection. | Accepted classification, Python and renderer dependencies, and Edge/Playwright for final visual inspection. | Two validated editable and presentation-ready diagram sets plus `current-design.json`. |
 | `agent-builder` | Builds the approved agent solution and reconciles every planned component. | Host-guided PAC and browser work, persisted-state verification, package handling, handoff contracts, and manifest validation. | Accepted classification/design, supported tenant and harness, PAC/browser authentication, licenses, capacity, and create/publish permissions. | Built agent evidence, instructions, live-state and handoff files, one solution package when applicable, and a complete or blocked manifest. |
 | `agent-evaluator` | Tests the built agent on its supported harness and records evidence. | Source-grounded test generation, Playwright execution, observation capture, deterministic scoring, and lifecycle validation. | Complete build handoff, evaluation material, a deployed supported test surface, and matching browser/tenant identity. | Evaluation dataset, per-test observations and evidence, scores, PASS/FAIL decision, and evaluation manifest. |
-| `agent-optimizer` | Audits and improves instructions while preserving rollback safety. | Instruction audit, evaluator-delegated retests, snapshots, bounded change rounds, rollback controls, and optional GEPA evolution. | Valid evaluation, authoring access to the same test agent, and evaluator availability; GEPA additionally needs its pinned package, budget, and shadow-isolation approvals. | Accepted improvement, verified no-change, blocked result, or rollback, with measured impact and an optimization manifest. |
+| `agent-optimizer` | Audits and improves instructions while preserving rollback safety. | Instruction audit, evaluator-delegated retests, snapshots, bounded change rounds, rollback controls, and LISA-decided GEPA evolution. | Valid evaluation, authoring access to the same test agent, and evaluator availability; GEPA additionally needs its pinned package, budget, and shadow-isolation approvals. | Accepted improvement, verified no-change, blocked result, or rollback, with measured impact and an optimization manifest. |
 | `artifact-generator` | Builds the final delivery documentation from lifecycle evidence. | Deterministic lifecycle input resolution, document generation, interactive execution-tree generation, and artifact validation. | Valid terminal artifacts from the required completed lifecycle stages. | Final solution document, interactive LISA execution tree, supporting files, and generation manifest. |
 | `artifact-publisher` | Publishes the approved package and artifacts to SharePoint. | Manifest categorization, Playwright-hosted SharePoint REST upload, checkpoints, remote reconciliation, and fresh read-back. | Generated artifacts, deployable package where required, authenticated browser session, correct libraries, and SharePoint write permission. | Agent-linked SharePoint folders/files and a verified `publication-record.json`; otherwise an explicit partial or failed result. |
 | `postpublish-cleanup` | Safely removes local generated output after delivery. | Fingerprinted inventory, path containment checks, publication verification, two consent gates, and exact-phrase confirmation. | Verified publication plus explicit approval and the exact phrase `DELETE OUTPUT`. | Contents removed from the configured `output/` directory while the output root and external workflow checkpoint are preserved. |
@@ -355,9 +357,11 @@ the [complete skills reference](skills/README.md).
   where required, a deployable solution package. Cowork-only solutions currently end as a
   documented handoff rather than completing evaluator, optimizer, and publisher stages.
 - `video-generator` is explicit-only and is not part of `cad-orchestrator` or its checkpoint.
-- Optional GEPA optimization is a bounded pilot for one Standard or GitHub Copilot harness agent.
-  Local synthetic tests do not prove live Copilot Studio effectiveness, and provider or Copilot
-  credit costs may remain unmeasured.
+- GEPA instruction optimization is decided by LISA rather than by configuration, and remains a
+  bounded pilot for one Standard, GitHub Copilot or Copilot chat harness agent with a verified
+  shadow. Microsoft Cowork is excluded because it has no instruction authoring path or evaluator
+  test surface. Local synthetic tests do not prove live Copilot Studio
+  effectiveness, and provider or Copilot credit costs may remain unmeasured.
 - The bundled Azure MCP exposes its full discovered toolset, including state-changing operations,
   but your Azure permissions and explicit approval still govern every action.
 - Artifact Publisher runs a packaged SharePoint publisher in the Playwright MCP process with

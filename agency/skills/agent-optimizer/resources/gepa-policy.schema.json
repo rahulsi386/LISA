@@ -23,7 +23,7 @@
       "properties": {
         "agentId": {"type": "string", "minLength": 1},
         "environmentId": {"type": "string", "minLength": 1},
-        "harness": {"enum": ["Standard", "GitHub Copilot"]}
+        "harness": {"enum": ["Standard", "GitHub Copilot", "Copilot chat"]}
       }
     },
     "githubCopilot": {

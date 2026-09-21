@@ -21,6 +21,7 @@
     {"relativePath": "optimization-run-report.md", "required": true, "schema": null},
     {"relativePath": "instruction-audit.json", "required": true, "schema": null},
     {"relativePath": "instruction-audit.md", "required": true, "schema": null},
+    {"relativePath": "gepa-eligibility.json", "required": false, "schema": "gepa-eligibility.schema.json"},
     {"relativePath": "gepa-run.json", "required": false, "schema": "gepa-run.schema.json"},
     {"relativePath": "optimization-outcome.json", "required": false, "schema": "optimization-outcome.schema.json"},
     {"relativePath": "optimization-impact.md", "required": false, "schema": null}

@@ -112,13 +112,17 @@ class AgencyPluginTests(unittest.TestCase):
         ):
             self.assertTrue((PLUGIN_ROOT / "skills" / name).is_file(), name)
 
-    def test_gepa_is_opt_in_inside_optimizer(self) -> None:
+    def test_gepa_decision_is_owned_by_lisa(self) -> None:
         config = json.loads((PLUGIN_ROOT / "lisa-config.example.json").read_text(encoding="utf-8"))
-        self.assertIs(False, config["optimization"]["gepa"]["enabled"])
+        self.assertNotIn("optimization", config)
         optimizer = PLUGIN_ROOT / "skills" / "agent-optimizer"
         self.assertEqual("gepa==0.1.4", (optimizer / "requirements-gepa.txt").read_text().strip())
         self.assertTrue((optimizer / "scripts" / "gepa_optimize.py").is_file())
+        self.assertTrue((optimizer / "resources" / "gepa-eligibility.schema.json").is_file())
         self.assertTrue((PLUGIN_ROOT / "skills" / "agent-evaluator" / "scripts" / "gepa_candidate.py").is_file())
+        runtime = (PLUGIN_ROOT / "skills" / "gepa_runtime.py").read_text(encoding="utf-8")
+        self.assertIn("def decide_eligibility", runtime)
+        self.assertNotIn('config.get("optimization"', runtime)
         base_dependencies = (PLUGIN_ROOT / "requirements.txt").read_text()
         self.assertNotRegex(base_dependencies, r"(?m)^gepa[=<>]")
 

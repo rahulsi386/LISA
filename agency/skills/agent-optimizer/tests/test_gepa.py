@@ -18,6 +18,8 @@ from gepa_runtime import (ArtifactError, AwaitingHost, BudgetExhausted, HostBrid
                           read_response, run_search, seal_response, sha256, validate_response, write_json)
 from gepa_runtime import advance, abort_search, freeze_evaluation, initialize, verified_session, outcome, text_hash, session_lock
 from gepa_runtime import github_copilot_execution, write_outcome
+from gepa_runtime import decide_eligibility, derive_budgets, derive_partitions, derive_seed
+from gepa_runtime import assess_eligibility
 from lisa_path_resolver import resolve_lisa_config
 from lifecycle_artifacts import inventory
 
@@ -214,6 +216,10 @@ class EngineTests(unittest.TestCase):
         plan = {"runId": self.session["runId"], "policy": {"gepa": self.session["policy"]},
                 "agent": target, "sourceEvaluation": {"runId": initial["runId"]}, "rounds": []}
         write_json(self.root.parent / "optimization-plan.json", plan)
+        write_json(self.root.parent / "gepa-eligibility.json",
+                   {"schemaVersion": "1.0", "runId": self.session["runId"], "decidedAt": "2026-09-17T12:00:00+00:00",
+                    "harness": self.harness, "sourceEvaluationRunId": initial["runId"],
+                    "eligible": True, "reason": "eligible", "detail": "Engine fixture decision."})
         self.assertEqual("not-measured", outcome(self.root.parent)["overallImpact"]["status"])
         candidate = load_object(self.root / "candidates" / (result["selectedCandidateId"] + ".json"))
         promoted = {"roundId": "round-001", "status": "accepted", "outcome": "accepted",
@@ -267,16 +273,11 @@ class SessionTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         base = Path(self.temporary.name)
-        write_json(base / "lisa-config.json", {"basePath": ".", "copilotStudio": {"envId": "test", "envUrl": "https://example.crm.dynamics.com"},
-                                              "optimization": {"gepa": {"enabled": True}}})
+        write_json(base / "lisa-config.json", {"basePath": ".", "copilotStudio": {"envId": "test", "envUrl": "https://example.crm.dynamics.com"}})
         self.paths = resolve_lisa_config(base / "lisa-config.json")
         self.seed = "# Identity\nPolicy agent.\n# Objectives\nAnswer questions.\n"
-        self.policy = {"enabled": True, "seed": 7, "searchMetricCalls": 8, "maxMetricCalls": 100,
-                       "maxReflectionCalls": 10, "maxElapsedSeconds": 3600, "minimumImprovement": 0.05,
-                       "reflectionProvider": "fixture", "reflectionModel": "fixture", "reflectionApproved": True,
+        self.policy = {"reflectionProvider": "fixture", "reflectionModel": "fixture", "reflectionApproved": True,
                        "isolationVerified": True, "isolationEvidence": "Fixture isolation evidence",
-                       "trainIds": ["EVAL-001"], "validationIds": ["EVAL-002"], "holdoutIds": ["EVAL-003"],
-                       "protectedTestIds": ["EVAL-004"],
                        "shadowAgent": {"agentId": "shadow", "environmentId": "test", "harness": "Standard"}}
         self.plan = {"schemaVersion": "1.0", "runId": "OPT-20260917-120000-ABCDEF12", "generatedAt": "2026-09-17T12:00:00Z",
                      "agent": {"agentId": "target", "environmentId": "test", "harness": "Standard",
@@ -286,6 +287,11 @@ class SessionTests(unittest.TestCase):
                                           "deploymentGateRelativePath": "evaluation/deployment-gate-summary.md"},
                      "policy": {"gepa": self.policy}, "rounds": [], "deferredFindings": []}
         write_json(self.paths.optimization / "optimization-plan.json", self.plan)
+        self.eligibility = {"schemaVersion": "1.0", "runId": self.plan["runId"],
+                            "decidedAt": "2026-09-17T12:00:00+00:00", "harness": "Standard",
+                            "sourceEvaluationRunId": self.plan["sourceEvaluation"]["runId"],
+                            "eligible": True, "reason": "eligible", "detail": "Fixture decision."}
+        write_json(self.paths.optimization / "gepa-eligibility.json", self.eligibility)
         write_json(self.paths.optimization / "instruction-audit.json", {"instructionSha256": text_hash(self.seed)})
         write_json(self.paths.build / "build-manifest.json", {})
         write_json(self.paths.build / "agent-build-handoff.json", {"agent": self.plan["agent"],
@@ -315,6 +321,8 @@ class SessionTests(unittest.TestCase):
         else:
             self.policy.pop("githubCopilot", None)
         write_json(self.paths.optimization / "optimization-plan.json", self.plan)
+        self.eligibility["harness"] = target
+        write_json(self.paths.optimization / "gepa-eligibility.json", self.eligibility)
         for directory, filename in ((self.paths.build, "agent-build-handoff.json"),
                                     (self.paths.evaluation, "evaluation-observations.json")):
             value = load_object(directory / filename)
@@ -335,10 +343,46 @@ class SessionTests(unittest.TestCase):
 
     def test_cross_harness_and_unsupported_targets_are_rejected(self):
         for target, shadow in (("GitHub Copilot", "Standard"), ("Standard", "GitHub Copilot"),
-                               ("Copilot chat", "Standard"), ("Copilot chat", "Copilot chat")):
+                               ("Copilot chat", "Standard"), ("Standard", "Copilot chat")):
             self.set_harness(target, shadow)
             with self.subTest(target=target, shadow=shadow), self.assertRaises(ArtifactError):
                 self.prepare()
+
+    def test_copilot_chat_session_uses_matching_shadow(self):
+        self.set_harness("Copilot chat", "Copilot chat")
+        session = self.prepare()
+        self.assertEqual("Copilot chat", session["agent"]["harness"])
+        self.assertEqual("Copilot chat", session["policy"]["shadowAgent"]["harness"])
+        self.assertNotIn("githubCopilot", session["policy"])
+
+    def test_lisa_derives_partitions_and_budgets_from_the_frozen_dataset(self):
+        session = self.prepare()
+        policy = session["policy"]
+        partitions = [set(policy[key]) for key in ("trainIds", "validationIds", "holdoutIds", "protectedTestIds")]
+        self.assertEqual({f"EVAL-{index:03d}" for index in range(1, 5)}, set.union(*partitions))
+        self.assertEqual(4, sum(len(item) for item in partitions))
+        self.assertEqual({"EVAL-004"}, partitions[3])
+        self.assertGreaterEqual(policy["maxMetricCalls"],
+                                policy["searchMetricCalls"] + 2 * (len(policy["holdoutIds"]) + len(policy["protectedTestIds"])))
+        self.assertEqual(derive_seed(self.plan["runId"]), policy["seed"])
+        self.assertEqual(policy, load_object(self.paths.optimization / "optimization-plan.json")["policy"]["gepa"])
+
+    def test_eligibility_reason_codes_are_deterministic(self):
+        dataset = self.paths.evaluation / "evaluation-dataset.json"
+        cowork = {**self.plan, "agent": {**self.plan["agent"], "harness": None}}
+        self.assertEqual("unsupported-harness", decide_eligibility(cowork, self.paths.evaluation)["reason"])
+        observations = load_object(self.paths.evaluation / "evaluation-observations.json")
+        blocked = copy.deepcopy(observations)
+        blocked["optimizerHandoff"]["eligibleForOptimization"] = False
+        write_json(self.paths.evaluation / "evaluation-observations.json", blocked)
+        self.assertEqual("evaluation-ineligible", decide_eligibility(self.plan, self.paths.evaluation)["reason"])
+        tools = copy.deepcopy(observations)
+        tools["optimizerHandoff"]["findings"] = [{"suspectedChangeSurface": "tool-schema"}]
+        write_json(self.paths.evaluation / "evaluation-observations.json", tools)
+        self.assertEqual("no-instruction-finding", decide_eligibility(self.plan, self.paths.evaluation)["reason"])
+        write_json(self.paths.evaluation / "evaluation-observations.json", observations)
+        write_json(dataset, {"testCases": [{"id": f"EVAL-{index:03d}", "severity": "high"} for index in range(1, 4)]})
+        self.assertEqual("dataset-too-small", decide_eligibility(self.plan, self.paths.evaluation)["reason"])
 
     def test_github_copilot_requires_memory_policy_and_verified_credits(self):
         for policy in (None, {"memoryMode": "shared", "creditsVerified": True},
@@ -377,26 +421,39 @@ class SessionTests(unittest.TestCase):
         with self.assertRaisesRegex(ArtifactError, "input changed"):
             verified_session(self.paths)
 
-    def test_leakage_target_alias_and_insufficient_holdout_budget_rejected(self):
-        for mutation in ("overlap", "target", "budget", "critical"):
+    def test_decision_is_recorded_once_and_reused(self):
+        path = self.paths.optimization / "gepa-eligibility.json"
+        path.unlink()
+        decision = assess_eligibility(self.paths)
+        self.assertEqual(self.plan["runId"], decision["runId"])
+        self.assertEqual(self.plan["sourceEvaluation"]["runId"], decision["sourceEvaluationRunId"])
+        self.assertIn(decision["reason"], ("eligible", "engine-unavailable"))
+        self.assertEqual(decision["eligible"], decision["reason"] == "eligible")
+        self.assertEqual(decision, load_object(path))
+        self.assertEqual(decision, assess_eligibility(self.paths))
+
+    def test_host_supplied_policy_inputs_are_validated(self):
+        for mutation in ("target", "isolation", "reflection", "environment"):
             policy = copy.deepcopy(self.policy)
-            if mutation == "overlap":
-                policy["holdoutIds"] = policy["trainIds"]
-            elif mutation == "target":
+            if mutation == "target":
                 policy["shadowAgent"]["agentId"] = "target"
-            elif mutation == "budget":
-                policy["maxMetricCalls"] = 8
+            elif mutation == "isolation":
+                policy["isolationVerified"] = False
+            elif mutation == "reflection":
+                del policy["reflectionProvider"]
             else:
-                policy["protectedTestIds"], policy["trainIds"] = policy["trainIds"], policy["protectedTestIds"]
+                policy["shadowAgent"]["environmentId"] = "other"
             write_json(self.paths.optimization / "optimization-plan.json", {**self.plan, "policy": {"gepa": policy}})
             with self.subTest(mutation=mutation), self.assertRaises(ArtifactError):
                 self.prepare()
 
-    def test_opt_in_and_missing_builder_contract(self):
-        self.paths.config["optimization"]["gepa"]["enabled"] = False
-        with self.assertRaisesRegex(ArtifactError, "not enabled"):
+    def test_ineligible_run_and_missing_builder_contract(self):
+        write_json(self.paths.optimization / "gepa-eligibility.json",
+                   {**self.eligibility, "eligible": False, "reason": "no-instruction-finding",
+                    "detail": "No instruction finding."})
+        with self.assertRaisesRegex(ArtifactError, "not eligible"):
             self.prepare()
-        self.paths.config["optimization"]["gepa"]["enabled"] = True
+        write_json(self.paths.optimization / "gepa-eligibility.json", self.eligibility)
         handoff = load_object(self.paths.build / "agent-build-handoff.json")
         del handoff["instructionOptimization"]
         write_json(self.paths.build / "agent-build-handoff.json", handoff)
