@@ -111,7 +111,7 @@ class RequirementAnalyzerTests(unittest.TestCase):
         self.assertEqual(output.resolve(), Path(run["temp_output_path"]))
         self.assertEqual(analysis.resolve(), Path(run["output_root"]))
         self.assertEqual(["analysis"], sorted(item.name for item in output.iterdir()))
-        self.assertTrue(Path(prepared["run"]).is_relative_to(analysis))
+        self.assertTrue(Path(prepared["run"]).is_relative_to(analysis.resolve()))
         self.assertEqual(analysis.resolve(), Path(prepared["target_markdown"]).parent)
         return run, manifest
 
