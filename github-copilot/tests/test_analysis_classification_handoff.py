@@ -28,9 +28,13 @@ def analyzer_fixtures():
 
 class AnalysisClassificationIntegrationTests(unittest.TestCase):
     def command(self, skill: str, *arguments: str, success: bool = True) -> dict:
-        script_name = "requirement_analyzer.py" if skill == "requirement-analyzer" else "complexity_classifier.py"
+        script = (
+            SKILLS / skill / "scripts" / "requirement_analyzer.py"
+            if skill == "requirement-analyzer"
+            else SKILLS / skill / "tests" / "classifier_cli.py"
+        )
         result = subprocess.run(
-            [sys.executable, "-B", str(SKILLS / skill / "scripts" / script_name), *arguments],
+            [sys.executable, "-B", str(script), *arguments],
             capture_output=True, text=True, encoding="utf-8", timeout=90,
         )
         if success:

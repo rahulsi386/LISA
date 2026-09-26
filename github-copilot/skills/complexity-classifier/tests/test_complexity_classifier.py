@@ -17,6 +17,7 @@ from unittest import mock
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = SKILL_ROOT / "scripts" / "complexity_classifier.py"
+CLI = SKILL_ROOT / "tests" / "classifier_cli.py"
 FIXTURE = SKILL_ROOT / "tests" / "fixtures" / "basic"
 sys.path.insert(0, str(SKILL_ROOT.parent))
 from analysis_handoff import build_validated_manifest
@@ -61,7 +62,7 @@ class ComplexityClassifierTests(unittest.TestCase):
 
     def run_cli(self, *arguments: str, expected: int = 0) -> dict:
         completed = subprocess.run(
-            [sys.executable, str(SCRIPT), *arguments],
+            [sys.executable, str(CLI), *arguments],
             capture_output=True,
             text=True,
             check=False,
@@ -2457,6 +2458,28 @@ class ComplexityClassifierTests(unittest.TestCase):
             )
         changed_date = {**original, "reviewed_at": "2026-08-14"}
         self.assertNotEqual(classifier._semantic_ledger(original), classifier._semantic_ledger(changed_date))
+
+    def test_packaged_offline_references_expire(self) -> None:
+        manifest = json.loads(classifier.REFERENCE_MANIFEST_PATH.read_text(encoding="utf-8"))
+        verified_at = datetime.fromisoformat(manifest["verified_at"])
+        for expired in (False, True):
+            with self.subTest(expired=expired), tempfile.TemporaryDirectory() as directory:
+                current = verified_at + timedelta(
+                    days=manifest["verification_max_age_days"] + 1 if expired else 1,
+                )
+                with mock.patch.object(classifier, "datetime", wraps=datetime) as clock, \
+                        mock.patch.object(classifier.urllib.request, "urlopen") as network:
+                    clock.now.return_value = current
+                    if expired:
+                        with self.assertRaisesRegex(classifier.ClassifierError, "Required Microsoft references"):
+                            classifier._refresh_references(Path(directory), current.isoformat(), True, "copilot")
+                    else:
+                        references = classifier._refresh_references(
+                            Path(directory), current.isoformat(), True, "copilot",
+                        )
+                        self.assertTrue(references)
+                        self.assertTrue(all(item["status"] == "packaged-verified" for item in references))
+                    network.assert_not_called()
 
     def test_fresh_reference_cache_still_avoids_network_without_extending_ttl(self) -> None:
         with tempfile.TemporaryDirectory(dir=SKILL_ROOT / "tests") as directory:

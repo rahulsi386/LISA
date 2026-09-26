@@ -35,7 +35,9 @@ def _checked_path(path: Path) -> Path:
             hasattr(component, "is_junction") and component.is_junction()
         ):
             raise AnalysisHandoffError(f"Analysis handoff cannot use links: {component}")
-    return absolute
+    # No component is a link, so this only canonicalises spellings of the same
+    # location (Windows 8.3 short names, drive casing); it cannot resolve links away.
+    return Path(os.path.realpath(absolute))
 
 
 def _read(path: Path) -> bytes:

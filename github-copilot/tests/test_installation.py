@@ -13,6 +13,26 @@ POWERSHELL = shutil.which("pwsh")
 
 @unittest.skipUnless(POWERSHELL, "PowerShell 7 is required")
 class InstallationTests(unittest.TestCase):
+    def test_repository_runner_propagates_native_failures(self):
+        self.run_powershell(r"""
+$ErrorActionPreference = 'Stop'
+$tokens = $null
+$parseErrors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile(
+    (Join-Path $PWD 'scripts/Test-LisaRepository.ps1'), [ref]$tokens, [ref]$parseErrors)
+if ($parseErrors) { throw ($parseErrors.Message -join '; ') }
+foreach ($definition in $ast.FindAll({ param($node)
+    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Invoke-RepositoryCheck'
+}, $false)) { . ([scriptblock]::Create($definition.Extent.Text)) }
+function Test-NativeCommand { $global:LASTEXITCODE = $script:exitCode }
+foreach ($code in @(7, 0)) {
+    $script:exitCode = $code
+    $rejected = $false
+    try { Invoke-RepositoryCheck Test-NativeCommand @('fixture') } catch { $rejected = $true }
+    if ($rejected -ne ($code -ne 0)) { throw "Incorrect failure propagation for $code" }
+}
+""")
+
     def test_plugin_registration_is_independent_of_project_setup(self):
         self.run_powershell(r"""
 $ErrorActionPreference = 'Stop'
@@ -26,7 +46,7 @@ foreach ($definition in $ast.FindAll({ param($node)
 $entry = $ast.EndBlock.Statements | Where-Object { $_.Extent.Text.StartsWith('if ([Environment]::OSVersion.Platform') } | Select-Object -First 1
 $main = [scriptblock]::Create($ast.Extent.Text.Substring($entry.Extent.StartOffset))
 $DistributionRoot = $PWD.Path
-$PluginRoot = Join-Path $PWD 'github-copilot-cli'
+$PluginRoot = Join-Path $PWD 'github-copilot'
 $ScoutSkillsRoot = Join-Path $PWD 'scout/m-skills'
 $RequirementsPath = Join-Path $PWD 'requirements.txt'
 $userProfile = Join-Path $PWD 'unused-profile'
@@ -170,7 +190,7 @@ if ($codebase.SkillsPath -ne (Join-Path $PWD 'scout/m-skills')) { throw 'Wrong s
     def test_shared_runtime_rejects_node18_and_missing_npx(self):
         self.run_powershell(r"""
 $ErrorActionPreference = 'Stop'
-. ./github-copilot-cli/scripts/Get-LisaRuntimePrerequisites.ps1
+. ./github-copilot/scripts/Get-LisaRuntimePrerequisites.ps1
 function Get-VersionFromCommand {
     param($Command, $Arguments, $Pattern)
     $versions = @{ python='3.13.15'; node=$script:nodeVersion; pwsh='7.6.0' }
@@ -204,9 +224,9 @@ if ($parseErrors) { throw ($parseErrors.Message -join '; ') }
 foreach ($definition in $ast.FindAll({ param($node)
     $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-PrerequisiteState'
 }, $false)) { . ([scriptblock]::Create($definition.Extent.Text)) }
-. ./github-copilot-cli/scripts/Get-LisaRuntimePrerequisites.ps1
+. ./github-copilot/scripts/Get-LisaRuntimePrerequisites.ps1
 $script:TargetPlatform = 'CopilotCli'
-$SourceSkillsRoot = Join-Path $PWD 'github-copilot-cli/skills'
+$SourceSkillsRoot = Join-Path $PWD 'github-copilot/skills'
 $RequirementsPath = Join-Path $PWD 'requirements.txt'
 function Get-VersionFromCommand { param($Command,$Arguments,$Pattern) [pscustomobject]@{ Version=[version]'20.0.0'; Path="mock:$Command" } }
 function Test-PythonLibraries { param($PythonPath) [pscustomobject]@{ Installed=$true; Details='fixture' } }

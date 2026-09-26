@@ -9,6 +9,7 @@ from pathlib import Path
 SKILLS_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(SKILLS_ROOT))
 
+from analysis_handoff import build_validated_manifest, _canonical_hash
 from lisa_path_resolver import LisaConfigError, resolve_lisa_config  # noqa: E402
 from resolve_skill_inputs import resolve_inputs  # noqa: E402
 
@@ -47,10 +48,26 @@ class SkillInputRoutingTests(unittest.TestCase):
             "publication",
         ):
             (output / stage).mkdir(parents=True)
-        write_json(
-            output / "analysis" / "requirement-analysis_20260818_120000.json",
-            {"schemaVersion": "fixture"},
+        ledger = output / "analysis" / "requirement-analysis_20260818_120000.json"
+        run_id = "RA-20260818_120000-0123ABCD"
+        write_json(ledger, {"run_id": run_id, "findings": []})
+        markdown = ledger.with_suffix(".md")
+        markdown.write_text("# Analysis fixture\n", encoding="utf-8")
+        sources = [{"source_id": "SRC-FIXTURE", "sha256": "0" * 64}]
+        manifest = build_validated_manifest(
+            {
+                "schema_version": "1.0",
+                "run_id": run_id,
+                "requirements_root": str(self.base / "requirements"),
+                "sources": sources,
+                "source_count": len(sources),
+                "manifest_sha256": _canonical_hash(sources),
+            },
+            ledger,
+            markdown,
+            "2026-08-18T12:00:00+00:00",
         )
+        write_json(ledger.with_name(f"{ledger.stem}-manifest.json"), manifest)
         write_json(
             output / "classification" / "complexity-classification_20260818_120100.json",
             {"schemaVersion": "fixture"},

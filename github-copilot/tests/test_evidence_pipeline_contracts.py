@@ -120,7 +120,7 @@ class AnalysisHandoffTests(unittest.TestCase):
 
     def test_shared_resolver_requires_the_same_handoff_without_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             path, _ = self.fixture(root)
             config = root / "lisa-config.json"
             config.write_text(json.dumps({"basePath": "."}), encoding="utf-8")

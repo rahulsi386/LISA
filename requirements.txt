@@ -58,12 +58,12 @@ networkx==3.6.1
 # [PLUGIN ONLY] GitHub Copilot CLI
 #   - WinGet package: GitHub.Copilot, or npm @github/copilot
 #   - An active GitHub Copilot plan and `copilot /login` sign-in.
-#   - Registers the plugin from github-copilot-cli, which ships its own
+#   - Registers the plugin from github-copilot, which ships its own
 #     self-contained requirements.txt for standalone plugin installs.
 #
 # [PLUGIN ONLY] Microsoft Agency (internal Microsoft only)
 #   - Installed from the internal Microsoft channel; not publicly available.
-#   - Registers the same github-copilot-cli plugin for its Copilot or Claude engine.
+#   - Registers the same github-copilot plugin for its Copilot or Claude engine.
 
 # ---------------------------------------------------------------------------
 # Required system software (not installable by pip; all platforms)
@@ -128,7 +128,7 @@ networkx==3.6.1
 # [PLUGIN ONLY] Optional GEPA instruction optimization
 # ---------------------------------------------------------------------------
 # Complete inventory:
-#   github-copilot-cli/skills/agent-optimizer/requirements-gepa.txt
+#   github-copilot/skills/agent-optimizer/requirements-gepa.txt
 # Requires Python 3.11-3.14 and the pinned gepa==0.1.4 release. LISA decides when
 # GEPA runs; when the engine is absent it records engine-unavailable and keeps the
 # evidence-guided workflow, so this stack remains optional.
@@ -137,7 +137,7 @@ networkx==3.6.1
 # [PLUGIN ONLY] Optional video-generator (explicit invocation, outside CAD)
 # ---------------------------------------------------------------------------
 # Complete pip-compatible inventory:
-#   github-copilot-cli/skills/video-generator/requirements.txt
+#   github-copilot/skills/video-generator/requirements.txt
 # Python speech dependency: edge-tts==7.2.7; install into the generated production
 # folder's work/speech-env venv, not the Scout or shared CAD Python environment.
 # Node.js 20+, npm; template pins @napi-rs/canvas==0.1.80 and ffmpeg-static==5.2.0.

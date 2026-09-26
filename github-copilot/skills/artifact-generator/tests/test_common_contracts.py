@@ -13,7 +13,7 @@ from validate_artifact_contracts import canonical_stage_root, validate_all  # no
 class CommonArtifactContractTests(unittest.TestCase):
     def test_all_local_skills_use_valid_common_contracts(self) -> None:
         contracts = validate_all()
-        self.assertEqual(10, len(contracts))
+        self.assertEqual(11, len(contracts))
         self.assertEqual(
             {
                 "analysis",
@@ -26,6 +26,7 @@ class CommonArtifactContractTests(unittest.TestCase):
                 "publication",
                 "cleanup",
                 "orchestration",
+                "video",
             },
             {contract["stage"] for contract in contracts},
         )
