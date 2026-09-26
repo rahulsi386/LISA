@@ -31,5 +31,5 @@ effort; there is no response or remediation SLA. A passing CI check is not a sec
 - Preserve the runtime review, publication-verification, and exact-phrase cleanup gates.
 
 Current runtime limitations, including the floating Azure MCP dependency, remain documented in the
-[plugin safety guidance](github-copilot-cli/README.md#limitations-and-safety). Repository governance
+[plugin safety guidance](github-copilot/README.md#limitations-and-safety). Repository governance
 does not change those runtime permissions or dependencies.

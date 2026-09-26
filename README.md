@@ -44,11 +44,11 @@ LISA runs on three hosts. Pick one and follow its guide.
 | Platform | Who it is for | Guide |
 |---|---|---|
 | **Microsoft Scout Desktop** | Scout users running LISA as local skills | [scout/README.md](scout/README.md) |
-| **GitHub Copilot CLI** | Anyone with an active GitHub Copilot plan | [github-copilot-cli/README.md](github-copilot-cli/README.md) |
-| **Microsoft Agency** | Internal Microsoft only, via its Copilot or Claude engine | [github-copilot-cli/README.md](github-copilot-cli/README.md) |
+| **GitHub Copilot CLI** | Anyone with an active GitHub Copilot plan | [github-copilot/README.md](github-copilot/README.md) |
+| **Microsoft Agency** | Internal Microsoft only, via its Copilot or Claude engine | [github-copilot/README.md](github-copilot/README.md) |
 
 GitHub Copilot CLI and Microsoft Agency share the same plugin distribution in
-[github-copilot-cli](github-copilot-cli). Scout uses the skill set in [scout/m-skills](scout/m-skills).
+[github-copilot](github-copilot). Scout uses the skill set in [scout/m-skills](scout/m-skills).
 
 ## Quick start
 
@@ -84,7 +84,7 @@ LISA\
 |-- lisa-config.json                 Common project configuration template
 |-- requirements.txt                 Common prerequisite manifest for all platforms
 |-- Install-LISA-Prerequisites.ps1   Common platform-aware installer
-|-- github-copilot-cli\              Plugin for GitHub Copilot CLI and Microsoft Agency
+|-- github-copilot\                  Plugin for GitHub Copilot CLI and Microsoft Agency
 |   |-- README.md
 |   |-- plugin.json
 |   `-- skills\
@@ -140,8 +140,8 @@ Both setup paths use the same runtime checker for Python, PowerShell, Node.js, n
 ## Further reading
 
 - [Microsoft Scout Desktop guide](scout/README.md)
-- [GitHub Copilot CLI and Agency plugin guide](github-copilot-cli/README.md)
-- [Skill suite reference](github-copilot-cli/skills/README.md)
+- [GitHub Copilot CLI and Agency plugin guide](github-copilot/README.md)
+- [Skill suite reference](github-copilot/skills/README.md)
 
 ## Governance and support
 

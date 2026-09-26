@@ -10,9 +10,9 @@ This is a community-maintained project, not a Microsoft-supported product. Agenc
 identifies a distribution target; it is not certification or an endorsement. Certification
 remains `draft`. Passing local tests or CI does not establish production readiness.
 
-Repository governance applies to both `github-copilot-cli/` and `scout/`. It does not replace the
+Repository governance applies to both `github-copilot/` and `scout/`. It does not replace the
 runtime human approvals, tenant permissions, or publication and cleanup checks described in the
-[plugin guide](github-copilot-cli/README.md).
+[plugin guide](github-copilot/README.md).
 
 ## Contribution decisions
 

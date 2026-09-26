@@ -32,9 +32,9 @@ jobs:
         with:
           node-version: '22'
       - name: Install Python dependencies
-        run: python -m pip install -r github-copilot-cli/requirements.txt
+        run: python -m pip install -r github-copilot/requirements.txt
       - name: Restore renderer
-        run: npm --prefix github-copilot-cli/skills/solution-designer/renderer ci
+        run: npm --prefix github-copilot/skills/solution-designer/renderer ci
       - name: Run plugin checks
         run: ./scripts/Test-LisaRepository.ps1 -Suite Plugin
 
@@ -72,6 +72,6 @@ jobs:
         with:
           python-version: '3.13'
       - name: Install GEPA test dependencies
-        run: python -m pip install -r github-copilot-cli/requirements.txt -r github-copilot-cli/skills/agent-optimizer/requirements-gepa.txt
+        run: python -m pip install -r github-copilot/requirements.txt -r github-copilot/skills/agent-optimizer/requirements-gepa.txt
       - name: Run synthetic engine checks
         run: ./scripts/Test-LisaRepository.ps1 -Suite Gepa

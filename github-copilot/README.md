@@ -81,7 +81,7 @@ without silently discarding completed work or remote resources.
 
 Choose one host and one source. A **local installation** is best while developing or reviewing the
 plugin. A **GitHub installation** is simpler for normal use and installs the plugin from the
-`github-copilot-cli/` directory of `rahulsi386/LISA`.
+`github-copilot/` directory of `rahulsi386/LISA`.
 
 ### Get the repository locally
 
@@ -105,14 +105,14 @@ agency --version
 
 ```powershell
 Set-Location <path-to-LISA>
-agency plugin install local:.\github-copilot-cli
+agency plugin install local:.\github-copilot
 agency plugin list
 ```
 
 **Directly from the GitHub repository:**
 
 ```powershell
-agency plugin install github:rahulsi386/LISA:github-copilot-cli
+agency plugin install github:rahulsi386/LISA:github-copilot
 agency plugin list
 ```
 
@@ -122,7 +122,7 @@ add `--engine copilot` before the plugin source.
 For a one-session local trial that does not install the plugin, run:
 
 ```powershell
-agency copilot --plugin local:.\github-copilot-cli
+agency copilot --plugin local:.\github-copilot
 ```
 
 ### Install in GitHub Copilot CLI
@@ -141,22 +141,22 @@ copilot login
 
 ```powershell
 Set-Location <path-to-LISA>
-copilot plugin install .\github-copilot-cli
+copilot plugin install .\github-copilot
 copilot plugin list
 ```
 
 **Directly from the GitHub repository:**
 
 ```powershell
-copilot plugin install rahulsi386/LISA:github-copilot-cli
+copilot plugin install rahulsi386/LISA:github-copilot
 copilot plugin list
 ```
 
-The `:github-copilot-cli` suffix is required because the plugin is in a repository subdirectory. For a
+The `:github-copilot` suffix is required because the plugin is in a repository subdirectory. For a
 one-session local trial that does not install or copy the plugin, run:
 
 ```powershell
-copilot --plugin-dir .\github-copilot-cli
+copilot --plugin-dir .\github-copilot
 ```
 
 See the official [GitHub Copilot CLI plugin reference](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-plugin-reference)
@@ -269,7 +269,7 @@ Before execution:
 Validate the project paths from the LISA checkout:
 
 ```powershell
-python .\github-copilot-cli\skills\lisa_path_resolver.py `
+python .\github-copilot\skills\lisa_path_resolver.py `
   --config "C:\Projects\MySolution\lisa-config.json"
 ```
 
@@ -396,7 +396,7 @@ the [complete skills reference](skills/README.md).
 - In a Copilot session, run `/skills info cad-orchestrator`. A same-named project or personal skill
   can take precedence over the plugin copy.
 - Start a new host session after installing or updating the plugin. During local Copilot CLI
-  development, use `copilot --plugin-dir .\github-copilot-cli` so edits are loaded from the checkout.
+  development, use `copilot --plugin-dir .\github-copilot` so edits are loaded from the checkout.
 - Re-run `Test-LisaAgencyPrerequisites.ps1` after a runtime update or dependency error.
 - Confirm `pac env who`, browser identity, configuration environment, and SharePoint tenant all
   refer to the same intended tenant before a cloud stage.
@@ -415,7 +415,7 @@ Repository CI uses the local runner documented in [CONTRIBUTING.md](../CONTRIBUT
 From the repository root, run `pwsh -File scripts/Test-LisaRepository.ps1 -Suite Plugin`.
 See [GOVERNANCE.md](../GOVERNANCE.md) for review requirements and the limits of CI coverage.
 
-From the `github-copilot-cli/` directory, run the plugin tests:
+From the `github-copilot/` directory, run the plugin tests:
 
 ```powershell
 python -m unittest discover -s .\tests -p "test_*.py" -v

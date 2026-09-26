@@ -14,7 +14,7 @@ $script:VerifiedComponents = New-Object System.Collections.Generic.List[string]
 
 $DistributionRoot = $PSScriptRoot
 $ScoutSkillsRoot = Join-Path $DistributionRoot 'scout\m-skills'
-$PluginRoot = Join-Path $DistributionRoot 'github-copilot-cli'
+$PluginRoot = Join-Path $DistributionRoot 'github-copilot'
 $RequirementsPath = Join-Path $DistributionRoot 'requirements.txt'
 . (Join-Path $PluginRoot 'scripts\Get-LisaRuntimePrerequisites.ps1')
 $userProfile = [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile)

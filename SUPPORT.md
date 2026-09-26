@@ -4,7 +4,7 @@ LISA is a community-maintained project with best-effort support through
 [GitHub Issues](https://github.com/rahulsi386/LISA/issues). It is not a Microsoft-supported product
 and provides no SLA or production-readiness guarantee.
 
-Before opening an issue, check the [plugin guide](github-copilot-cli/README.md), its troubleshooting
+Before opening an issue, check the [plugin guide](github-copilot/README.md), its troubleshooting
 section, and existing issues. For Scout, start with the [Scout guide](scout/README.md).
 
 For a reproducible bug, include:

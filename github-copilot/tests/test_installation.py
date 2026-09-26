@@ -46,7 +46,7 @@ foreach ($definition in $ast.FindAll({ param($node)
 $entry = $ast.EndBlock.Statements | Where-Object { $_.Extent.Text.StartsWith('if ([Environment]::OSVersion.Platform') } | Select-Object -First 1
 $main = [scriptblock]::Create($ast.Extent.Text.Substring($entry.Extent.StartOffset))
 $DistributionRoot = $PWD.Path
-$PluginRoot = Join-Path $PWD 'github-copilot-cli'
+$PluginRoot = Join-Path $PWD 'github-copilot'
 $ScoutSkillsRoot = Join-Path $PWD 'scout/m-skills'
 $RequirementsPath = Join-Path $PWD 'requirements.txt'
 $userProfile = Join-Path $PWD 'unused-profile'
@@ -190,7 +190,7 @@ if ($codebase.SkillsPath -ne (Join-Path $PWD 'scout/m-skills')) { throw 'Wrong s
     def test_shared_runtime_rejects_node18_and_missing_npx(self):
         self.run_powershell(r"""
 $ErrorActionPreference = 'Stop'
-. ./github-copilot-cli/scripts/Get-LisaRuntimePrerequisites.ps1
+. ./github-copilot/scripts/Get-LisaRuntimePrerequisites.ps1
 function Get-VersionFromCommand {
     param($Command, $Arguments, $Pattern)
     $versions = @{ python='3.13.15'; node=$script:nodeVersion; pwsh='7.6.0' }
@@ -224,9 +224,9 @@ if ($parseErrors) { throw ($parseErrors.Message -join '; ') }
 foreach ($definition in $ast.FindAll({ param($node)
     $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-PrerequisiteState'
 }, $false)) { . ([scriptblock]::Create($definition.Extent.Text)) }
-. ./github-copilot-cli/scripts/Get-LisaRuntimePrerequisites.ps1
+. ./github-copilot/scripts/Get-LisaRuntimePrerequisites.ps1
 $script:TargetPlatform = 'CopilotCli'
-$SourceSkillsRoot = Join-Path $PWD 'github-copilot-cli/skills'
+$SourceSkillsRoot = Join-Path $PWD 'github-copilot/skills'
 $RequirementsPath = Join-Path $PWD 'requirements.txt'
 function Get-VersionFromCommand { param($Command,$Arguments,$Pattern) [pscustomobject]@{ Version=[version]'20.0.0'; Path="mock:$Command" } }
 function Test-PythonLibraries { param($PythonPath) [pscustomobject]@{ Installed=$true; Details='fixture' } }

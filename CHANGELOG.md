@@ -12,6 +12,12 @@ User-visible changes are recorded here. Unreleased entries are not a published r
 - Windows CI and a matching local runner for plugin tests, Scout shared-infrastructure checks,
   and the synthetic GEPA engine test. CI performs no tenant operations.
 
+### Changed
+
+- The plugin distribution now lives in `github-copilot/`. Installation commands, CI, test runners,
+  and documentation use the new folder and GitHub subdirectory source `rahulsi386/LISA:github-copilot`.
+  Existing installations referencing the previous location must be reinstalled from the new source.
+
 ### Fixed
 
 - Plugin artifact test fixtures now include a validated analysis handoff and the standalone video contract.

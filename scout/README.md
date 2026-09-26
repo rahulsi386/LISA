@@ -6,7 +6,7 @@
 
 This guide covers running **LISA on Microsoft Scout Desktop**. For the repository overview and the
 other supported platforms, see the [root README](../README.md). To run LISA on GitHub Copilot CLI
-or Microsoft Agency instead, see the [plugin guide](../github-copilot-cli/README.md).
+or Microsoft Agency instead, see the [plugin guide](../github-copilot/README.md).
 
 **LISA** stands for **Low code Intelligent System Architect**. It is an intelligent system architect
 delivered here as a collection of automations and skills for Microsoft Scout. LISA can autonomously
@@ -158,7 +158,7 @@ After downloading or cloning LISA from GitHub, the repository root must have thi
 |       |-- artifact-publisher\
 |       |-- postpublish-cleanup\
 |       `-- sync_skills_metadata.py
-|-- github-copilot-cli\
+|-- github-copilot\
 |-- README.md
 |-- lisa-config.json
 |-- requirements.txt
