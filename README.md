@@ -142,3 +142,10 @@ Both setup paths use the same runtime checker for Python, PowerShell, Node.js, n
 - [Microsoft Scout Desktop guide](scout/README.md)
 - [GitHub Copilot CLI and Agency plugin guide](github-copilot-cli/README.md)
 - [Skill suite reference](github-copilot-cli/skills/README.md)
+
+## Governance and support
+
+LISA is community-maintained with draft governance status, not a Microsoft-supported product.
+See [governance and release policy](GOVERNANCE.md), [contributing and local checks](CONTRIBUTING.md),
+[security reporting](SECURITY.md), [support](SUPPORT.md), and the [changelog](CHANGELOG.md).
+Original LISA code is [MIT licensed](LICENSE); bundled third-party materials retain their own terms.

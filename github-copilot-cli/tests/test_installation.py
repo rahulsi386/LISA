@@ -13,6 +13,26 @@ POWERSHELL = shutil.which("pwsh")
 
 @unittest.skipUnless(POWERSHELL, "PowerShell 7 is required")
 class InstallationTests(unittest.TestCase):
+    def test_repository_runner_propagates_native_failures(self):
+        self.run_powershell(r"""
+$ErrorActionPreference = 'Stop'
+$tokens = $null
+$parseErrors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile(
+    (Join-Path $PWD 'scripts/Test-LisaRepository.ps1'), [ref]$tokens, [ref]$parseErrors)
+if ($parseErrors) { throw ($parseErrors.Message -join '; ') }
+foreach ($definition in $ast.FindAll({ param($node)
+    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Invoke-RepositoryCheck'
+}, $false)) { . ([scriptblock]::Create($definition.Extent.Text)) }
+function Test-NativeCommand { $global:LASTEXITCODE = $script:exitCode }
+foreach ($code in @(7, 0)) {
+    $script:exitCode = $code
+    $rejected = $false
+    try { Invoke-RepositoryCheck Test-NativeCommand @('fixture') } catch { $rejected = $true }
+    if ($rejected -ne ($code -ne 0)) { throw "Incorrect failure propagation for $code" }
+}
+""")
+
     def test_plugin_registration_is_independent_of_project_setup(self):
         self.run_powershell(r"""
 $ErrorActionPreference = 'Stop'

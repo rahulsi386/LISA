@@ -411,6 +411,10 @@ for current service-specific guidance.
 
 ## Validation for contributors
 
+Repository CI uses the local runner documented in [CONTRIBUTING.md](../CONTRIBUTING.md).
+From the repository root, run `pwsh -File scripts/Test-LisaRepository.ps1 -Suite Plugin`.
+See [GOVERNANCE.md](../GOVERNANCE.md) for review requirements and the limits of CI coverage.
+
 From the `github-copilot-cli/` directory, run the plugin tests:
 
 ```powershell
