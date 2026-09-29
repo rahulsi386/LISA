@@ -75,6 +75,20 @@ IN_SCOPE_STATUSES = {
     "Preferred",
     "Near-term",
 }
+# Only source-stated requirement kinds need assessment; analyst kinds are hints.
+REQUIREMENT_FINDING_KINDS = {"Explicit requirement", "Observed fact", "Decision"}
+SOURCE_FINDING_KINDS = REQUIREMENT_FINDING_KINDS | {"Context"}
+ANALYST_FINDING_KINDS = {"Derived classification", "Analyst-identified gap", "Conflict"}
+CONTEXT_SECTIONS = {
+    "stakeholders": "Stakeholders and Personas",
+    "non_functional_requirements": "Non-Functional Requirements",
+    "dependencies_constraints": "Dependencies and Constraints",
+    "assumptions": "Assumptions",
+    "risks": "Risks",
+    "timeline_budget": "Timeline and Budget",
+    "glossary": "Glossary",
+    "open_questions": "Open Questions",
+}
 RESEARCH_ORDER = {
     "copilot": 0,
     "foundry": 1,
@@ -399,7 +413,7 @@ def _build_evidence_summary(
         }
         for item in findings
         if item.get("status") in IN_SCOPE_STATUSES
-        and item.get("kind") != "Analyst-identified gap"
+        and item.get("kind") in REQUIREMENT_FINDING_KINDS
         and not _contains_classic_topic_text(item.get("statement", ""))
     ]
     gaps = [
@@ -411,7 +425,21 @@ def _build_evidence_summary(
         for item in findings
         if item.get("kind") in {"Analyst-identified gap", "Conflict"}
     ]
+    analyst_hints = [
+        {
+            "finding_id": item["finding_id"],
+            "statement": item["statement"],
+            "status": item["status"],
+        }
+        for item in findings
+        if item.get("kind") == "Derived classification"
+    ]
     in_scope_ids = {item["finding_id"] for item in in_scope}
+    source_ids = {
+        item["finding_id"]
+        for item in findings
+        if item.get("kind") in SOURCE_FINDING_KINDS
+    }
     configured_channels = (
         _extract_configured_channels(lisa_config) if lisa_config else []
     )
@@ -441,6 +469,7 @@ def _build_evidence_summary(
         "run_id": data.get("run_id", ""),
         "in_scope_findings": in_scope,
         "gaps_and_conflicts": gaps,
+        "analyst_hints": analyst_hints,
         "source_annotations": scoped_structured_items(
             data.get("source_annotations", [])
         ),
@@ -467,6 +496,10 @@ def _build_evidence_summary(
         "scope": _section_items(
             sections.get("Scope and Delivery Phases", []), in_scope_ids
         ),
+        **{
+            key: _section_items(sections.get(name, []), source_ids)
+            for key, name in CONTEXT_SECTIONS.items()
+        },
         "lisa_config": {
             "path": str(lisa_config_path) if lisa_config_path else "",
             "sha256": _sha256_file(lisa_config_path) if lisa_config_path else "",
@@ -507,6 +540,7 @@ def _review_records(
     for key in (
         "source_annotations", "knowledge_sources", "integrations", "agentic_behaviors",
         "goals", "metrics", "data_sources", "data_types", "solution_components", "scope",
+        "analyst_hints", *CONTEXT_SECTIONS,
     ):
         for index, item in enumerate(summary[key]):
             records.append({
@@ -3125,6 +3159,10 @@ def _score_model(
             flags=re.IGNORECASE,
         )
         for item in evidence_summary["in_scope_findings"]
+    ) or any(
+        item.get("behavior") == "Delegated personal work"
+        and item.get("requirement_status") in IN_SCOPE_STATUSES
+        for item in evidence_summary.get("agentic_behaviors", [])
     )
     in_scope_statements = "\n".join(
         item.get("statement", "")

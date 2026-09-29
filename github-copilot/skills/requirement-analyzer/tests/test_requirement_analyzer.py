@@ -171,6 +171,15 @@ class RequirementAnalyzerTests(unittest.TestCase):
             )
 
         first_source = manifest["sources"][0]["source_id"]
+        stated_conversation = add_finding(
+            "Explicit requirement",
+            "Users interact with the assistant through conversation.",
+            "Confirmed",
+            "Confirmed",
+            first_source,
+            "line 1",
+            "explicit",
+        )
         conversational = add_finding(
             "Derived classification",
             "The requested assistant interaction is conversational.",
@@ -216,6 +225,15 @@ class RequirementAnalyzerTests(unittest.TestCase):
             "agentic-behavior completeness check across the extracted corpus",
             "absence_check",
         )
+        delegated_gap = add_finding(
+            "Analyst-identified gap",
+            "Delegated personal work is not evidenced.",
+            "Not evidenced",
+            "Missing",
+            "CORPUS",
+            "agentic-behavior completeness check across the extracted corpus",
+            "absence_check",
+        )
         multi_agent_gap = add_finding(
             "Analyst-identified gap",
             "Child-agent or multi-agent behavior is not evidenced.",
@@ -236,21 +254,7 @@ class RequirementAnalyzerTests(unittest.TestCase):
         )
 
         first_inventory_finding = source_annotations[0]["finding_ids"][0]
-        section_names = [
-            "Executive Summary",
-            "Problem Statement",
-            "Current State",
-            "Desired Future State",
-            "Goals",
-            "Success Criteria",
-            "Metrics and Baselines",
-            "Data Sources",
-            "Data Types",
-            "Dependencies and Constraints",
-            "Solution Components",
-            "Scope and Delivery Phases",
-            "Gaps and Conflicts",
-        ]
+        section_names = analyzer.LEDGER_SECTION_NAMES
         sections = {
             name: [
                 {
@@ -262,8 +266,8 @@ class RequirementAnalyzerTests(unittest.TestCase):
             for name in section_names
         }
 
-        return {
-            "schema_version": "1.0",
+        ledger = {
+            "schema_version": "2.0",
             "run_id": run["run_id"],
             "findings": findings,
             "source_annotations": source_annotations,
@@ -272,6 +276,7 @@ class RequirementAnalyzerTests(unittest.TestCase):
             "batch_reviews": analyzer._batch_reviews(
                 json.loads(Path(run["review_index_path"]).read_text(encoding="utf-8"))
             ),
+            "record_dispositions": [],
             "knowledge_sources": [],
             "knowledge_source_notes": [
                 {
@@ -298,7 +303,7 @@ class RequirementAnalyzerTests(unittest.TestCase):
                     "evidenced_behavior": "Users ask the assistant questions.",
                     "trigger_decision_handoff": "User prompt",
                     "gaps": "Channel and response targets are unspecified.",
-                    "finding_ids": [conversational],
+                    "finding_ids": [stated_conversation, conversational],
                 },
                 {
                     "behavior": "Autonomous",
@@ -307,6 +312,14 @@ class RequirementAnalyzerTests(unittest.TestCase):
                     "trigger_decision_handoff": "Not evidenced",
                     "gaps": "No autonomous requirements are supplied.",
                     "finding_ids": [autonomous_gap],
+                },
+                {
+                    "behavior": "Delegated personal work",
+                    "requirement_status": "Not evidenced",
+                    "evidenced_behavior": "No delegated personal work is described.",
+                    "trigger_decision_handoff": "Not evidenced",
+                    "gaps": "No delegated personal work is supplied.",
+                    "finding_ids": [delegated_gap],
                 },
                 {
                     "behavior": "Child-Agent/Multi-Agent",
@@ -327,6 +340,26 @@ class RequirementAnalyzerTests(unittest.TestCase):
             ],
             "sections": sections,
         }
+        RequirementAnalyzerTests.disposition_remaining_records(ledger, manifest)
+        return ledger
+
+    @staticmethod
+    def disposition_remaining_records(ledger: dict, manifest: dict) -> None:
+        remaining = analyzer._record_coverage(
+            analyzer._all_extractions(manifest), ledger
+        )["uncovered_records"]
+        by_owner: dict[str, list[str]] = {}
+        for item in remaining:
+            by_owner.setdefault(item["owner_id"], []).append(item["locator"])
+        ledger["record_dispositions"].extend(
+            {
+                "owner_id": owner,
+                "locators": sorted(set(locators)),
+                "disposition": "non-substantive",
+                "reason": "Fixture text carries no requirement content.",
+            }
+            for owner, locators in by_owner.items()
+        )
 
     def normalize_draft(
         self, run: dict, draft: dict, name: str = "test"
@@ -689,6 +722,16 @@ class RequirementAnalyzerTests(unittest.TestCase):
                     {"locator": "finance node", "text": "Finance approval is mandatory."}
                 ],
             }]
+            owner = target.get("embedded_id") or target["source_id"]
+            draft["findings"].append({
+                "finding_id": "D-900", "kind": "Explicit requirement",
+                "statement": "Finance approval is mandatory.", "status": "Required",
+                "confidence": "Confirmed", "evidence": [{
+                    "source_id": owner, "locator": "finance node", "evidence_type": "explicit",
+                    "quote": "Finance approval is mandatory.",
+                }],
+            })
+            draft["sections"]["Dependencies and Constraints"][0]["finding_ids"].append("D-900")
             path = Path(run["run_directory"]) / "reviewed.json"
             path.write_text(json.dumps(draft), encoding="utf-8")
             self.call_in_process(analyzer._publish, run=str(path.parent / "run.json"), ledger=str(path))
@@ -716,6 +759,95 @@ class RequirementAnalyzerTests(unittest.TestCase):
             changed_target = self.call_in_process(analyzer._prepare, config=run["config_path"], workers=2, local_time=None)
             changed_draft = json.loads(Path(changed_target["ledger_draft"]).read_text(encoding="utf-8"))
             self.assertEqual([], changed_draft["manual_reviews"])
+
+    def semantic_errors(self, run: dict, manifest: dict, draft: dict, name: str) -> list[str]:
+        normalized = json.loads(self.normalize_draft(run, draft, name).read_text(encoding="utf-8"))
+        return analyzer._validate_semantics(run, manifest, normalized)
+
+    def test_record_coverage_counts_ranges_cells_and_exemptions(self):
+        extractions = {"SRC-A": {"content_units": [
+            {"locator": "line 1", "text": "Approve invoices."},
+            {"locator": "line 2", "text": "Route exceptions."},
+            {"locator": "line 3", "text": "Archive monthly."},
+            {"locator": "line 4", "text": "   "},
+            {"locator": "line 5", "text": "Approve invoices."},
+            {"locator": "sheet 'Data' row 2", "text": "A2=x | B2=y", "cells": [
+                {"locator": "sheet 'Data' cell A2", "value": "x", "formula": None},
+                {"locator": "sheet 'Data' cell B2", "value": "y", "formula": None},
+            ]},
+            {"locator": "sheet 'Data' row 3", "text": "A3=z", "cells": [
+                {"locator": "sheet 'Data' cell A3", "value": "z", "formula": None},
+            ]},
+            {"locator": "sheet 'Data' profile", "text": "rows_scanned=3"},
+        ]}}
+        ledger = {
+            "findings": [{"evidence": [
+                {"source_id": "SRC-A", "locator": "lines 1-2"},
+                {"source_id": "SRC-A", "locator": "sheet 'Data' cell A2"},
+                {"source_id": "SRC-A", "locator": "sheet 'Data' cell B2"},
+            ]}],
+            "record_dispositions": [{"owner_id": "SRC-A", "locators": ["sheet 'Data' rows 3-3"]}],
+            "manual_reviews": [],
+        }
+        result = analyzer._record_coverage(extractions, ledger)
+        self.assertEqual([{"owner_id": "SRC-A", "locator": "line 3"}], result["uncovered_records"])
+        self.assertEqual(
+            {"total": 8, "cited": 3, "dispositioned": 1, "duplicate": 1, "blank": 1, "structural": 1},
+            result["counts"],
+        )
+
+    def test_uncited_record_blocks_publication_and_coverage_lists_it(self):
+        with project_directory() as directory:
+            run, manifest = self.prepare_fixture(Path(directory))
+            draft = self.make_draft_ledger(run, manifest)
+            draft["record_dispositions"] = []
+            errors = self.semantic_errors(run, manifest, draft, "coverage")
+            self.assertTrue(any("Record coverage is incomplete" in item for item in errors), errors)
+            path = Path(run["run_directory"]) / "coverage-draft.json"
+            path.write_text(json.dumps(draft), encoding="utf-8")
+            report = self.call_in_process(
+                analyzer._coverage, run=str(Path(run["run_directory"]) / "run.json"),
+                ledger=str(path), limit=5,
+            )
+            self.assertEqual("incomplete", report["status"])
+            self.assertGreater(report["uncovered_count"], 0)
+
+    def test_source_findings_cannot_carry_interpretation(self):
+        with project_directory() as directory:
+            run, manifest = self.prepare_fixture(Path(directory))
+            draft = self.make_draft_ledger(run, manifest)
+            stated = next(item for item in draft["findings"] if item["kind"] == "Explicit requirement")
+            stated["evidence"][0]["evidence_type"] = "derived"
+            errors = self.semantic_errors(run, manifest, draft, "interpretation")
+            self.assertTrue(any("source findings restate inputs" in item for item in errors), errors)
+
+    def test_behavior_requires_a_source_finding(self):
+        with project_directory() as directory:
+            run, manifest = self.prepare_fixture(Path(directory))
+            draft = self.make_draft_ledger(run, manifest)
+            derived = next(item["finding_id"] for item in draft["findings"] if item["kind"] == "Derived classification")
+            draft["agentic_behaviors"][0]["finding_ids"] = [derived]
+            errors = self.semantic_errors(run, manifest, draft, "behavior")
+            self.assertTrue(any("Conversational must cite a source finding" in item for item in errors), errors)
+
+    def test_platform_rows_record_verbatim_source_wording(self):
+        with project_directory() as directory:
+            run, manifest = self.prepare_fixture(Path(directory))
+            draft = self.make_draft_ledger(run, manifest)
+            stated = next(item["finding_id"] for item in draft["findings"] if item["kind"] == "Explicit requirement")
+            draft["platform_absence_finding_ids"] = []
+            platform = {
+                "platform": "Microsoft Cowork", "source_wording": "conversational assistant",
+                "provider": "", "requirement_status": "Candidate", "intended_role": "Assistant",
+                "constraints_gaps": "Not evidenced", "finding_ids": [stated],
+            }
+            draft["platforms"] = [platform]
+            self.assertFalse(
+                [item for item in self.semantic_errors(run, manifest, draft, "platform") if "Microsoft Cowork" in item]
+            )
+            platform["source_wording"] = "Microsoft Cowork plugin"
+            errors = self.semantic_errors(run, manifest, draft, "platform-wording")
+            self.assertTrue(any("source_wording must appear verbatim" in item for item in errors), errors)
 
     def test_equivalent_assertion_dedup_preserves_all_citations(self):
         with project_directory() as directory:

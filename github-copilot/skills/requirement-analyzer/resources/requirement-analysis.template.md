@@ -17,6 +17,9 @@
 ## Desired Future State
 {{Desired Future State}}
 
+## Stakeholders and Personas
+{{Stakeholders and Personas}}
+
 ## Goals
 {{Goals}}
 
@@ -25,6 +28,9 @@
 
 ## Metrics and Baselines
 {{Metrics and Baselines}}
+
+## Non-Functional Requirements
+{{Non-Functional Requirements}}
 
 ## Data Sources
 {{Data Sources}}
@@ -50,14 +56,35 @@
 ## Dependencies and Constraints
 {{Dependencies and Constraints}}
 
+## Assumptions
+{{Assumptions}}
+
+## Risks
+{{Risks}}
+
 ## Solution Components
 {{Solution Components}}
 
 ## Scope and Delivery Phases
 {{Scope and Delivery Phases}}
 
+## Timeline and Budget
+{{Timeline and Budget}}
+
+## Glossary
+{{Glossary}}
+
+## Open Questions
+{{Open Questions}}
+
 ## Gaps and Conflicts
 {{Gaps and Conflicts}}
+
+## Analyst Annotations
+{{Analyst Annotations}}
+
+## Record Coverage
+{{Record Coverage}}
 
 ## Source Traceability
 {{Source Traceability}}

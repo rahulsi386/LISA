@@ -45,6 +45,14 @@ Classify findings with status:
 
 Do not count Future, Potential, Optional, Explicitly excluded, Not evidenced, or unresolved gaps as required implementation.
 
+Only source-stated requirement kinds (`Explicit requirement`, `Observed fact`, `Decision`) are
+in scope. Analyst findings are hints: `analyst_hints` (derived classifications) and
+`gaps_and_conflicts` inform research but never become requirements or evidence IDs. `Context`
+findings arrive through the context sections (`stakeholders`, `non_functional_requirements`,
+`dependencies_constraints`, `assumptions`, `risks`, `timeline_budget`, `glossary`,
+`open_questions`); use them to shape the design without assessing them as requirements. An
+in-scope `Delegated personal work` behavior requires a Microsoft Cowork assessment.
+
 A component can be:
 
 - `evidenced`: directly supported by in-scope finding IDs.

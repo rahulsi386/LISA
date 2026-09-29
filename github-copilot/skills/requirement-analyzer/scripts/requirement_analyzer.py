@@ -40,10 +40,11 @@ from analysis_handoff import (
 )
 
 
-VERSION = "3.0.0"
+VERSION = "4.0.0"
 EXTRACTION_FORMAT_VERSION = "2"
-ANALYSIS_CACHE_FORMAT_VERSION = "2"
-REVIEW_POLICY_VERSION = "lossless-source-batches-and-local-observations-v1"
+ANALYSIS_CACHE_FORMAT_VERSION = "3"
+REVIEW_POLICY_VERSION = "lossless-source-batches-record-coverage-v2"
+LEDGER_SCHEMA_VERSION = "2.0"
 REVIEW_BATCH_BYTES = 16384
 MAX_EMBEDDED_BYTES = 100 * 1024 * 1024
 MAX_CORPUS_BYTES = 500 * 1024 * 1024
@@ -67,9 +68,11 @@ REQUIRED_SECTIONS = [
     "Problem Statement",
     "Current State",
     "Desired Future State",
+    "Stakeholders and Personas",
     "Goals",
     "Success Criteria",
     "Metrics and Baselines",
+    "Non-Functional Requirements",
     "Data Sources",
     "Knowledge Sources",
     "Knowledge Source Data Types",
@@ -78,9 +81,16 @@ REQUIRED_SECTIONS = [
     "Integrations",
     "Agentic Behavior",
     "Dependencies and Constraints",
+    "Assumptions",
+    "Risks",
     "Solution Components",
     "Scope and Delivery Phases",
+    "Timeline and Budget",
+    "Glossary",
+    "Open Questions",
     "Gaps and Conflicts",
+    "Analyst Annotations",
+    "Record Coverage",
     "Source Traceability",
 ]
 
@@ -95,6 +105,8 @@ LEDGER_SECTION_NAMES = [
         "Preferred Agent Development Platform",
         "Integrations",
         "Agentic Behavior",
+        "Analyst Annotations",
+        "Record Coverage",
         "Source Traceability",
     }
 ]
@@ -126,12 +138,19 @@ IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".
 FINDING_PREFIXES = {
     "Explicit requirement": "REQ",
     "Observed fact": "OBS",
+    "Context": "CTX",
+    "Decision": "DEC",
     "Derived classification": "CLS",
     "Analyst-identified gap": "GAP",
     "Conflict": "CON",
-    "Decision": "DEC",
 }
-FINAL_FINDING_PATTERN = re.compile(r"^(REQ|OBS|CLS|GAP|CON|DEC)-[A-F0-9]{10}$")
+# Source findings restate what inputs say; analyst findings interpret or check them.
+SOURCE_KINDS = frozenset({"Explicit requirement", "Observed fact", "Context", "Decision"})
+ANALYST_KINDS = frozenset({"Derived classification", "Analyst-identified gap", "Conflict"})
+SOURCE_EVIDENCE_TYPES = frozenset({"explicit", "metadata", "configuration"})
+ANALYST_ONLY_STATUSES = frozenset({"Strong candidate"})
+FINDING_ID_TOKEN = r"(?:REQ|OBS|CTX|CLS|GAP|CON|DEC)-[A-F0-9]{10}"
+FINAL_FINDING_PATTERN = re.compile(rf"^{FINDING_ID_TOKEN}$")
 FILENAME_PATTERN = re.compile(
     r"^requirement-analysis_[0-9]{8}_[0-9]{6}(_[0-9]{3})?\.md$"
 )
@@ -2077,13 +2096,14 @@ def _prepare(args: argparse.Namespace) -> int:
             }
         )
     ledger_template = {
-        "schema_version": "1.0",
+        "schema_version": LEDGER_SCHEMA_VERSION,
         "run_id": run_id,
         "findings": configured_findings,
         "source_annotations": [],
         "referred_artifacts": [],
         "manual_reviews": [],
         "batch_reviews": [],
+        "record_dispositions": [],
         "knowledge_sources": configured_rows,
         "knowledge_source_notes": [],
         "platforms": [],
@@ -2197,6 +2217,10 @@ def _normalized_statement(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
+def _finding_origin(kind: str) -> str:
+    return "source" if kind in SOURCE_KINDS else "analyst"
+
+
 def _expected_finding_id(finding: dict[str, Any]) -> str:
     prefix = FINDING_PREFIXES[finding["kind"]]
     evidence = sorted(
@@ -2271,6 +2295,7 @@ def _normalize(args: argparse.Namespace, *, context: Any = None) -> int:
     for merged in equivalent.values():
         merged["evidence"].sort(key=lambda item: json.dumps(item, sort_keys=True))
         merged["finding_id"] = _expected_finding_id(merged)
+        merged["origin"] = _finding_origin(merged["kind"])
     mapping = {old: equivalent[key]["finding_id"] for old, key in mapping.items()}
     normalized = _rewrite_finding_references(ledger, mapping)
     normalized["findings"] = list(equivalent.values())
@@ -2571,18 +2596,12 @@ def _locator_is_valid(locator: str, known: set[str], *, normalized_known: set[st
         normalized_known = {_normalized_statement(item).casefold() for item in known}
     if normalized in normalized_known:
         return True
-    match = re.fullmatch(
-        r"(lines?|pages?|paragraphs?|slides?)\s+([0-9]+)"
-        r"(?:\s*-\s*([0-9]+))?",
-        normalized,
-    )
-    if not match:
+    bounds = _range_bounds(normalized)
+    if bounds is None:
         return False
-    unit = match.group(1).rstrip("s")
-    start = int(match.group(2))
-    end = int(match.group(3) or start)
-    if end < start:
-        return False
+    unit, start, end = bounds
+    if unit.startswith("sheet "):
+        return f"{unit} {start}" in normalized_known and f"{unit} {end}" in normalized_known
     return all(
         any(
             item == f"{unit} {index}" or item.startswith(f"{unit} {index},")
@@ -2590,6 +2609,131 @@ def _locator_is_valid(locator: str, known: set[str], *, normalized_known: set[st
         )
         for index in range(start, end + 1)
     )
+
+
+UNIT_RANGE = re.compile(r"(lines?|pages?|paragraphs?|slides?)\s+([0-9]+)(?:\s*-\s*([0-9]+))?")
+SHEET_RANGE = re.compile(r"sheet '(.+)' rows\s+([0-9]+)\s*-\s*([0-9]+)")
+SHEET_ROW = re.compile(r"sheet '(.+)' row ([0-9]+)")
+SHEET_PROFILE = re.compile(r"sheet '.+' profile")
+
+
+def _range_bounds(normalized: str) -> tuple[str, int, int] | None:
+    """Parse a normalized range locator into (unit, first, last)."""
+    match = UNIT_RANGE.fullmatch(normalized)
+    if match:
+        unit, start = match.group(1).rstrip("s"), int(match.group(2))
+        end = int(match.group(3) or start)
+    else:
+        match = SHEET_RANGE.fullmatch(normalized)
+        if not match:
+            return None
+        unit, start, end = f"sheet '{match.group(1)}' row", int(match.group(2)), int(match.group(3))
+    return (unit, start, end) if end >= start else None
+
+
+def _range_member(unit: str, normalized_locator: str) -> int | None:
+    if unit.startswith("sheet "):
+        match = SHEET_ROW.fullmatch(normalized_locator)
+        if match and f"sheet '{match.group(1)}' row" == unit:
+            return int(match.group(2))
+        return None
+    match = re.match(rf"^{unit} ([0-9]+)(?:,| |$)", normalized_locator)
+    return int(match.group(1)) if match else None
+
+
+def _locator_matcher(locators: Iterable[str]) -> tuple[set[str], list[tuple[str, int, int]]]:
+    exact = {_normalized_statement(item).casefold() for item in locators}
+    ranges = [bounds for item in exact if (bounds := _range_bounds(item))]
+    return exact, ranges
+
+
+def _matches(matcher: tuple[set[str], list[tuple[str, int, int]]], locator: str, cells: list[str]) -> bool:
+    exact, ranges = matcher
+    if locator in exact:
+        return True
+    for unit, first, last in ranges:
+        position = _range_member(unit, locator)
+        if position is not None and first <= position <= last:
+            return True
+    return bool(cells) and all(cell in exact for cell in cells)
+
+
+def _record_coverage(
+    extractions: dict[str, dict[str, Any]], ledger: dict[str, Any]
+) -> dict[str, Any]:
+    """Account for every extracted record: cited, dispositioned, or automatically exempt."""
+    cited: dict[str, list[str]] = {}
+    for finding in ledger["findings"]:
+        for evidence in finding["evidence"]:
+            if evidence["source_id"] not in {"CORPUS", "CONFIG"}:
+                cited.setdefault(evidence["source_id"], []).append(evidence["locator"])
+    disposed: dict[str, list[str]] = {}
+    for item in ledger.get("record_dispositions", []):
+        disposed.setdefault(item["owner_id"], []).extend(item["locators"])
+    cited_matchers = {owner: _locator_matcher(values) for owner, values in cited.items()}
+    disposed_matchers = {owner: _locator_matcher(values) for owner, values in disposed.items()}
+    empty = (set(), [])
+    counts = {
+        "total": 0, "cited": 0, "dispositioned": 0, "duplicate": 0,
+        "blank": 0, "structural": 0,
+    }
+    uncovered: list[str] = []
+    uncovered_records: list[dict[str, str]] = []
+
+    def account(owner: str, label: str, locator: str, cells: list[str], raw: str) -> None:
+        if _matches(cited_matchers.get(owner, empty), locator, cells):
+            counts["cited"] += 1
+        elif _matches(disposed_matchers.get(owner, empty), locator, cells):
+            counts["dispositioned"] += 1
+        else:
+            uncovered.append(label)
+            uncovered_records.append({"owner_id": owner, "locator": raw})
+
+    targets: dict[str, dict[str, Any]] = {}
+
+    def walk(extraction: dict[str, Any], owner: str) -> None:
+        seen: set[str] = set()
+        for index, unit in enumerate(extraction.get("content_units", []), 1):
+            counts["total"] += 1
+            raw_locator = str(unit.get("locator", ""))
+            locator = _normalized_statement(raw_locator).casefold()
+            text = str(unit.get("text", ""))
+            cells = [
+                _normalized_statement(cell["locator"]).casefold()
+                for cell in unit.get("cells", [])
+                if str(cell.get("value", "")).strip() or cell.get("formula") is not None
+            ]
+            if SHEET_PROFILE.fullmatch(locator):
+                counts["structural"] += 1
+            elif not text.strip() and not cells:
+                counts["blank"] += 1
+            elif text in seen:
+                counts["duplicate"] += 1
+            else:
+                seen.add(text)
+                account(owner, f"{owner}:unit:{index} ({raw_locator})", locator, cells, raw_locator)
+        for target in extraction.get("review_targets", []):
+            targets[target["target_id"]] = target
+        for embedded in extraction.get("embedded_items", []):
+            walk(embedded["extraction"], embedded["embedded_id"])
+
+    for source_id, extraction in extractions.items():
+        walk(extraction, source_id)
+    for review in ledger["manual_reviews"]:
+        target = targets.get(review["target_id"])
+        if target is None:
+            continue
+        owner = target.get("embedded_id") or target["source_id"]
+        for observation in review.get("observations", []):
+            counts["total"] += 1
+            account(
+                owner,
+                f"{review['target_id']} observation ({observation['locator']})",
+                _normalized_statement(observation["locator"]).casefold(),
+                [],
+                observation["locator"],
+            )
+    return {"counts": counts, "uncovered": uncovered, "uncovered_records": uncovered_records}
 
 
 def _collect_finding_references(value: Any, within_findings: bool = False) -> set[str]:
@@ -2632,18 +2776,14 @@ def _quote_at_locator(
     normalized = _normalized_statement(locator).casefold()
     candidates = texts.get(normalized, [])
     if not candidates:
-        match = re.fullmatch(
-            r"(lines?|pages?|paragraphs?|slides?)\s+([0-9]+)(?:\s*-\s*([0-9]+))?",
-            normalized,
-        )
-        if match:
-            kind = match.group(1).rstrip("s")
-            first, last = int(match.group(2)), int(match.group(3) or match.group(2))
+        bounds = _range_bounds(normalized)
+        if bounds:
+            unit, first, last = bounds
             selected = []
             for key, values in texts.items():
-                position = re.match(rf"^{kind} ([0-9]+)(?:,|$)", key)
-                if position and first <= int(position.group(1)) <= last:
-                    selected.append((int(position.group(1)), values))
+                position = _range_member(unit, key)
+                if position is not None and first <= position <= last:
+                    selected.append((position, values))
             candidates = [text for _, values in sorted(selected) for text in values]
     return normalized_quote in _normalized_statement("\n".join(candidates))
 
@@ -2964,6 +3104,79 @@ def _validate_semantics(
                 "absence-check gap findings"
             )
 
+    source_finding_ids = {
+        identifier
+        for identifier, finding in finding_by_id.items()
+        if finding["kind"] in SOURCE_KINDS
+    }
+    for identifier, finding in finding_by_id.items():
+        origin = _finding_origin(finding["kind"])
+        if finding.get("origin") != origin:
+            errors.append(f"{identifier}: origin must be {origin} for {finding['kind']}")
+        if origin == "source":
+            invalid = {item["evidence_type"] for item in finding["evidence"]} - SOURCE_EVIDENCE_TYPES
+            if invalid:
+                errors.append(
+                    f"{identifier}: source findings restate inputs and cannot use "
+                    f"{sorted(invalid)} evidence; record interpretation as an analyst finding"
+                )
+            if finding["status"] in ANALYST_ONLY_STATUSES:
+                errors.append(
+                    f"{identifier}: status {finding['status']} is an analyst judgment; "
+                    "use an analyst finding kind"
+                )
+    for platform in ledger["platforms"]:
+        stated = [
+            finding_by_id[identifier]
+            for identifier in platform["finding_ids"]
+            if identifier in source_finding_ids
+        ]
+        if not stated:
+            errors.append(
+                f"{platform['platform']} must cite a source finding that states the platform"
+            )
+        elif not any(
+            _quote_at_locator(
+                platform["source_wording"],
+                evidence["locator"],
+                scoped_texts.get(evidence["source_id"], {}),
+            )
+            for finding in stated
+            for evidence in finding["evidence"]
+        ):
+            errors.append(
+                f"{platform['platform']} source_wording must appear verbatim at a cited "
+                "source locator"
+            )
+    for behavior in ledger["agentic_behaviors"]:
+        if behavior["requirement_status"] != "Not evidenced" and not (
+            set(behavior["finding_ids"]) & source_finding_ids
+        ):
+            errors.append(
+                f"{behavior['behavior']} must cite a source finding; derived "
+                "classifications alone are interpretation"
+            )
+
+    for item in ledger.get("record_dispositions", []):
+        owner = item["owner_id"]
+        if owner not in source_by_id and owner not in embedded_ids:
+            errors.append(f"Record disposition uses unknown owner: {owner}")
+            continue
+        for locator in item["locators"]:
+            if not _locator_is_valid(
+                locator, locators_by_id.get(owner, set()),
+                normalized_known=normalized_locators.get(owner, set()),
+            ):
+                errors.append(f"Record disposition locator is not present in {owner}: {locator}")
+    uncovered = _record_coverage(extractions, ledger)["uncovered"]
+    if uncovered:
+        errors.append(
+            f"Record coverage is incomplete: {len(uncovered)} substantive records are neither "
+            "cited by a finding nor dispositioned: "
+            + "; ".join(uncovered[:25])
+            + (" ..." if len(uncovered) > 25 else "")
+        )
+
     return errors
 
 
@@ -3189,6 +3402,7 @@ def _render_platforms(ledger: dict[str, Any]) -> str:
         ).strip()
     columns = [
         "Agent development platform",
+        "Source wording",
         "Provider (Third Party only)",
         "Requirement status",
         "Intended role",
@@ -3198,6 +3412,7 @@ def _render_platforms(ledger: dict[str, Any]) -> str:
         {
             "cells": [
                 item["platform"],
+                item["source_wording"],
                 item["provider"],
                 item["requirement_status"],
                 item["intended_role"],
@@ -3277,6 +3492,7 @@ def _render_traceability(ledger: dict[str, Any]) -> str:
     columns = [
         "Finding ID",
         "Finding type",
+        "Origin",
         "Material finding",
         "Status",
         "Confidence",
@@ -3296,6 +3512,7 @@ def _render_traceability(ledger: dict[str, Any]) -> str:
                 "cells": [
                     finding["finding_id"],
                     finding["kind"],
+                    _finding_origin(finding["kind"]),
                     finding["statement"],
                     finding["status"],
                     finding["confidence"],
@@ -3305,6 +3522,50 @@ def _render_traceability(ledger: dict[str, Any]) -> str:
             }
         )
     return _render_table(columns, rows)
+
+
+def _render_analyst_annotations(ledger: dict[str, Any]) -> str:
+    rows = [
+        {
+            "cells": [finding["kind"], finding["statement"], finding["status"], finding["confidence"]],
+            "finding_ids": [finding["finding_id"]],
+        }
+        for finding in sorted(ledger["findings"], key=lambda item: item["finding_id"])
+        if finding["kind"] in ANALYST_KINDS
+    ]
+    note = (
+        "Analyst interpretation and completeness checks, kept separate from what the sources "
+        "state. Downstream stages treat these as hints, not requirements."
+    )
+    if not rows:
+        return note + "\n\nNo analyst annotations were recorded."
+    return note + "\n\n" + _render_table(["Type", "Annotation", "Status", "Confidence"], rows)
+
+
+def _render_record_coverage(
+    extractions: dict[str, dict[str, Any]], ledger: dict[str, Any]
+) -> str:
+    counts = _record_coverage(extractions, ledger)["counts"]
+    labels = [
+        ("Extracted records and manual-review observations", "total"),
+        ("Cited by findings", "cited"),
+        ("Dispositioned (non-substantive or captured elsewhere)", "dispositioned"),
+        ("Exact duplicates within the same source", "duplicate"),
+        ("Blank", "blank"),
+        ("Structural metadata", "structural"),
+    ]
+    lines = ["| Record category | Count |", "|---|---|"]
+    lines.extend(f"| {label} | {counts[key]} |" for label, key in labels)
+    dispositions = [
+        (
+            f"- {item['owner_id']}: {', '.join(item['locators'])} — {item['disposition']}: "
+            f"{item['reason']} {_citation(item.get('finding_ids', []))}"
+        ).strip()
+        for item in ledger.get("record_dispositions", [])
+    ]
+    if dispositions:
+        lines.extend(["", "### Record dispositions", "", *dispositions])
+    return "\n".join(lines)
 
 
 def _render_metadata(run: dict[str, Any], manifest: dict[str, Any]) -> str:
@@ -3345,6 +3606,8 @@ def _render_markdown(
         "Preferred Agent Development Platform": _render_platforms(ledger),
         "Integrations": _render_integrations(ledger),
         "Agentic Behavior": _render_behaviors(ledger),
+        "Analyst Annotations": _render_analyst_annotations(ledger),
+        "Record Coverage": _render_record_coverage(_all_extractions(manifest), ledger),
         "Source Traceability": _render_traceability(ledger),
     }
     values.update(
@@ -3397,13 +3660,13 @@ def _validate_markdown_text(
         else:
             used = set(
                 re.findall(
-                    r"\[((?:REQ|OBS|CLS|GAP|CON|DEC)-[A-F0-9]{10})\]",
+                    rf"\[({FINDING_ID_TOKEN})\]",
                     trace[0],
                 )
             )
             defined = set(
                 re.findall(
-                    r"^\| ((?:REQ|OBS|CLS|GAP|CON|DEC)-[A-F0-9]{10}) \|",
+                    rf"^\| ({FINDING_ID_TOKEN}) \|",
                     trace[1],
                     flags=re.MULTILINE,
                 )
@@ -3682,6 +3945,26 @@ def _audit_markdown(args: argparse.Namespace) -> int:
     return 0 if not errors else 2
 
 
+def _coverage(args: argparse.Namespace) -> int:
+    run_input = Path(args.run)
+    _assert_no_link_components(run_input)
+    run, manifest = _load_run(run_input.resolve())
+    ledger_input = Path(args.ledger)
+    _assert_no_link_components(ledger_input)
+    ledger_path = ledger_input.resolve()
+    if not _is_within(ledger_path, Path(run["run_directory"]).resolve()):
+        raise AnalyzerError("Draft ledger must be inside the prepared run directory")
+    result = _record_coverage(_all_extractions(manifest), _json_load(ledger_path))
+    remaining = result["uncovered_records"]
+    print(json.dumps({
+        "status": "complete" if not remaining else "incomplete",
+        "counts": result["counts"],
+        "uncovered_count": len(remaining),
+        "uncovered": remaining[: max(0, args.limit)],
+    }, indent=2, ensure_ascii=False))
+    return 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Requirement Analyzer deterministic support pipeline"
@@ -3725,6 +4008,14 @@ def _build_parser() -> argparse.ArgumentParser:
     publish.add_argument("--run", required=True)
     publish.add_argument("--ledger", required=True)
     publish.set_defaults(handler=_publish)
+
+    coverage = commands.add_parser(
+        "coverage", help="List extracted records not yet cited or dispositioned"
+    )
+    coverage.add_argument("--run", required=True)
+    coverage.add_argument("--ledger", required=True)
+    coverage.add_argument("--limit", type=int, default=200)
+    coverage.set_defaults(handler=_coverage)
 
     audit = commands.add_parser(
         "audit-markdown", help="Structurally audit a legacy Markdown analysis"
