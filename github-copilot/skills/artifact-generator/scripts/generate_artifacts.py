@@ -776,6 +776,7 @@ def remove_empty_evidence_columns(text: str) -> str:
 
 def customer_clean_markdown(text: str) -> str:
     cleaned = re.sub(r"\s*\[(?:REQ|OBS|CTX|CLS|GAP|CON|DEC)-[A-Z0-9]+\]", "", text)
+    cleaned = re.sub(r"\s*\[(?:RS-[0-9]+|TOPIC-[A-Z0-9-]+|[a-z0-9][a-z0-9-]*)\](?!\()", "", cleaned)
     cleaned = re.sub(r"\b[a-f0-9]{64}\b", "[internal integrity value omitted]", cleaned)
     cleaned = re.sub(r"[A-Za-z]:\\[^|\n]+", "[internal path omitted]", cleaned)
     cleaned = re.sub(r"\s*\(basis=[^)]*\)", "", cleaned)
@@ -903,7 +904,9 @@ def render_solution_document(
         classification_text,
         [
             "Final Classification",
+            "Agentic Suitability",
             "Agentic Platform, Code Tier and Harness",
+            "Platform Comparison",
             "Comprehensive Justification",
         ],
     )
@@ -1705,7 +1708,7 @@ def validate_outputs(
     forbidden_customer_content = [
         r"[A-Za-z]:\\",
         r"\b[a-f0-9]{64}\b",
-        r"\b(?:REQ|OBS|CTX|CLS|GAP|CON|DEC|EVAL|OPT-FINDING|BLD|SDR|CC|RA)-[A-Z0-9_-]+\b",
+        r"\b(?:REQ|OBS|CTX|CLS|GAP|CON|DEC|EVAL|OPT-FINDING|BLD|SDR|CC|RA|RS|TOPIC)-[A-Z0-9_-]+\b",
         r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b",
         r"Persisted Agent Instructions",
         r"Core Artifact Inventory",

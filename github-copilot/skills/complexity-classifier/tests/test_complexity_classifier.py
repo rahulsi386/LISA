@@ -856,6 +856,120 @@ class ComplexityClassifierTests(unittest.TestCase):
             "sequence_flows": sequence,
         }
 
+    @staticmethod
+    def research_fields() -> dict:
+        both = ["REQ-AAAA000001", "REQ-BBBB000002"]
+
+        def source(identifier, source_type, product, locator, confidentiality="public"):
+            return {
+                "id": identifier,
+                "source_type": source_type,
+                "tool": f"{source_type} search",
+                "query": f"{product} capabilities, limits, and known issues",
+                "locator": locator,
+                "retrieved_at": "2026-08-13T12:10:00+05:30",
+                "vendor": "Microsoft",
+                "product": product,
+                "confidentiality": confidentiality,
+                "finding": f"{product} supports the evaluated requirement within documented limits.",
+            }
+
+        def topic(identifier, category, subject, findings, sources):
+            return {
+                "id": identifier,
+                "category": category,
+                "subject": subject,
+                "vendor": "Microsoft",
+                "questions": [f"How does the platform satisfy {subject.lower()}?"],
+                "finding_ids": findings,
+                "source_ids": sources,
+                "status": "resolved",
+                "resolution": f"{subject} is satisfied by documented, currently available capabilities.",
+            }
+
+        def comparison(platform, fit, selected, sources):
+            return {
+                "platform": platform,
+                "fit": fit,
+                "selected": selected,
+                "pros": [f"{platform} offers documented managed capabilities."],
+                "cons": [f"{platform} adds constraints for this requirement set."],
+                "decision_rationale": (
+                    f"{platform} was compared in precedence order against every in-scope requirement."
+                ),
+                "source_ids": sources,
+            }
+
+        rationale = "The requirement evidence was weighed against official platform documentation for this criterion."
+        return {
+            "research_plan": [
+                topic("TOPIC-AGENTIC-SUITABILITY", "suitability", "Agentic suitability", both, ["RS-001", "RS-003"]),
+                topic("TOPIC-PLATFORM-PRECEDENCE", "platform", "Platform precedence", both, ["RS-001", "RS-005"]),
+                topic("TOPIC-IDENTITY-SECURITY", "identity-security", "Identity and security", [], ["RS-002", "entra-id"]),
+                topic("TOPIC-GOVERNANCE-ALM", "governance-alm", "Governance and ALM", [], ["RS-002"]),
+                topic("TOPIC-KNOWLEDGE-POLICY", "knowledge", "Policy knowledge", ["REQ-AAAA000001"], ["RS-001"]),
+                topic("TOPIC-BEHAVIOR-CONVERSATIONAL", "behavior", "Conversational behavior", ["REQ-AAAA000001"], ["RS-001"]),
+                topic("TOPIC-BEHAVIOR-AUTONOMOUS", "behavior", "Autonomous behavior", ["REQ-BBBB000002"], ["RS-001", "RS-004"]),
+            ],
+            "research_register": {
+                "mcp_usage": [
+                    {"server": server, "status": "used", "detail": f"Queried {server} for the fixture."}
+                    for server in ("ms-learn-mcp", "azure-mcp", "ms-eng-hub-mcp", "ms-icm-mcp")
+                ],
+                "sources": [
+                    source("RS-001", "ms-learn-mcp", "Copilot Studio", "https://learn.microsoft.com/microsoft-copilot-studio/"),
+                    source("RS-002", "azure-mcp", "Power Platform", "azure-mcp:bestpractices/power-platform"),
+                    source("RS-003", "ms-eng-hub-mcp", "Copilot Studio", "eng.ms/copilot-studio/orchestration", "microsoft-internal"),
+                    source("RS-004", "ms-icm-mcp", "Copilot Studio", "IcM active incidents: scheduled triggers", "microsoft-internal"),
+                    source("RS-005", "ms-learn-mcp", "Microsoft Cowork", "https://learn.microsoft.com/copilot/cowork/"),
+                ],
+            },
+            "agentic_suitability": {
+                "recommendation": "agentic",
+                "summary": (
+                    "Users ask open-ended policy questions whose wording varies, so answers require "
+                    "retrieval and synthesis over unstructured policy text rather than fixed rules. "
+                    "The scheduled compliance check is deterministic, but it complements the "
+                    "conversational need instead of replacing it. A grounded conversational agent is "
+                    "therefore the better fit, with deterministic execution for the scheduled step."
+                ),
+                "criteria": [
+                    {
+                        "criterion": criterion,
+                        "assessment": assessment,
+                        "rationale": rationale,
+                        "evidence_ids": ["REQ-AAAA000001"],
+                        "source_ids": ["RS-001"],
+                    }
+                    for criterion, assessment in (
+                        ("input-ambiguity", "favors-agentic"),
+                        ("reasoning-need", "favors-agentic"),
+                        ("process-variability", "neutral"),
+                        ("tool-orchestration", "neutral"),
+                        ("action-impact", "neutral"),
+                        ("determinism-auditability", "favors-deterministic"),
+                        ("cost-latency", "neutral"),
+                    )
+                ],
+                "deterministic_alternative": (
+                    "A searchable policy portal with keyword search and a scheduled flow could list "
+                    "matching documents and run the check."
+                ),
+                "rejected_alternative_rationale": (
+                    "Keyword search returns documents rather than grounded answers, so users would still "
+                    "interpret policy text themselves; that fails the explicit requirement for grounded "
+                    "conversational answers."
+                ),
+            },
+            "platform_comparison": [
+                comparison("Microsoft Cowork", "not-fit", False, ["RS-005"]),
+                comparison("Copilot Studio", "full", True, ["RS-001", "copilot-studio-fundamentals"]),
+                comparison("Azure AI Foundry", "not-assessed", False, ["RS-001"]),
+                comparison("Microsoft Agent Framework", "not-assessed", False, ["RS-001"]),
+                comparison("Deterministic (no agent)", "not-fit", False, ["RS-001"]),
+            ],
+        }
+
     @classmethod
     def model(
         cls,
@@ -889,12 +1003,13 @@ class ComplexityClassifierTests(unittest.TestCase):
                 }
             ]
         model = {
-            "schema_version": "3.0",
+            "schema_version": "4.0",
             "run_id": run_id,
             "research_stage": "copilot",
+            **cls.research_fields(),
             "platform_assessment": {
                 "copilot_studio_fit": "full",
-                "cowork_fit": "not-assessed",
+                "cowork_fit": "not-fit",
                 "foundry_fit": "not-assessed",
                 "agent_framework_fit": "not-assessed",
                 "unmet_requirements": [],
@@ -906,9 +1021,11 @@ class ComplexityClassifierTests(unittest.TestCase):
                     "status": "satisfied",
                     "platform": "Copilot Studio",
                     "capability": "Generative orchestration and grounded knowledge",
+                    "rationale": "Copilot Studio knowledge grounding answers policy questions from the approved source.",
                     "reference_ids": [
                         "copilot-studio-orchestration",
                         "copilot-studio-knowledge",
+                        "RS-001",
                     ],
                 },
                 {
@@ -916,7 +1033,8 @@ class ComplexityClassifierTests(unittest.TestCase):
                     "status": "satisfied",
                     "platform": "Copilot Studio",
                     "capability": "Autonomous scheduled trigger",
-                    "reference_ids": ["copilot-studio-autonomous"],
+                    "rationale": "A Copilot Studio scheduled trigger starts the compliance check without user action.",
+                    "reference_ids": ["copilot-studio-autonomous", "RS-001"],
                 },
             ],
             "agentic_platform": "Copilot Studio",
@@ -986,6 +1104,7 @@ class ComplexityClassifierTests(unittest.TestCase):
                         "business_priority": "must",
                         "business_weight": 5,
                         "work_type": "knowledge-retrieval",
+                        "work_type_rationale": "Answers require retrieving and summarizing unstructured policy content.",
                         "action_impact": "read-only",
                         "dependencies": [],
                         "component_ids": ["policy-agent", "policy-knowledge"],
@@ -1024,6 +1143,7 @@ class ComplexityClassifierTests(unittest.TestCase):
                         "business_priority": "should",
                         "business_weight": 3,
                         "work_type": "deterministic-execution",
+                        "work_type_rationale": "The schedule and the check sequence are fixed rules without judgment.",
                         "action_impact": "read-only",
                         "dependencies": ["CAP-001"],
                         "component_ids": ["agent-automation", "policy-agent"],
@@ -1217,9 +1337,14 @@ class ComplexityClassifierTests(unittest.TestCase):
                 {
                     "platform": "Microsoft Cowork",
                     "capability": "Cowork delegated work, built-in skills, and scheduled tasks",
-                    "reference_ids": ["cowork-overview", "cowork-get-started"],
+                    "reference_ids": ["cowork-overview", "cowork-get-started", "RS-005"],
                 }
             )
+        for entry in model["platform_comparison"]:
+            if entry["platform"] == "Microsoft Cowork":
+                entry.update({"fit": "full", "selected": True})
+            elif entry["platform"] == "Copilot Studio":
+                entry.update({"fit": "partial", "selected": False})
         model.update(
             {
                 "agentic_platform": "Microsoft Cowork",
@@ -1598,6 +1723,7 @@ class ComplexityClassifierTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             prepared, run = self.prepare_delegated(Path(directory))
             model = self.model(run["run_id"])
+            model["platform_assessment"]["cowork_fit"] = "not-assessed"
             model["delivery_assessment"]["capabilities"][0]["work_type"] = (
                 "delegated-personal-work"
             )
@@ -1614,6 +1740,7 @@ class ComplexityClassifierTests(unittest.TestCase):
             model = self.model(run["run_id"])
             cowork = self.cowork_model(run["run_id"])
             model["platform_assessment"]["cowork_fit"] = "full"
+            model["platform_comparison"][0]["fit"] = "full"
             model["delivery_assessment"]["platform_gates"].extend(
                 cowork["delivery_assessment"]["platform_gates"]
             )
@@ -1960,6 +2087,19 @@ class ComplexityClassifierTests(unittest.TestCase):
             )
             markdown = Path(result["markdown"]).read_text(encoding="utf-8")
             output = json.loads(Path(result["json"]).read_text(encoding="utf-8"))
+            for heading in (
+                "## Research Plan and Sources",
+                "## Agentic Suitability",
+                "## Platform Comparison",
+            ):
+                self.assertIn(heading, markdown)
+            self.assertIn("| Copilot Studio | full | Yes |", markdown)
+            self.assertEqual(5, len(output["platform_comparison"]))
+            self.assertEqual("agentic", output["agentic_suitability"]["recommendation"])
+            self.assertEqual(
+                ["ms-learn-mcp", "azure-mcp", "ms-eng-hub-mcp", "ms-icm-mcp"],
+                [item["server"] for item in output["research_register"]["mcp_usage"]],
+            )
             self.assertIn(
                 "## Architecture and Sequence Design Contract",
                 markdown,
@@ -2544,6 +2684,232 @@ class ComplexityClassifierTests(unittest.TestCase):
                 network.assert_called_once()
             self.assertEqual("cached-after-error", stale["status"])
             self.assertEqual(cached["retrieved_at"], stale["retrieved_at"])
+
+    def test_prepare_seeds_research_plan_from_analysis(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            prepared, run = self.prepare(Path(directory))
+            draft = json.loads(Path(prepared["model_draft"]).read_text(encoding="utf-8"))
+            expected = [item["id"] for item in self.research_fields()["research_plan"]]
+            self.assertEqual(expected, [item["id"] for item in draft["research_plan"]])
+            self.assertEqual("4.0", draft["schema_version"])
+            self.assertEqual(
+                list(classifier.COMPARISON_ORDER),
+                [item["platform"] for item in draft["platform_comparison"]],
+            )
+            context = json.loads(Path(run["model_context_path"]).read_text(encoding="utf-8"))
+            seed = json.loads(
+                (Path(run["run_directory"]) / context["research_plan_seed"]).read_text(encoding="utf-8")
+            )
+            self.assertEqual(expected, [item["id"] for item in seed["topics"]])
+            self.assertIn("ms-icm-mcp", seed["mcp_routing"])
+
+
+class ResearchSuitabilityPrecedenceTests(unittest.TestCase):
+    IN_SCOPE = {"REQ-AAAA000001", "REQ-BBBB000002"}
+    SUMMARY = {
+        "in_scope_findings": [
+            {"finding_id": "REQ-AAAA000001", "statement": "Grounded answers."},
+            {"finding_id": "REQ-BBBB000002", "statement": "Scheduled check."},
+        ],
+        "knowledge_sources": [{"name": "Policy", "finding_ids": ["REQ-AAAA000001"]}],
+        "integrations": [],
+        "agentic_behaviors": [
+            {"behavior": "Conversational", "requirement_status": "Confirmed", "finding_ids": ["REQ-AAAA000001"]},
+            {"behavior": "Autonomous", "requirement_status": "Confirmed", "finding_ids": ["REQ-BBBB000002"]},
+        ],
+        "lisa_config": {"configured_channels": []},
+        "evidenced_channels": [],
+    }
+    PACKAGED = {"entra-id", "copilot-studio-fundamentals", "copilot-studio-autonomous"}
+
+    def setUp(self) -> None:
+        self.model = ComplexityClassifierTests.model("RUN")
+
+    def research(self) -> tuple[set[str], set[str]]:
+        return classifier._validate_research(self.model, self.SUMMARY, self.IN_SCOPE, self.PACKAGED)
+
+    def citable(self) -> set[str]:
+        return self.PACKAGED | {item["id"] for item in self.model["research_register"]["sources"]}
+
+    def assert_error(self, function, message: str) -> None:
+        with self.assertRaises(classifier.ClassifierError) as raised:
+            function()
+        self.assertIn(message, str(raised.exception))
+
+    def comparison(self, platform: str) -> dict:
+        return next(item for item in self.model["platform_comparison"] if item["platform"] == platform)
+
+    def test_valid_fixture_passes_every_new_rule(self) -> None:
+        register, internal = self.research()
+        self.assertEqual({"RS-003", "RS-004"}, internal)
+        self.assertIn("RS-001", register)
+        classifier._validate_agentic_suitability(self.model, self.SUMMARY, self.IN_SCOPE, self.citable())
+        classifier._validate_platform_comparison(self.model, self.citable())
+
+    def test_seeded_topic_and_finding_mapping_are_required(self) -> None:
+        self.model["research_plan"] = [
+            item for item in self.model["research_plan"] if item["id"] != "TOPIC-KNOWLEDGE-POLICY"
+        ]
+        self.assert_error(self.research, "must resolve seeded topic TOPIC-KNOWLEDGE-POLICY")
+        self.setUp()
+        for topic in self.model["research_plan"]:
+            topic["finding_ids"] = [item for item in topic["finding_ids"] if item != "REQ-BBBB000002"]
+        self.assert_error(self.research, "Every in-scope finding must map to a research topic")
+
+    def test_platform_topics_cannot_remain_research_gaps(self) -> None:
+        self.model["research_plan"][1]["status"] = "research-gap"
+        self.assert_error(self.research, "must be resolved before publication")
+
+    def test_every_mcp_server_usage_is_recorded_and_consistent(self) -> None:
+        self.model["research_register"]["mcp_usage"].pop()
+        self.assert_error(self.research, "must record each MCP server once")
+        self.setUp()
+        self.model["research_register"]["mcp_usage"][3]["status"] = "unavailable"
+        self.assert_error(self.research, "ms-icm-mcp is marked unavailable")
+        self.setUp()
+        self.model["research_register"]["mcp_usage"][0]["status"] = "unavailable"
+        self.assert_error(self.research, "Microsoft Learn MCP")
+        self.setUp()
+        self.model["research_register"]["sources"] = [
+            item for item in self.model["research_register"]["sources"] if item["id"] != "RS-002"
+        ]
+        self.model["research_plan"][2]["source_ids"] = ["entra-id"]
+        self.model["research_plan"][3]["source_ids"] = ["RS-001"]
+        self.assert_error(self.research, "azure-mcp is marked used")
+
+    def test_unavailable_server_is_recorded_as_a_gap(self) -> None:
+        self.model["research_register"]["mcp_usage"][3].update(
+            {"status": "unavailable", "detail": "IcM MCP authentication failed for this session."}
+        )
+        self.model["research_register"]["sources"] = [
+            item for item in self.model["research_register"]["sources"] if item["id"] != "RS-004"
+        ]
+        self.model["research_plan"][6]["source_ids"] = ["RS-001"]
+        self.research()
+
+    def test_non_microsoft_topics_require_vendor_official_sources(self) -> None:
+        self.model["research_plan"].append({
+            "id": "TOPIC-REQ-TICKETING",
+            "category": "integration",
+            "subject": "ServiceNow ticketing",
+            "vendor": "ServiceNow",
+            "questions": ["Which ServiceNow APIs create incidents?"],
+            "finding_ids": ["REQ-BBBB000002"],
+            "source_ids": ["RS-001"],
+            "status": "resolved",
+            "resolution": "ServiceNow Table API creates incidents with OAuth authentication.",
+        })
+        self.assert_error(self.research, "must cite that vendor's official documentation")
+        vendor_source = {
+            "id": "RS-006",
+            "source_type": "vendor-official",
+            "tool": "fetch_webpage",
+            "query": "ServiceNow Table API incident create",
+            "locator": "https://docs.servicenow.com/table-api",
+            "retrieved_at": "2026-08-13T12:10:00+05:30",
+            "vendor": "ServiceNow",
+            "product": "ServiceNow Table API",
+            "confidentiality": "public",
+            "version_or_date": "Xanadu",
+            "finding": "The Table API supports creating incident records.",
+        }
+        self.model["research_register"]["sources"].append(vendor_source)
+        self.model["research_plan"][-1]["source_ids"] = ["RS-006"]
+        self.assert_error(self.research, "need a trust_basis")
+        vendor_source["trust_basis"] = "vendor-owned-domain"
+        self.research()
+        vendor_source["vendor"] = "Microsoft"
+        self.assert_error(self.research, "through the Microsoft MCP servers")
+
+    def test_internal_sources_stay_out_of_customer_text(self) -> None:
+        self.model["justification_paragraphs"].append("An open incident exists [RS-004].")
+        self.assert_error(self.research, "must not cite Microsoft-internal sources")
+        self.setUp()
+        self.model["research_register"]["sources"][2]["confidentiality"] = "public"
+        self.assert_error(self.research, "ms-eng-hub-mcp sources are microsoft-internal")
+        self.setUp()
+        self.comparison("Microsoft Cowork")["source_ids"] = ["RS-003"]
+        self.assert_error(self.research, "must cite at least one public source")
+
+    def test_requirement_assessments_cite_register_sources(self) -> None:
+        self.model["requirement_assessments"][1]["reference_ids"] = ["copilot-studio-autonomous"]
+        self.assert_error(self.research, "must cite a research register source")
+
+    def test_suitability_matches_platform_and_work_types(self) -> None:
+        self.model["agentic_suitability"]["criteria"].pop()
+        self.assert_error(
+            lambda: classifier._validate_agentic_suitability(self.model, self.SUMMARY, self.IN_SCOPE, self.citable()),
+            "must assess each criterion once",
+        )
+        self.setUp()
+        self.model["agentic_suitability"]["recommendation"] = "deterministic"
+        self.assert_error(
+            lambda: classifier._validate_agentic_suitability(self.model, self.SUMMARY, self.IN_SCOPE, self.citable()),
+            "requires the Deterministic (no agent) platform",
+        )
+        self.model["agentic_platform"] = classifier.DETERMINISTIC_PLATFORM
+        self.assert_error(
+            lambda: classifier._validate_agentic_suitability(self.model, self.SUMMARY, self.IN_SCOPE, self.citable()),
+            "cannot contain agentic capability work types",
+        )
+        self.model["delivery_assessment"]["capabilities"][0]["work_type"] = "conventional-software"
+        self.assert_error(
+            lambda: classifier._validate_agentic_suitability(self.model, self.SUMMARY, self.IN_SCOPE, self.citable()),
+            "conflicts with in-scope agentic behaviors",
+        )
+        self.setUp()
+        self.model["agentic_suitability"]["recommendation"] = "hybrid"
+        self.model["delivery_assessment"]["capabilities"][1]["work_type"] = "adaptive-reasoning"
+        self.assert_error(
+            lambda: classifier._validate_agentic_suitability(self.model, self.SUMMARY, self.IN_SCOPE, self.citable()),
+            "needs both agentic and deterministic",
+        )
+
+    def test_deterministic_recommendation_is_accepted_when_consistent(self) -> None:
+        summary = copy.deepcopy(self.SUMMARY)
+        summary["agentic_behaviors"] = summary["agentic_behaviors"][1:]
+        self.model["agentic_suitability"]["recommendation"] = "deterministic"
+        self.model["agentic_platform"] = classifier.DETERMINISTIC_PLATFORM
+        self.model["components"]["agents"] = []
+        for capability in self.model["delivery_assessment"]["capabilities"]:
+            capability["work_type"] = "deterministic-execution"
+        classifier._validate_agentic_suitability(self.model, summary, self.IN_SCOPE, self.citable())
+        for entry in self.model["platform_comparison"]:
+            entry["selected"] = entry["platform"] == classifier.DETERMINISTIC_PLATFORM
+        self.comparison(classifier.DETERMINISTIC_PLATFORM)["fit"] = "full"
+        classifier._validate_platform_comparison(self.model, self.citable())
+
+    def test_platform_precedence_selects_first_full_fit(self) -> None:
+        self.model["platform_comparison"].reverse()
+        self.assert_error(
+            lambda: classifier._validate_platform_comparison(self.model, self.citable()),
+            "precedence order",
+        )
+        self.setUp()
+        self.model["platform_assessment"]["cowork_fit"] = "not-assessed"
+        self.assert_error(
+            lambda: classifier._validate_platform_comparison(self.model, self.citable()),
+            "requires a Microsoft Cowork fit assessment",
+        )
+        self.setUp()
+        self.comparison("Microsoft Cowork")["fit"] = "partial"
+        self.assert_error(
+            lambda: classifier._validate_platform_comparison(self.model, self.citable()),
+            "must match platform_assessment.cowork_fit",
+        )
+        self.setUp()
+        self.model["platform_assessment"]["cowork_fit"] = "full"
+        self.comparison("Microsoft Cowork")["fit"] = "full"
+        self.assert_error(
+            lambda: classifier._validate_platform_comparison(self.model, self.citable()),
+            "must select Microsoft Cowork",
+        )
+        self.setUp()
+        self.comparison("Azure AI Foundry")["selected"] = True
+        self.assert_error(
+            lambda: classifier._validate_platform_comparison(self.model, self.citable()),
+            "must mark only Copilot Studio as selected",
+        )
 
 
 if __name__ == "__main__":

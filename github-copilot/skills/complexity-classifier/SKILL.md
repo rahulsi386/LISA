@@ -1,6 +1,6 @@
 ---
 name: "complexity-classifier"
-description: "Designs the complete solution, classifies intrinsic complexity, and deterministically scores how much can be built or demonstrated with Copilot Studio, Microsoft 365 Copilot Chat, Cowork, and Teams."
+description: "Researches with Microsoft MCP servers and official vendor sources, decides agentic versus deterministic suitability, selects the platform by Cowork, Copilot Studio, Foundry, Agent Framework precedence, designs the solution and scores complexity and allowed-tool coverage."
 ---
 
 # Complexity Classifier
@@ -102,7 +102,7 @@ because it is available:
 
 | When | Required sections |
 |---|---|
-| Every non-cache architecture | Required delivery assessment; In-scope evidence; AI agent architect responsibility; Required component inventory; Architecture-ready solution topology; Mandatory baseline components |
+| Every non-cache architecture | Research plan, sources, suitability, and precedence; Required delivery assessment; In-scope evidence; AI agent architect responsibility; Required component inventory; Architecture-ready solution topology; Mandatory baseline components |
 | Every run's active research | Staged research (Stage 1 always; later stages only after the persisted gap gate) |
 | Conversational channels | Channels; Harness selection and solution design |
 | Autonomous work | Autonomous triggers |
@@ -111,6 +111,29 @@ because it is available:
 
 Use `resources\classification-model.schema.json` for exact field shapes. The completion contract is
 a focused checklist, not a replacement for applicable safety, product or architecture guidance.
+
+## Research, suitability and precedence
+
+Resolve every `research-plan-seed.json` topic, adding topics until each in-scope finding maps to
+one, with cited `research_register` sources (tool, query, locator, retrieval time, finding). Use all
+MCP servers and record each in `mcp_usage`; a failing server is `unavailable` with its detail:
+
+| Server | Use for |
+|---|---|
+| `ms-learn-mcp` (mandatory) | Microsoft and allied product documentation, limits, best practices, known issues |
+| `azure-mcp` | Azure and Power Platform best practices, architecture references, deployment tooling |
+| `ms-eng-hub-mcp` | Microsoft-internal deep engineering guidance |
+| `ms-icm-mcp` | Microsoft-internal open incidents and bugs affecting the design |
+
+Non-Microsoft products cite only the vendor's official documentation (`vendor-official`, trust
+basis, version/date). Internal sources never appear in customer-facing text.
+
+Decide `agentic_suitability` first (agentic, hybrid or deterministic) across all seven criteria,
+with the deterministic alternative and why the other approach was rejected. Deterministic selects
+`Deterministic (no agent)`: no agents, no harness. Otherwise apply precedence Microsoft Cowork ->
+Copilot Studio -> Azure AI Foundry -> Microsoft Agent Framework: always assess Cowork and select
+the first full fit. `platform_comparison` justifies the choice against all five options with fit,
+pros, cons, rationale and public sources.
 
 ## Staged research
 
@@ -167,29 +190,15 @@ Markdown/JSON consistency and output containment. It emits:
 ## Verified reuse and measurements
 
 Only `classification_cache_hit: true` permits publishing the returned reused model without repeating
-model completion. Cache candidates must already be validated and pass full current evidence,
-scoring and architecture checks again. Semantic reuse ignores **only the top-level `run_id` in the
-ledger**, preserving every other field, nested ID, date and provenance value. A validated republication
-of otherwise identical evidence can reuse the model; every prepared run still binds the exact current
-ledger, Markdown and full manifest hashes and refuses drift.
+model completion; candidates are re-scored against current evidence and architecture checks.
+Semantic reuse ignores **only the ledger's top-level `run_id`**. The key also covers the configured
+root, source identity, configuration, references, schemas, contracts, helpers, instructions, rules
+and templates; each run still binds exact current ledger, Markdown and manifest hashes.
 
-The semantic key also includes the configured root, complete source identity, configuration, current
-references, schemas/contracts, shared helpers, instructions/rules and templates. In source-manifest
-bookkeeping only, the recognized generated extraction path is content-addressed using its retained
-source ID/extraction hash, and its operational cache-hit flag is excluded. Source paths, dates,
-metadata, unknown fields and extraction content hashes remain significant. Manifest publication
-identity and creation time remain in the exact per-run handoff, not semantic evidence identity.
+`classification_cache_decision` explains reuse or refusal. Models naming old upstream artifacts,
+analyzer run IDs or changed hashes are not rewritten: complete the current model. Output paths and
+hashes always come from the current run. `input_size_counters` reports measured UTF-8 bytes, not
+token estimates or promised savings.
 
-`classification_cache_decision` explains reuse or a safe refusal. Models mentioning old upstream
-artifact names, analyzer run IDs or changed publication hashes are not automatically rewritten:
-complete the current model instead. Fresh output paths and artifact hashes are always generated
-from the current run, never copied from a prior classification. There is no legacy/unvalidated bypass;
-reference freshness/TTL and sequential research gates remain unchanged.
-
-`input_size_counters` reports measured UTF-8 bytes for the ledger, summary, populated draft, full
-references, mandatory compact input, navigation and on-demand excerpts, plus batch/fragment counts.
-These are not tokenizer estimates or promised savings: add applicable guidance, schema and official
-documentation reads to measure actual total input. A small input may not be smaller.
-
-Return concise complexity/platform/stage, tier/harness, counts, channels/triggers, topology counts,
+Return concise suitability, complexity/platform/stage, tier/harness, counts, channels/triggers, topology counts,
 published paths, cache status and duration.

@@ -257,6 +257,13 @@ It filters in-scope analysis findings, decomposes them into weighted business ca
 
 It requires explicit channels, triggers, typed build contracts, component-to-inventory mapping, actor-to-channel-to-agent paths, identity/authentication/authorization, security, governance, monitoring, ALM, trust boundaries, Development/Test/Production environments, quality decisions, and an architecture-derived sequence.
 
+Classifier 3.0 (model schema 4.0) adds:
+
+- **Research plan.** `prepare` writes `research-plan-seed.json` from the analysis. Every seeded topic and every in-scope finding must be covered by resolved, cited topics.
+- **Source register.** Every consulted source is recorded as `RS-###` with tool, query, locator, retrieval time, and finding. All four MCP servers are recorded in `mcp_usage`: `ms-learn-mcp` (mandatory), `azure-mcp`, `ms-eng-hub-mcp`, and `ms-icm-mcp`. A server that could not be reached is marked unavailable with its reason. Non-Microsoft products need vendor-official sources with a trust basis. Internal eng-hub and IcM sources never appear in customer-facing text.
+- **Agentic suitability.** The recommendation is agentic, hybrid, or deterministic, scored across seven criteria. It names the deterministic alternative and explains why the rejected option was rejected. A deterministic result selects `Deterministic (no agent)`, and the orchestrator ends after classification.
+- **Platform comparison.** A five-row comparison covers Microsoft Cowork, Copilot Studio, Azure AI Foundry, Microsoft Agent Framework, and the deterministic option, with pros and cons. The selected platform must be the first full fit in that precedence order.
+
 ### Inputs consumed and outputs provided
 
 **Inputs**
@@ -298,7 +305,7 @@ Run IDs match `CC-YYYYMMDD_HHMMSS[_mmm]-XXXXXXXX`; statuses are `prepared`, `res
 
    Foundry cannot be skipped, and Agent Framework can address only gaps persisted from the preceding assessment.
 4. Complete the strict model. Model-authored percentages are not authoritative: the publisher derives counts, weighted product scores, business coverage, and complexity.
-5. **Publish.** Validation checks research precedence, every in-scope finding, consulted references, channels/triggers, product and code-tier consistency, mandatory controls, component inventory, full topology relationships, trust/environments, sequence, PoC treatment, simulation disclosure, approval gates, schemas, and Markdown consistency.
+5. **Publish.** Validation checks the research plan and source register, agentic suitability, platform precedence and comparison, every in-scope finding, consulted references, channels/triggers, product and code-tier consistency, mandatory controls, component inventory, full topology relationships, trust/environments, sequence, PoC treatment, simulation disclosure, approval gates, schemas, and Markdown consistency.
 
    ```powershell
    & "<skill-dir>\scripts\Invoke-ComplexityClassifier.ps1" publish --run "<run.json>" --model "<completed-model.json>"

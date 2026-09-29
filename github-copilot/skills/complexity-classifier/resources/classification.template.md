@@ -3,12 +3,21 @@
 ## Reference Documentation Consulted
 {{REFERENCES}}
 
+## Research Plan and Sources
+{{RESEARCH}}
+
 ## Final Classification
 
 **{{COMPLEXITY}}**
 
+## Agentic Suitability
+{{SUITABILITY}}
+
 ## Agentic Platform, Code Tier and Harness
 {{PLATFORM}}
+
+## Platform Comparison
+{{COMPARISON}}
 
 ## Comprehensive Justification
 {{JUSTIFICATION}}

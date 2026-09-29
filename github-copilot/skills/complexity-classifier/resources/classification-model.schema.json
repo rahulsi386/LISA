@@ -7,7 +7,11 @@
     "schema_version",
     "run_id",
     "research_stage",
+    "research_plan",
+    "research_register",
+    "agentic_suitability",
     "platform_assessment",
+    "platform_comparison",
     "requirement_assessments",
     "agentic_platform",
     "code_tier",
@@ -22,10 +26,23 @@
     "gaps"
   ],
   "properties": {
-    "schema_version": {"const": "3.0"},
+    "schema_version": {"const": "4.0"},
     "run_id": {"type": "string", "minLength": 1},
     "research_stage": {
       "enum": ["copilot", "foundry", "agent-framework"]
+    },
+    "research_plan": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/researchTopic"}
+    },
+    "research_register": {"$ref": "#/$defs/researchRegister"},
+    "agentic_suitability": {"$ref": "#/$defs/agenticSuitability"},
+    "platform_comparison": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {"$ref": "#/$defs/platformComparison"}
     },
     "platform_assessment": {
       "type": "object",
@@ -69,6 +86,7 @@
           "status",
           "platform",
           "capability",
+          "rationale",
           "reference_ids"
         ],
         "properties": {
@@ -79,10 +97,12 @@
               "Copilot Studio",
               "Microsoft Cowork",
               "Azure AI Foundry",
-              "Microsoft Agent Framework"
+              "Microsoft Agent Framework",
+              "Deterministic (no agent)"
             ]
           },
           "capability": {"type": "string", "minLength": 1},
+          "rationale": {"type": "string", "minLength": 40},
           "reference_ids": {
             "type": "array",
             "minItems": 1,
@@ -98,7 +118,8 @@
         "Microsoft Cowork",
         "Azure AI Foundry",
         "Pro-code (Microsoft Agent Framework)",
-        "Hybrid"
+        "Hybrid",
+        "Deterministic (no agent)"
       ]
     },
     "code_tier": {"enum": ["No-code", "Low-code", "Pro-code"]},
@@ -133,7 +154,6 @@
       "properties": {
         "agents": {
           "type": "array",
-          "minItems": 1,
           "items": {"$ref": "#/$defs/agent"}
         },
         "platform_capabilities": {
@@ -214,6 +234,109 @@
     "gaps": {"$ref": "#/$defs/groundedItems"}
   },
   "$defs": {
+    "researchTopic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "category", "subject", "vendor", "questions", "finding_ids", "source_ids", "status", "resolution"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^TOPIC-[A-Z0-9-]{2,60}$"},
+        "category": {"enum": ["suitability", "platform", "identity-security", "governance-alm", "knowledge", "integration", "behavior", "channel", "requirement", "non-functional"]},
+        "subject": {"type": "string", "minLength": 1},
+        "vendor": {"type": "string", "minLength": 1},
+        "questions": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 10}},
+        "finding_ids": {"$ref": "#/$defs/stringIds"},
+        "source_ids": {"$ref": "#/$defs/stringIds"},
+        "status": {"enum": ["resolved", "research-gap"]},
+        "resolution": {"type": "string", "minLength": 40}
+      }
+    },
+    "researchRegister": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mcp_usage", "sources"],
+      "properties": {
+        "mcp_usage": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["server", "status", "detail"],
+            "properties": {
+              "server": {"enum": ["ms-learn-mcp", "azure-mcp", "ms-eng-hub-mcp", "ms-icm-mcp"]},
+              "status": {"enum": ["used", "unavailable"]},
+              "detail": {"type": "string", "minLength": 10}
+            }
+          }
+        },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "source_type", "tool", "query", "locator", "retrieved_at", "vendor", "product", "confidentiality", "finding"],
+            "properties": {
+              "id": {"type": "string", "pattern": "^RS-[0-9]{3,}$"},
+              "source_type": {"enum": ["ms-learn-mcp", "azure-mcp", "ms-eng-hub-mcp", "ms-icm-mcp", "vendor-official"]},
+              "tool": {"type": "string", "minLength": 1},
+              "query": {"type": "string", "minLength": 1},
+              "locator": {"type": "string", "minLength": 1},
+              "retrieved_at": {"type": "string", "format": "date-time"},
+              "vendor": {"type": "string", "minLength": 1},
+              "product": {"type": "string", "minLength": 1},
+              "confidentiality": {"enum": ["public", "microsoft-internal"]},
+              "trust_basis": {"enum": ["vendor-owned-domain", "official-vendor-repository", "vendor-linked-documentation"]},
+              "version_or_date": {"type": "string", "minLength": 1},
+              "finding": {"type": "string", "minLength": 20}
+            }
+          }
+        }
+      }
+    },
+    "agenticSuitability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recommendation", "summary", "criteria", "deterministic_alternative", "rejected_alternative_rationale"],
+      "properties": {
+        "recommendation": {"enum": ["agentic", "hybrid", "deterministic"]},
+        "summary": {"type": "string", "minLength": 300},
+        "criteria": {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["criterion", "assessment", "rationale", "evidence_ids", "source_ids"],
+            "properties": {
+              "criterion": {"enum": ["input-ambiguity", "reasoning-need", "process-variability", "tool-orchestration", "action-impact", "determinism-auditability", "cost-latency"]},
+              "assessment": {"enum": ["favors-agentic", "favors-deterministic", "neutral"]},
+              "rationale": {"type": "string", "minLength": 60},
+              "evidence_ids": {"$ref": "#/$defs/stringIds"},
+              "source_ids": {"$ref": "#/$defs/stringIds"}
+            }
+          }
+        },
+        "deterministic_alternative": {"type": "string", "minLength": 80},
+        "rejected_alternative_rationale": {"type": "string", "minLength": 150}
+      }
+    },
+    "platformComparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platform", "fit", "selected", "pros", "cons", "decision_rationale", "source_ids"],
+      "properties": {
+        "platform": {"enum": ["Microsoft Cowork", "Copilot Studio", "Azure AI Foundry", "Microsoft Agent Framework", "Deterministic (no agent)"]},
+        "fit": {"enum": ["full", "partial", "not-fit", "not-assessed"]},
+        "selected": {"type": "boolean"},
+        "pros": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 10}},
+        "cons": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 10}},
+        "decision_rationale": {"type": "string", "minLength": 60},
+        "source_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      }
+    },
     "deliveryAssessment": {
       "type": "object",
       "additionalProperties": false,
@@ -349,6 +472,7 @@
         "business_priority",
         "business_weight",
         "work_type",
+        "work_type_rationale",
         "action_impact",
         "dependencies",
         "component_ids",
@@ -382,6 +506,7 @@
             "custom-agent-software"
           ]
         },
+        "work_type_rationale": {"type": "string", "minLength": 40},
         "action_impact": {
           "enum": ["read-only", "draft", "reversible-write", "high-impact-write", "irreversible-or-safety-critical"]
         },

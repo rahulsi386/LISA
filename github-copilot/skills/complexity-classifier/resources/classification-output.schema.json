@@ -6,7 +6,11 @@
   "required": [
     "complexity",
     "research_stage",
+    "agentic_suitability",
     "platform_assessment",
+    "platform_comparison",
+    "research_plan",
+    "research_register",
     "agentic_platform",
     "harness",
     "code_tier",
@@ -39,13 +43,31 @@
     "platform_assessment": {
       "type": "object"
     },
+    "agentic_suitability": {
+      "type": "object",
+      "required": ["recommendation", "summary", "criteria"]
+    },
+    "platform_comparison": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5
+    },
+    "research_plan": {
+      "type": "array",
+      "minItems": 1
+    },
+    "research_register": {
+      "type": "object",
+      "required": ["mcp_usage", "sources"]
+    },
     "agentic_platform": {
       "enum": [
         "Copilot Studio",
         "Microsoft Cowork",
         "Azure AI Foundry",
         "Pro-code (Microsoft Agent Framework)",
-        "Hybrid"
+        "Hybrid",
+        "Deterministic (no agent)"
       ]
     },
     "harness": {

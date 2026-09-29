@@ -33,8 +33,9 @@ from analysis_handoff import (
 from review_batches import ReviewBatchError, write_review_batches
 
 
-VERSION = "2.2.0"
-CACHE_VERSION = "4"
+VERSION = "3.0.0"
+CACHE_VERSION = "5"
+MODEL_SCHEMA_VERSION = "4.0"
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 RESOURCES = SKILL_ROOT / "resources"
 ARTIFACT_CONTRACT = validate_contract(SKILL_ROOT)
@@ -57,8 +58,11 @@ REQUIREMENT_FILENAME = re.compile(
 )
 REQUIRED_HEADINGS = [
     "Reference Documentation Consulted",
+    "Research Plan and Sources",
     "Final Classification",
+    "Agentic Suitability",
     "Agentic Platform, Code Tier and Harness",
+    "Platform Comparison",
     "Comprehensive Justification",
     "Extracted Evidence",
     "Solution Component Inventory",
@@ -102,6 +106,46 @@ FOUNDRY_REFERENCE_IDS = {
     "azure-pipelines",
 }
 AGENT_FRAMEWORK_REFERENCE_IDS = {"agent-framework"}
+DETERMINISTIC_PLATFORM = "Deterministic (no agent)"
+# Agentic platforms in mandatory selection precedence.
+AGENTIC_PRECEDENCE = (
+    "Microsoft Cowork",
+    "Copilot Studio",
+    "Azure AI Foundry",
+    "Microsoft Agent Framework",
+)
+COMPARISON_ORDER = (*AGENTIC_PRECEDENCE, DETERMINISTIC_PLATFORM)
+COMPARISON_NAME = {
+    "Microsoft Cowork": "Microsoft Cowork",
+    "Copilot Studio": "Copilot Studio",
+    "Azure AI Foundry": "Azure AI Foundry",
+    "Pro-code (Microsoft Agent Framework)": "Microsoft Agent Framework",
+    DETERMINISTIC_PLATFORM: DETERMINISTIC_PLATFORM,
+}
+COMPARISON_FIT_KEY = {
+    "Microsoft Cowork": "cowork_fit",
+    "Copilot Studio": "copilot_studio_fit",
+    "Azure AI Foundry": "foundry_fit",
+    "Microsoft Agent Framework": "agent_framework_fit",
+}
+MCP_SERVERS = ("ms-learn-mcp", "azure-mcp", "ms-eng-hub-mcp", "ms-icm-mcp")
+INTERNAL_SOURCE_TYPES = {"ms-eng-hub-mcp", "ms-icm-mcp"}
+SUITABILITY_CRITERIA = (
+    "input-ambiguity",
+    "reasoning-need",
+    "process-variability",
+    "tool-orchestration",
+    "action-impact",
+    "determinism-auditability",
+    "cost-latency",
+)
+AGENTIC_WORK_TYPES = {
+    "knowledge-retrieval",
+    "adaptive-reasoning",
+    "delegated-personal-work",
+    "custom-agent-software",
+}
+DETERMINISTIC_WORK_TYPES = {"conventional-software", "deterministic-execution"}
 DEFAULT_CONVERSATIONAL_CHANNELS = [
     "Microsoft Teams",
     "Microsoft 365 Copilot",
@@ -614,6 +658,23 @@ def _write_model_context(
         "references": reference_index,
     }) + "\n")
     context_path = root / "model-context.json"
+    research_seed_path = root / "research-plan-seed.json"
+    _atomic_write_text(research_seed_path, _compact_json({
+        "schema_version": "1.0",
+        "usage": (
+            "Mandatory research topics derived from the analysis. Resolve each with cited "
+            "research_register sources; add requirement topics until every in-scope finding "
+            "maps to a topic."
+        ),
+        "mcp_routing": {
+            "ms-learn-mcp": "Official Microsoft product documentation, limits, best practices, known issues.",
+            "azure-mcp": "Azure and Power Platform best practices, architecture references, deployment tooling.",
+            "ms-eng-hub-mcp": "Microsoft-internal deep engineering guidance (internal only).",
+            "ms-icm-mcp": "Microsoft-internal open incidents and bugs affecting the design (internal only).",
+            "vendor-official": "Non-Microsoft products: the vendor's own official documentation only.",
+        },
+        "topics": _research_seed_topics(summary),
+    }) + "\n")
     context = {
         "schema_version": "1.0",
         "run_id": run["run_id"],
@@ -627,6 +688,7 @@ def _write_model_context(
         "evidence_first_page": str(Path("evidence-batches") / index["first_page"]),
         "evidence_index": str(Path(index["index_path"]).relative_to(root)),
         "reference_index": reference_index_path.name,
+        "research_plan_seed": research_seed_path.name,
         "model_draft": Path(run["model_draft_path"]).name,
         "authoritative_ledger": run["input_path"],
         "authoritative_evidence_summary": Path(run["evidence_summary_path"]).name,
@@ -645,7 +707,7 @@ def _write_model_context(
     }
     _atomic_write_text(context_path, _compact_json(context) + "\n")
     tracked = [
-        context_path, reference_index_path,
+        context_path, reference_index_path, research_seed_path,
         *sorted(evidence_root.glob("*.json")),
         *sorted(reference_root.glob("*.json")),
         *sorted(reference_root.glob("*\\*.json")),
@@ -996,6 +1058,7 @@ def _model_template(
                 "business_priority": "must",
                 "business_weight": 5,
                 "work_type": "adaptive-reasoning",
+                "work_type_rationale": "",
                 "action_impact": "read-only",
                 "dependencies": [],
                 "component_ids": [],
@@ -1029,9 +1092,58 @@ def _model_template(
             }
         )
     return {
-        "schema_version": "3.0",
+        "schema_version": MODEL_SCHEMA_VERSION,
         "run_id": run_id,
         "research_stage": research_stage,
+        "research_plan": [
+            {
+                "id": seed["id"],
+                "category": seed["category"],
+                "subject": seed["subject"],
+                "vendor": "Microsoft",
+                "questions": seed["questions"],
+                "finding_ids": seed["evidence_ids"],
+                "source_ids": [],
+                "status": "research-gap",
+                "resolution": "Not yet researched; resolve with cited research_register sources.",
+            }
+            for seed in _research_seed_topics(evidence_summary)
+        ],
+        "research_register": {
+            "mcp_usage": [
+                {"server": server, "status": "used", "detail": "Record the queries performed."}
+                for server in MCP_SERVERS
+            ],
+            "sources": [],
+        },
+        "agentic_suitability": {
+            "recommendation": "agentic",
+            "summary": "",
+            "criteria": [
+                {
+                    "criterion": criterion,
+                    "assessment": "neutral",
+                    "rationale": "",
+                    "evidence_ids": [],
+                    "source_ids": [],
+                }
+                for criterion in SUITABILITY_CRITERIA
+            ],
+            "deterministic_alternative": "",
+            "rejected_alternative_rationale": "",
+        },
+        "platform_comparison": [
+            {
+                "platform": name,
+                "fit": "not-assessed",
+                "selected": False,
+                "pros": [],
+                "cons": [],
+                "decision_rationale": "",
+                "source_ids": [],
+            }
+            for name in COMPARISON_ORDER
+        ],
         "platform_assessment": {
             "copilot_studio_fit": "full",
             "cowork_fit": "not-assessed",
@@ -2210,6 +2322,9 @@ def _validate_solution_topology(model: dict[str, Any]) -> None:
         required_categories.add("automation")
     if components["integration"]:
         required_categories.add("integration")
+    deterministic = model["agentic_platform"] == DETERMINISTIC_PLATFORM
+    if deterministic:
+        required_categories -= {"agent", "agent-platform"}
     present_categories = {item["category"] for item in topology_components}
     missing_categories = required_categories - present_categories
     if missing_categories:
@@ -2251,7 +2366,7 @@ def _validate_solution_topology(model: dict[str, Any]) -> None:
         for item in topology_components
         if item["category"] == "agent-platform"
     ]
-    if not any(
+    if not deterministic and not any(
         model["agentic_platform"].casefold()
         in item["product_service"].casefold()
         for item in platform_components
@@ -2437,7 +2552,7 @@ def _validate_solution_topology(model: dict[str, Any]) -> None:
     agent_ids = {
         item["id"] for item in topology_components if item["category"] == "agent"
     }
-    if channel_ids:
+    if channel_ids and not deterministic:
         actor_to_channel = {
             item["target_id"]
             for item in topology["relationships"]
@@ -2461,6 +2576,9 @@ def _validate_solution_topology(model: dict[str, Any]) -> None:
             )
 
     if components["triggers"]:
+        trigger_targets = agent_ids if not deterministic else {
+            item["id"] for item in topology_components if item["category"] == "automation"
+        }
         trigger_names = {item["name"] for item in components["triggers"]}
         trigger_component_ids = {
             item["id"]
@@ -2471,7 +2589,7 @@ def _validate_solution_topology(model: dict[str, Any]) -> None:
             item["source_id"]
             for item in topology["relationships"]
             if item["relationship_type"] == "triggers"
-            and item["target_id"] in agent_ids
+            and item["target_id"] in trigger_targets
         }
         if trigger_component_ids - wired_trigger_ids:
             raise ClassifierError(
@@ -2916,6 +3034,349 @@ def _validate_delivery_assessment(
     return coverage, platform_scores
 
 
+def _topic_slug(value: str) -> str:
+    slug = re.sub(r"[^A-Z0-9]+", "-", value.upper()).strip("-")[:40].strip("-")
+    return slug or "ITEM"
+
+
+def _research_seed_topics(summary: dict[str, Any]) -> list[dict[str, Any]]:
+    """Derive the mandatory research topics deterministically from the analysis handoff."""
+    seeds = [
+        {
+            "id": "TOPIC-AGENTIC-SUITABILITY",
+            "category": "suitability",
+            "subject": "Agentic versus deterministic suitability",
+            "questions": [
+                "Which requirements need reasoning over ambiguous input, and which are fixed rules?",
+                "What deterministic implementation would satisfy the same outcomes, and at what cost?",
+            ],
+            "evidence_ids": [],
+        },
+        {
+            "id": "TOPIC-PLATFORM-PRECEDENCE",
+            "category": "platform",
+            "subject": "Cowork, Copilot Studio, Foundry, and Agent Framework fit in precedence order",
+            "questions": [
+                "Does a Microsoft Cowork plugin or skill fully satisfy the in-scope requirements?",
+                "If not, does Copilot Studio fully satisfy them before considering Foundry or Agent Framework?",
+            ],
+            "evidence_ids": [],
+        },
+        {
+            "id": "TOPIC-IDENTITY-SECURITY",
+            "category": "identity-security",
+            "subject": "Identity, authorization, data protection, and known issues",
+            "questions": [
+                "Which authentication, least-privilege, and data-protection controls apply to the selected platform?",
+            ],
+            "evidence_ids": [],
+        },
+        {
+            "id": "TOPIC-GOVERNANCE-ALM",
+            "category": "governance-alm",
+            "subject": "Governance, environments, ALM, and operations",
+            "questions": [
+                "Which governance, deployment, and monitoring practices apply to the selected platform?",
+            ],
+            "evidence_ids": [],
+        },
+    ]
+    used = {item["id"] for item in seeds}
+
+    def add(prefix: str, category: str, name: str, question: str, evidence: list[str]) -> None:
+        base = f"TOPIC-{prefix}-{_topic_slug(name)}"
+        candidate, number = base, 2
+        while candidate in used:
+            candidate, number = f"{base}-{number}", number + 1
+        used.add(candidate)
+        seeds.append({
+            "id": candidate, "category": category, "subject": name,
+            "questions": [question], "evidence_ids": list(evidence),
+        })
+
+    for item in summary.get("knowledge_sources", []):
+        name = str(item.get("name", "")).strip() or "Knowledge source"
+        add("KNOWLEDGE", "knowledge", name,
+            f"How can the solution ground on {name} with correct permissions, freshness, and limits?",
+            item.get("finding_ids", []))
+    for item in summary.get("integrations", []):
+        name = str(item.get("name", "")).strip() or "Integration"
+        add("INTEGRATION", "integration", name,
+            f"What official interfaces, authentication, and limits does {name} provide?",
+            item.get("finding_ids", []))
+    for item in summary.get("agentic_behaviors", []):
+        if item.get("requirement_status") in IN_SCOPE_STATUSES:
+            name = str(item.get("behavior", "")).strip() or "Behavior"
+            add("BEHAVIOR", "behavior", name,
+                f"Which platform capabilities implement the {name} behavior and its controls?",
+                item.get("finding_ids", []))
+    channels = summary.get("lisa_config", {}).get("configured_channels") or [
+        item["name"] for item in summary.get("evidenced_channels", [])
+    ]
+    for name in channels:
+        add("CHANNEL", "channel", name,
+            f"How is the solution published and governed in {name}?", [])
+    if summary.get("non_functional_requirements"):
+        in_scope = {item["finding_id"] for item in summary.get("in_scope_findings", [])}
+        add("NFR", "non-functional", "Non-functional requirements",
+            "Which platform limits, quotas, and service levels satisfy the non-functional requirements?",
+            sorted({
+                identifier
+                for item in summary["non_functional_requirements"]
+                for identifier in item.get("evidence_ids", [])
+                if identifier in in_scope
+            }))
+    return seeds
+
+
+def _is_microsoft_vendor(value: str) -> bool:
+    return bool(re.match(r"^microsoft\b", value.strip(), flags=re.IGNORECASE))
+
+
+def _validate_research(
+    model: dict[str, Any],
+    evidence_summary: dict[str, Any],
+    in_scope_ids: set[str],
+    packaged_reference_ids: set[str],
+) -> tuple[set[str], set[str]]:
+    """Validate the research plan and source register; return (register IDs, internal IDs)."""
+    register = model["research_register"]
+    usage = {item["server"]: item for item in register["mcp_usage"]}
+    if len(usage) != len(register["mcp_usage"]) or set(usage) != set(MCP_SERVERS):
+        raise ClassifierError(
+            f"research_register.mcp_usage must record each MCP server once: {list(MCP_SERVERS)}"
+        )
+    if usage["ms-learn-mcp"]["status"] != "used":
+        raise ClassifierError(
+            "Microsoft Learn MCP is the authoritative Microsoft documentation source and must be used"
+        )
+    sources = {item["id"]: item for item in register["sources"]}
+    if len(sources) != len(register["sources"]):
+        raise ClassifierError("Research register source IDs must be unique")
+    for identifier, source in sources.items():
+        source_type = source["source_type"]
+        microsoft = _is_microsoft_vendor(source["vendor"])
+        if source_type == "vendor-official":
+            if microsoft:
+                raise ClassifierError(
+                    f"{identifier}: research Microsoft products through the Microsoft MCP servers"
+                )
+            if not source.get("trust_basis"):
+                raise ClassifierError(f"{identifier}: vendor-official sources need a trust_basis")
+        elif not microsoft:
+            raise ClassifierError(
+                f"{identifier}: {source_type} sources must describe a Microsoft product; "
+                "use vendor-official documentation for other vendors"
+            )
+        if source_type in {"ms-learn-mcp", "vendor-official"} and not source["locator"].startswith("https://"):
+            raise ClassifierError(f"{identifier}: locator must be an https URL")
+        expected = "microsoft-internal" if source_type in INTERNAL_SOURCE_TYPES else "public"
+        if source["confidentiality"] != expected:
+            raise ClassifierError(f"{identifier}: {source_type} sources are {expected}")
+    for server, item in usage.items():
+        count = sum(source["source_type"] == server for source in sources.values())
+        if item["status"] == "used" and not count:
+            raise ClassifierError(f"{server} is marked used but no register source cites it")
+        if item["status"] == "unavailable" and count:
+            raise ClassifierError(f"{server} is marked unavailable but register sources cite it")
+
+    citable = set(sources) | packaged_reference_ids
+    topics = {item["id"]: item for item in model["research_plan"]}
+    if len(topics) != len(model["research_plan"]):
+        raise ClassifierError("Research plan topic IDs must be unique")
+    for seed in _research_seed_topics(evidence_summary):
+        topic = topics.get(seed["id"])
+        if topic is None or topic["category"] != seed["category"]:
+            raise ClassifierError(
+                f"Research plan must resolve seeded topic {seed['id']} ({seed['category']})"
+            )
+    mapped: set[str] = set()
+    for identifier, topic in topics.items():
+        unknown_findings = set(topic["finding_ids"]) - in_scope_ids
+        if unknown_findings:
+            raise ClassifierError(
+                f"{identifier} cites non-scope findings: {sorted(unknown_findings)}"
+            )
+        mapped.update(topic["finding_ids"])
+        unknown_sources = set(topic["source_ids"]) - citable
+        if unknown_sources:
+            raise ClassifierError(f"{identifier} cites unknown sources: {sorted(unknown_sources)}")
+        if topic["status"] == "research-gap":
+            if topic["category"] in {"suitability", "platform"}:
+                raise ClassifierError(f"{identifier} must be resolved before publication")
+            continue
+        cited = [sources[item] for item in topic["source_ids"] if item in sources]
+        if _is_microsoft_vendor(topic["vendor"]):
+            if not any(item["source_type"] in MCP_SERVERS for item in cited):
+                raise ClassifierError(
+                    f"{identifier} researches a Microsoft product and must cite a Microsoft MCP source"
+                )
+        elif not any(
+            item["source_type"] == "vendor-official"
+            and item["vendor"].casefold() == topic["vendor"].casefold()
+            for item in cited
+        ):
+            raise ClassifierError(
+                f"{identifier} researches {topic['vendor']} and must cite that vendor's official documentation"
+            )
+    unmapped = in_scope_ids - mapped
+    if unmapped:
+        raise ClassifierError(
+            f"Every in-scope finding must map to a research topic; unmapped={sorted(unmapped)}"
+        )
+    for assessment in model["requirement_assessments"]:
+        if not set(assessment["reference_ids"]) & set(sources):
+            raise ClassifierError(
+                f"Requirement assessment {assessment['finding_id']} must cite a research register source"
+            )
+    internal = {
+        identifier
+        for identifier, source in sources.items()
+        if source["confidentiality"] == "microsoft-internal"
+    }
+    suitability = model["agentic_suitability"]
+    customer_text = "\n".join([
+        *model["justification_paragraphs"],
+        model["platform_assessment"]["decision_summary"],
+        model["harness_rationale"],
+        model["billing_implication"],
+        suitability["summary"],
+        suitability["deterministic_alternative"],
+        suitability["rejected_alternative_rationale"],
+        *(item["rationale"] for item in suitability["criteria"]),
+        *(
+            text
+            for item in model["platform_comparison"]
+            for text in (*item["pros"], *item["cons"], item["decision_rationale"])
+        ),
+    ])
+    leaked = sorted(item for item in internal if re.search(rf"\b{re.escape(item)}\b", customer_text))
+    if leaked:
+        raise ClassifierError(
+            f"Customer-facing classification text must not cite Microsoft-internal sources: {leaked}"
+        )
+    for item in model["platform_comparison"]:
+        if not set(item["source_ids"]) - internal:
+            raise ClassifierError(
+                f"Platform comparison for {item['platform']} must cite at least one public source"
+            )
+    return set(sources), internal
+
+
+def _validate_agentic_suitability(
+    model: dict[str, Any],
+    evidence_summary: dict[str, Any],
+    in_scope_ids: set[str],
+    citable_ids: set[str],
+) -> None:
+    suitability = model["agentic_suitability"]
+    criteria = [item["criterion"] for item in suitability["criteria"]]
+    if sorted(criteria) != sorted(SUITABILITY_CRITERIA):
+        raise ClassifierError(
+            f"Agentic suitability must assess each criterion once: {list(SUITABILITY_CRITERIA)}"
+        )
+    for item in suitability["criteria"]:
+        if not item["evidence_ids"] and not item["source_ids"]:
+            raise ClassifierError(
+                f"Suitability criterion {item['criterion']} must cite evidence or research"
+            )
+        unknown = set(item["evidence_ids"]) - in_scope_ids
+        unknown |= set(item["source_ids"]) - citable_ids
+        if unknown:
+            raise ClassifierError(
+                f"Suitability criterion {item['criterion']} cites unknown IDs: {sorted(unknown)}"
+            )
+    recommendation = suitability["recommendation"]
+    platform = model["agentic_platform"]
+    if (recommendation == "deterministic") != (platform == DETERMINISTIC_PLATFORM):
+        raise ClassifierError(
+            "A deterministic recommendation requires the Deterministic (no agent) platform, and only it"
+        )
+    work_types = {item["work_type"] for item in model["delivery_assessment"]["capabilities"]}
+    if recommendation == "deterministic":
+        if work_types & AGENTIC_WORK_TYPES:
+            raise ClassifierError(
+                "A deterministic recommendation cannot contain agentic capability work types"
+            )
+        conversational = [
+            item["behavior"]
+            for item in evidence_summary.get("agentic_behaviors", [])
+            if item.get("behavior") in {"Conversational", "Delegated personal work", "Child-Agent/Multi-Agent"}
+            and item.get("requirement_status") in IN_SCOPE_STATUSES
+        ]
+        if conversational:
+            raise ClassifierError(
+                f"A deterministic recommendation conflicts with in-scope agentic behaviors: {conversational}"
+            )
+        if model["components"]["agents"]:
+            raise ClassifierError("A deterministic solution must not declare agents")
+    else:
+        if not work_types & AGENTIC_WORK_TYPES:
+            raise ClassifierError(
+                "An agentic or hybrid recommendation needs at least one agentic capability work type"
+            )
+        if recommendation == "hybrid" and not work_types & DETERMINISTIC_WORK_TYPES:
+            raise ClassifierError(
+                "A hybrid recommendation needs both agentic and deterministic capability work types"
+            )
+        if not model["components"]["agents"]:
+            raise ClassifierError("An agentic solution must declare at least one agent")
+
+
+def _validate_platform_comparison(model: dict[str, Any], citable_ids: set[str]) -> None:
+    comparison = model["platform_comparison"]
+    if [item["platform"] for item in comparison] != list(COMPARISON_ORDER):
+        raise ClassifierError(
+            f"Platform comparison must list every option in precedence order: {list(COMPARISON_ORDER)}"
+        )
+    assessment = model["platform_assessment"]
+    if assessment["cowork_fit"] == "not-assessed":
+        raise ClassifierError(
+            "Platform precedence requires a Microsoft Cowork fit assessment before other platforms"
+        )
+    by_name = {item["platform"]: item for item in comparison}
+    for name, key in COMPARISON_FIT_KEY.items():
+        if by_name[name]["fit"] != assessment[key]:
+            raise ClassifierError(
+                f"Platform comparison fit for {name} must match platform_assessment.{key}"
+            )
+    for item in comparison:
+        unknown = set(item["source_ids"]) - citable_ids
+        if unknown:
+            raise ClassifierError(
+                f"Platform comparison for {item['platform']} cites unknown sources: {sorted(unknown)}"
+            )
+    platform = model["agentic_platform"]
+    selected = [item["platform"] for item in comparison if item["selected"]]
+    if platform == "Hybrid":
+        if len(selected) < 2 or DETERMINISTIC_PLATFORM in selected:
+            raise ClassifierError("A Hybrid platform must select at least two agentic platforms")
+        if any(by_name[name]["fit"] not in {"full", "partial"} for name in selected):
+            raise ClassifierError("Hybrid platforms must each have full or partial fit")
+        return
+    expected = COMPARISON_NAME[platform]
+    if selected != [expected]:
+        raise ClassifierError(f"Platform comparison must mark only {expected} as selected")
+    if platform == DETERMINISTIC_PLATFORM:
+        if by_name[DETERMINISTIC_PLATFORM]["fit"] != "full":
+            raise ClassifierError("The deterministic option must have full fit when selected")
+        return
+    for name in AGENTIC_PRECEDENCE:
+        fit = by_name[name]["fit"]
+        if fit == "full":
+            if name != expected:
+                raise ClassifierError(
+                    "Platform precedence (Microsoft Cowork, Copilot Studio, Azure AI Foundry, "
+                    f"Microsoft Agent Framework) must select {name}"
+                )
+            return
+        if fit == "not-assessed":
+            raise ClassifierError(
+                f"Platform precedence requires assessing {name} before selecting {expected}"
+            )
+    raise ClassifierError(f"The selected platform {expected} must have full fit")
+
+
 def _score_model(
     model: dict[str, Any],
     evidence_summary: dict[str, Any],
@@ -2975,6 +3436,11 @@ def _score_model(
             f"{sorted(unknown_assessment)}"
         )
     consulted_reference_ids = set(evidence_summary["consulted_reference_ids"])
+    stage_reference_ids = set(consulted_reference_ids)
+    register_ids, _internal_ids = _validate_research(
+        model, evidence_summary, in_scope_ids, consulted_reference_ids
+    )
+    consulted_reference_ids |= register_ids
     unknown_references = (
         _collect_component_reference_ids(model) - consulted_reference_ids
     )
@@ -2997,7 +3463,7 @@ def _score_model(
             f"{sorted(unknown_assessment_references)}"
         )
     allowed_platforms = {
-        "copilot": {"Copilot Studio", "Microsoft Cowork"},
+        "copilot": {"Copilot Studio", "Microsoft Cowork", DETERMINISTIC_PLATFORM},
         "foundry": {"Copilot Studio", "Microsoft Cowork", "Azure AI Foundry"},
         "agent-framework": {
             "Copilot Studio",
@@ -3020,7 +3486,7 @@ def _score_model(
     stage = model["research_stage"]
     assessment = model["platform_assessment"]
     if stage == "copilot":
-        forbidden = consulted_reference_ids & (
+        forbidden = stage_reference_ids & (
             FOUNDRY_REFERENCE_IDS | AGENT_FRAMEWORK_REFERENCE_IDS
         )
         if forbidden:
@@ -3030,15 +3496,19 @@ def _score_model(
         selected_stage_one_fit = {
             "Copilot Studio": assessment["copilot_studio_fit"],
             "Microsoft Cowork": assessment["cowork_fit"],
+            DETERMINISTIC_PLATFORM: "full",
         }.get(model["agentic_platform"])
         if selected_stage_one_fit != "full":
             raise ClassifierError(
                 "The selected Stage 1 platform must have full fit; otherwise "
                 "publish a blocked allowed-tool assessment or expand research"
             )
-        if model["agentic_platform"] not in {"Copilot Studio", "Microsoft Cowork"}:
+        if model["agentic_platform"] not in {
+            "Copilot Studio", "Microsoft Cowork", DETERMINISTIC_PLATFORM
+        }:
             raise ClassifierError(
-                "Stage 1 publication must select Copilot Studio or Microsoft Cowork"
+                "Stage 1 publication must select Copilot Studio, Microsoft Cowork, "
+                "or a deterministic solution"
             )
         if assessment["unmet_requirements"]:
             raise ClassifierError(
@@ -3139,6 +3609,10 @@ def _score_model(
 
     platform = model["agentic_platform"]
     harness = model["harness"]
+    _validate_agentic_suitability(
+        model, evidence_summary, in_scope_ids, consulted_reference_ids
+    )
+    _validate_platform_comparison(model, consulted_reference_ids)
     if platform in {"Copilot Studio", "Hybrid"} and harness is None:
         raise ClassifierError("Copilot Studio solutions require a harness")
     if platform == "Microsoft Cowork" and harness != "Cowork":
@@ -3322,6 +3796,7 @@ def _score_model(
     if derived_tier in {"No-code", "Low-code"} and platform not in {
         "Copilot Studio",
         "Microsoft Cowork",
+        DETERMINISTIC_PLATFORM,
     }:
         raise ClassifierError(
             f"{derived_tier} tier requires Copilot Studio or Microsoft Cowork"
@@ -3475,7 +3950,12 @@ def _score_model(
         for item in components["agents"]
         if "Autonomous" in item["behaviors"]
     }
-    if autonomous and not autonomous_agents:
+    if platform == DETERMINISTIC_PLATFORM:
+        if autonomous and not components["triggers"]:
+            raise ClassifierError(
+                "Deterministic scheduled or event-driven work requires at least one explicit invocation trigger"
+            )
+    elif autonomous and not autonomous_agents:
         raise ClassifierError(
             "At least one agent must be marked Autonomous"
         )
@@ -3517,7 +3997,12 @@ def _score_model(
             )
 
     mandatory_reference_groups: dict[str, set[str]]
-    if platform == "Copilot Studio":
+    if platform == DETERMINISTIC_PLATFORM:
+        mandatory_reference_groups = {
+            "authentication": {"entra-id"},
+            "authorization": {"entra-id"},
+        }
+    elif platform == "Copilot Studio":
         mandatory_reference_groups = {
             "authentication": {"entra-id", "copilot-studio-authentication"},
             "authorization": {"entra-id", "copilot-studio-authentication"},
@@ -3566,7 +4051,23 @@ def _score_model(
         for item in components["alm"]
         for reference in item["reference_ids"]
     }
-    if platform == "Copilot Studio":
+    if platform == DETERMINISTIC_PLATFORM:
+        if not (
+            {"power-platform-dlp", "microsoft-purview", "azure-policy", "azure-monitor"}
+            & security_refs
+        ):
+            raise ClassifierError(
+                "Deterministic security must cite DLP, Purview, Azure Policy, or Azure Monitor"
+            )
+        if not ({"managed-environments", "power-platform-dlp", "azure-policy"} & governance_refs):
+            raise ClassifierError(
+                "Deterministic governance must cite Managed Environments, DLP, or Azure Policy"
+            )
+        if not ({"power-platform-alm", "azure-pipelines"} & alm_refs):
+            raise ClassifierError(
+                "Deterministic ALM must cite Power Platform ALM or Azure Pipelines"
+            )
+    elif platform == "Copilot Studio":
         if not ({"power-platform-dlp", "microsoft-purview"} & security_refs):
             raise ClassifierError(
                 "Copilot Studio security must cite DLP or Microsoft Purview"
@@ -3636,7 +4137,7 @@ def _score_model(
         complexity = "High"
         reasons = high_reasons
     elif (
-        platform in {"Copilot Studio", "Microsoft Cowork"}
+        platform in {"Copilot Studio", "Microsoft Cowork", DETERMINISTIC_PLATFORM}
         and model["code_tier"] == "No-code"
         and not flags["uses_low_code"]
         and counts["easily_integrable_tools"]
@@ -4134,7 +4635,11 @@ def _output_object(
     return {
         "complexity": score["complexity"],
         "research_stage": model["research_stage"],
+        "agentic_suitability": model["agentic_suitability"],
         "platform_assessment": model["platform_assessment"],
+        "platform_comparison": model["platform_comparison"],
+        "research_plan": model["research_plan"],
+        "research_register": model["research_register"],
         "agentic_platform": model["agentic_platform"],
         "harness": model["harness"],
         "code_tier": model["code_tier"],
@@ -4153,6 +4658,98 @@ def _output_object(
         "input_analysis": run["input_path"],
         "output_markdown": run["target_markdown_path"],
     }
+
+
+def _cell(value: Any) -> str:
+    return re.sub(r"\s+", " ", str(value)).replace("|", "\\|").strip()
+
+
+def _bracket_ids(*groups: list[str]) -> str:
+    return " ".join(f"[{item}]" for group in groups for item in group)
+
+
+def _render_research(model: dict[str, Any]) -> str:
+    register = model["research_register"]
+    lines = [
+        "### Research plan",
+        "",
+        "| Topic | Category | Vendor | Status | Resolution | Evidence |",
+        "|---|---|---|---|---|---|",
+    ]
+    for topic in model["research_plan"]:
+        lines.append(
+            f"| {_cell(topic['id'])}: {_cell(topic['subject'])} | {topic['category']} | "
+            f"{_cell(topic['vendor'])} | {topic['status']} | {_cell(topic['resolution'])} | "
+            f"{_bracket_ids(topic['finding_ids'], topic['source_ids'])} |"
+        )
+    lines += [
+        "",
+        "### MCP server usage",
+        "",
+        "| Server | Status | Detail |",
+        "|---|---|---|",
+        *(
+            f"| {item['server']} | {item['status']} | {_cell(item['detail'])} |"
+            for item in register["mcp_usage"]
+        ),
+        "",
+        "### Source register",
+        "",
+        "| ID | Source | Product | Confidentiality | Locator | Retrieved | Finding |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for source in register["sources"]:
+        origin = source["source_type"]
+        if source.get("trust_basis"):
+            origin += f" ({source['trust_basis']})"
+        product = source["product"]
+        if source.get("version_or_date"):
+            product += f" {source['version_or_date']}"
+        lines.append(
+            f"| {source['id']} | {_cell(origin)} via {_cell(source['tool'])} | "
+            f"{_cell(source['vendor'])} {_cell(product)} | {source['confidentiality']} | "
+            f"{_cell(source['locator'])} | {source['retrieved_at']} | {_cell(source['finding'])} |"
+        )
+    return "\n".join(lines)
+
+
+def _render_suitability(model: dict[str, Any]) -> str:
+    suitability = model["agentic_suitability"]
+    lines = [
+        f"**Recommendation:** {suitability['recommendation']}",
+        "",
+        suitability["summary"],
+        "",
+        "| Criterion | Assessment | Rationale | Evidence |",
+        "|---|---|---|---|",
+        *(
+            f"| {item['criterion']} | {item['assessment']} | {_cell(item['rationale'])} | "
+            f"{_bracket_ids(item['evidence_ids'], item['source_ids'])} |"
+            for item in suitability["criteria"]
+        ),
+        "",
+        f"**Deterministic alternative:** {suitability['deterministic_alternative']}",
+        "",
+        f"**Why the alternative was not selected:** {suitability['rejected_alternative_rationale']}",
+    ]
+    return "\n".join(lines)
+
+
+def _render_platform_comparison(model: dict[str, Any]) -> str:
+    lines = [
+        "Precedence: Microsoft Cowork, then Copilot Studio, then Azure AI Foundry, then "
+        "Microsoft Agent Framework; the first platform with full fit is selected.",
+        "",
+        "| Platform | Fit | Selected | Pros | Cons | Decision rationale | Evidence |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for item in model["platform_comparison"]:
+        lines.append(
+            f"| {item['platform']} | {item['fit']} | {'Yes' if item['selected'] else 'No'} | "
+            f"{_cell('; '.join(item['pros']))} | {_cell('; '.join(item['cons']))} | "
+            f"{_cell(item['decision_rationale'])} | {_bracket_ids(item['source_ids'])} |"
+        )
+    return "\n".join(lines)
 
 
 def _render_markdown(
@@ -4206,8 +4803,11 @@ def _render_markdown(
     gaps = _render_items(model["gaps"])
     values = {
         "REFERENCES": _render_reference_table(references),
+        "RESEARCH": _render_research(model),
         "COMPLEXITY": score["complexity"],
+        "SUITABILITY": _render_suitability(model),
         "PLATFORM": platform,
+        "COMPARISON": _render_platform_comparison(model),
         "JUSTIFICATION": justification,
         "EVIDENCE": _render_evidence(summary),
         "COMPONENTS": _render_components(model),
