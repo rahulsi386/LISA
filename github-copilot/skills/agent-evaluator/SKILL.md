@@ -1,6 +1,6 @@
 ---
 name: "agent-evaluator"
-description: "Harness-aware agent evaluation gate. Generates a source-grounded test set, selects the correct test surface from the agent's harness (Standard → the /overview 'Test your agent' pane, with classic canvas / Demo website / Teams fallback; GitHub Copilot → the /agents preview canvas; Copilot chat → M365 Copilot channel), executes every test through Playwright (waiting out slow multi-minute retrieval, dismissing feedback surveys, ignoring interim reasoning steps), records observations/evidence, and e"
+description: "Harness-aware evaluation gate for Copilot Studio agents: generates a source-grounded test set, runs every test through Playwright on the harness-matched surface, scores LLM-as-Judge, tool use, groundedness and regression, and issues the deployment gate plus optimizer handoff."
 ---
 
 # Agent Evaluation Gate
@@ -26,33 +26,8 @@ after the deployment-gate decision and packaged validator complete.
 
 ## Inputs
 
-### Agency GEPA candidate mode
-
-For a GEPA request from `agent-optimizer`, follow
-`..\agent-optimizer\resources\gepa-execution.md`. Candidate mode is a subordinate operation
-within optimization, not a normal evaluation stage. Do not regenerate tests, change thresholds,
-write canonical evaluation files, create a deployment gate, or call `start-stage evaluation`.
-Use `scripts\gepa_candidate.py freeze --config <CONFIG>` once to preserve the validated initial
-dataset, rubric, observations and baseline. Write candidate responses and evidence only beneath
-`output\evaluation\gepa\<OPT-ID>\<request-ID>\`; seal with `scripts\gepa_candidate.py seal`.
-These nested runs have their own hash-bound receipts and are excluded from the canonical
-evaluation inventory. Only the exact pinned shadow identity is allowed; do not suppress generic
-target identity checks. Return normalized scores from the fixed rubric, observed evidence and
-redacted actionable feedback. Authentication/tooling/source blockers are BLOCKED, not low scores.
-
-For the final target retest after GEPA promotion, use normal evaluation mode on the original
-target with the full frozen dataset and rubric unchanged. Include `instructionSha256` from live
-read-back in observations. Candidate-mode scores can never authorize deployment.
-
-For Agency GHCP GEPA runs, use the optimizer's `policy.gepa.githubCopilot.memoryMode` consistently from the
-initial evaluation through candidate tests and final target retest. Require the live CliCopilot
-signature and the pinned `/environments/<envId>/agents/<agentId>/preview` URL; no Standard test-pane
-fallback is allowed. On initial and final observations, include `gepaExecution` with
-`authoringPath` (`pac-cli-copilot` or `new-agent-ui`) and `harnessSignature` as specified by the GEPA
-protocol. For every test, record `playwrightObservations.surfaceUsed: preview-canvas`, `surfaceUrl`,
-`conversationReset: true`, and `memoryState` (`disabled` or `reset`). Candidate results use the same
-per-test fields and record the signature/authoring path in `persistenceReceipt`. A fresh chat alone
-does not reset persistent memory. Missing reset or signature evidence is a blocker, not a low score.
+For a GEPA candidate or final-retest request from `agent-optimizer`, read
+`resources\gepa-candidate-mode.md` first; otherwise do not load it.
 
 Read `lisa-config.json` first, resolve its configured `basePath`, and use only:
 
@@ -122,28 +97,28 @@ Write nothing evaluation-related to the output root, `build`, `optimization`, re
 ### Standard run and names
 
 - Run ID: `EVAL-YYYYMMDD-HHMMSS-XXXXXXXX`, where `XXXXXXXX` is uppercase hexadecimal.
-- Required files:
-  1. `evaluation-manifest.json`
-  2. `evaluation-dataset.json`
-  3. `evaluation-dataset.csv`
-  4. `evaluation-rubric.json`
-  5. `evaluation-observations.json`
-  6. `regression-baseline.json`
-  7. `evaluation-run-report.md`
-  8. `deployment-gate-summary.md`
+- Required files (write only the first three by hand; `scripts\render_evaluation.py` derives the rest):
+  1. `evaluation-dataset.json` — authored
+  2. `evaluation-rubric.json` — authored
+  3. `evaluation-observations.json` — authored per test; the renderer adds copied fields and aggregates
+  4. `evaluation-dataset.csv` — rendered
+  5. `regression-baseline.json` — rendered only when no prior baseline exists
+  6. `evaluation-run-report.md` — rendered
+  7. `deployment-gate-summary.md` — rendered
+  8. `evaluation-manifest.json` — published last
 - Required directory: `evidence\`
 - Evidence names: `EVAL-NNN-attempt-NN.png` (or `.jpg`, `.jpeg`, `.json` for equivalent browser evidence). Retests increment `attempt-NN`; never overwrite earlier evidence.
 
-Use UTF-8. JSON must be valid and machine-readable. CSV must quote fields containing commas, quotes, arrays, or line breaks.
+Use UTF-8. JSON must be valid and machine-readable.
 
-The JSON files must validate against their packaged schemas: `evaluation-dataset.schema.json`, `evaluation-rubric.schema.json`, `evaluation-observations.schema.json`, and `regression-baseline.schema.json`. Generate `evaluation-manifest.json` last and inventory every evaluator artifact other than the manifest itself by relative path, hash, size, kind, required status, and schema.
+The JSON files must validate against their packaged schemas: `evaluation-dataset.schema.json`, `evaluation-rubric.schema.json`, `evaluation-observations.schema.json`, and `regression-baseline.schema.json`.
 
 Packaged naming contract: `resources\artifact-contract.json`.
 
-Before completion run the packaged atomic publisher:
+Before completion, render the derived artifacts (Step 8), then run the packaged atomic publisher with the renderer's `manifestStatus` and every `sourceRuns` value:
 
 ```powershell
-python "<skill-dir>\scripts\generate_manifest.py" --root "<basePath>\output\evaluation" --status "<pass|fail|blocked>" --source-run "<BLD run ID>" --summary "<concise evaluation outcome>"
+python "<skill-dir>\scripts\generate_manifest.py" --root "<basePath>\output\evaluation" --status "<manifestStatus>" --source-run "<each sourceRuns value>" --summary "<concise evaluation outcome>"
 ```
 
 The evaluator cannot issue a gate decision until this returns `passed`. The publisher excludes the manifest from its own inventory, rejects unlisted/extra artifacts, and restores the prior manifest if validation fails.
@@ -245,11 +220,7 @@ Rules:
 - Do not require exact wording unless the source mandates exact legal, safety, compliance, or confirmation text.
 - Keep prompts executable as written; do not leave placeholders unresolved.
 
-Create `evaluation-dataset.csv` with these columns in this order:
-
-`id,scenario,sourceType,sourceReferences,userPrompt,expectedResponse,expectedBehavior,responseAssertions,expectedKnowledgeSources,requiredTools,prohibitedBehavior,evaluationTypes,severity,passCriteria,failCriteria`
-
-Serialize array and object fields as compact JSON strings inside the CSV cells.
+Do not write `evaluation-dataset.csv`; the renderer derives it from the dataset.
 
 ### Step 4: Build the evaluation rubric
 
@@ -296,118 +267,63 @@ When `maxConcurrency` > 1, tests may run concurrently to shorten slow Standard-h
 - Keep concurrency modest (typically 3–5). Treat throttling (`429`, timeout, `Unable to connect`) as **retryable**, not an agent failure; requeue with backoff and staggered starts.
 - Keep every **multi-turn** test on a single worker/context, run sequentially within it. Only independent single-turn tests are distributed.
 - Store all parallel helpers (`storageState.json`, `prompts.json`, `responses.json`, worker scripts) inside `<basePath>\output\evaluation\`, and delete `storageState.json` when finished.
-- Scoring (Step 7) is deterministic and can always run in parallel/offline after responses are captured, regardless of `maxConcurrency`.
+- Per-test judging can run offline after responses are captured, regardless of `maxConcurrency`; aggregation is deterministic in the renderer.
 
 ### Step 6: Record observations
 
-Write `evaluation-observations.json` using this schema:
+Write `evaluation-observations.json` (schema `resources\evaluation-observations.schema.json`).
+Record only what was captured or judged for each test. Do **not** restate `scenario`,
+`userPrompt`, or `expectedResponse` (the renderer copies them from the dataset and rejects any
+mismatch), and do not write `summary` or `gateSummary` (the renderer computes them).
 
 ```json
 {
   "schemaVersion": "1.1",
   "runId": "EVAL-YYYYMMDD-HHMMSS-XXXXXXXX",
-  "testSetId": "Configured or generated test-set identifier",
-  "agent": {
-    "name": "Configured agent name",
-    "url": "Resolved harness-matched browser target",
-    "harness": "GitHub Copilot | Standard | Copilot chat",
-    "surface": "overview-test-pane | preview-canvas | classic-canvas | m365-copilot | published-url",
-    "environmentId": "Configured environment identifier",
-    "agentId": "Configured agent or bot identifier"
-  },
-  "startedAt": "ISO-8601 timestamp",
-  "completedAt": "ISO-8601 timestamp",
-  "summary": {
-    "total": 0,
-    "passed": 0,
-    "failed": 0,
-    "blocked": 0,
-    "notRun": 0
-  },
+  "testSetId": "Same testSetId as the dataset",
+  "agent": {"name": "", "agentId": "", "harness": "GitHub Copilot | Standard | Copilot chat",
+            "surface": "overview-test-pane | preview-canvas | classic-canvas | m365-copilot | published-url",
+            "environmentId": "", "url": "Resolved harness-matched browser target"},
+  "instructionSha256": "Live read-back hash when available",
+  "startedAt": "ISO-8601", "completedAt": "ISO-8601",
   "results": [
     {
       "testCaseId": "EVAL-001",
-      "scenario": "Scenario name",
-      "userPrompt": "Exact submitted prompt",
-      "expectedResponse": "Canonical expected response",
       "actualResponse": "Complete final response captured from the agent",
       "status": "PASS | FAIL | BLOCKED | NOT_RUN",
-      "startedAt": "ISO-8601 timestamp",
-      "completedAt": "ISO-8601 timestamp",
-      "durationMs": 0,
-      "attempts": 1,
+      "durationMs": 0, "attempts": 1,
       "playwrightObservations": {
-        "conversationReset": true,
-        "responseCompleted": true,
-        "surfaceUsed": "overview-test-pane | preview-canvas | classic-canvas | m365-copilot | published-url",
-        "citationsObserved": ["Visible citation text or URL"],
-        "toolActivityObserved": ["Visible tool or action evidence"],
-        "uiErrors": ["Visible error text"],
-        "sideEffectsObserved": ["Verified visible side effect"],
-        "evidence": ["evidence/EVAL-001-attempt-01.png"],
+        "conversationReset": true, "responseCompleted": true, "surfaceUsed": "overview-test-pane",
+        "citationsObserved": [], "toolActivityObserved": [], "uiErrors": [],
+        "sideEffectsObserved": [], "evidence": ["evidence/EVAL-001-attempt-01.png"],
         "notes": "Objective UI observations only"
       },
       "gateResults": {
-        "llmAsJudge": {
-          "status": "PASS | FAIL | NOT_APPLICABLE | NOT_OBSERVABLE",
-          "score": 0,
-          "rationale": "Comparison with expected response and assertions"
-        },
-        "toolUse": {
-          "status": "PASS | FAIL | NOT_APPLICABLE | NOT_OBSERVABLE",
-          "score": 0,
-          "rationale": "Observed tool behavior and result"
-        },
-        "groundedness": {
-          "status": "PASS | FAIL | NOT_APPLICABLE | NOT_OBSERVABLE",
-          "score": 0,
-          "rationale": "Claim-level comparison with source references; note any configured-source retrieval failure"
-        },
-        "regression": {
-          "status": "PASS | FAIL | NOT_APPLICABLE | NOT_OBSERVABLE",
-          "score": 0,
-          "rationale": "Comparison with baseline"
-        }
+        "llmAsJudge": {"status": "PASS | FAIL | NOT_APPLICABLE | NOT_OBSERVABLE", "score": 0, "rationale": ""}
       },
-      "assertionResults": [
-        {
-          "assertion": "Required semantic element",
-          "status": "PASS | FAIL | NOT_OBSERVABLE",
-          "evidence": "Quoted response text or browser observation"
-        }
-      ],
-      "prohibitedBehaviorObserved": [],
-      "failureReasons": [],
-      "blocker": null
+      "assertionResults": [{"assertion": "", "status": "PASS | FAIL | NOT_OBSERVABLE", "evidence": "Quoted text or observation"}],
+      "prohibitedBehaviorObserved": [], "failureReasons": [], "blocker": null
     }
   ],
-  "gateSummary": {
-    "llmAsJudge": {},
-    "toolUse": {},
-    "groundedness": {},
-    "regression": {}
-  },
   "optimizerHandoff": {
     "evaluationDecision": "PASS | FAIL | BLOCKED | NOT_RUN",
     "eligibleForOptimization": false,
     "findings": [
       {
-        "id": "OPT-FINDING-001",
-        "testCaseIds": ["EVAL-001"],
-        "severity": "critical | high | medium | low",
+        "id": "OPT-FINDING-001", "testCaseIds": ["EVAL-001"], "severity": "critical | high | medium | low",
         "failedGates": ["LLM_AS_JUDGE | TOOL_USE | GROUNDEDNESS | REGRESSION"],
-        "observedSymptom": "Evidence-based description only",
-        "evidence": ["Quoted response, observation, or relative evidence path"],
+        "observedSymptom": "Evidence-based description only", "evidence": [],
         "suspectedChangeSurface": "instructions | tool-description | tool-schema | knowledge | orchestration | connected-agent-routing | permissions | implementation | performance | platform-or-surface",
-        "requiredRetestScope": ["EVAL-001"],
-        "doNotOptimizeReason": null
+        "requiredRetestScope": ["EVAL-001"], "doNotOptimizeReason": null
       }
     ]
   }
 }
 ```
 
-Do not leave a case as `PASS` when an applicable mandatory gate failed or was not observable. Do not omit failed, blocked, timed-out, or not-run cases.
+`gateResults` keys are `llmAsJudge`, `toolUse`, `groundedness`, and `regression`; every
+`evaluationTypes` entry of an executed test needs one. Quote agent text accurately and keep
+observed evidence separate from judgment. Do not omit failed, blocked, timed-out, or not-run cases.
 
 ### Step 7: Evaluate the mandatory gates
 
@@ -417,70 +333,24 @@ For each test case:
 2. Score only the evaluation types listed for that test case.
 3. Verify factual claims against `sourceReferences`; source presence alone is not proof of groundedness. If the agent states it could not retrieve a configured knowledge source and used model/general knowledge instead, deduct or fail groundedness accordingly and note the retrieval failure.
 4. For tool cases, distinguish requested intent, visible invocation evidence, completion, and verified side effect. A plausible answer is not proof that a tool ran.
-5. For regression cases, compare only against `<basePath>\output\evaluation\regression-baseline.json` when it exists. If no valid baseline exists, mark regression `NOT_APPLICABLE`, create the current `regression-baseline.json` (inside the `evaluation` folder), and state that regression was not enforced for this initial run.
+5. For regression cases, compare only against `<basePath>\output\evaluation\regression-baseline.json` when it exists. If none exists, mark regression `NOT_APPLICABLE`; the renderer creates a candidate baseline from this run and never overwrites a prior or approved one.
 6. Apply automatic-failure rules before aggregate thresholds.
-7. Determine the test status from the applicable gate results and rubric.
+7. Determine the test status from the applicable gate results and rubric. A test cannot be `PASS` when an applicable gate is `FAIL` or `NOT_OBSERVABLE`.
 
-Populate `regression-baseline.json` only from completed, reviewed run data. Include test-case ID, prompt, expected response, actual response, gate scores, overall status, agent identifiers, and timestamp. Never overwrite an approved baseline silently; preserve or version it according to the configured path and project conventions.
+List only evidence-backed findings in `optimizerHandoff`. Do not modify the agent, draft replacement instructions, or claim an unobserved root cause. Set `eligibleForOptimization=false` for authentication/consent blockers, wrong test surfaces, portal failures, inaccessible sources, or other platform/tooling blockers.
 
-### Step 8: Produce the run report
+### Step 8: Render the derived artifacts
 
-Create `evaluation-run-report.md` (in the `evaluation` folder) with these sections in this order:
-
-1. `# Agent Evaluation Run Report`
-2. `## Run Metadata` (include the agent's harness and the harness-matched surface actually used)
-3. `## Source and Requirement Coverage`
-4. `## Execution Summary`
-5. `## Gate Summary`
-6. `## Test Case Observations`
-7. `## Failures and Blockers`
-8. `## Optimizer Handoff`
-9. `## Regression Comparison`
-10. `## Overall Decision`
-
-In `## Test Case Observations`, use this exact format for every test case:
-
-```markdown
-### EVAL-001: Scenario name
-
-**User prompt:** Exact submitted prompt
-
-**Expected response:** Canonical expected response
-
-**Actual response:** Complete captured final response, or `Not available` when blocked/not run
-
-**Playwright observations:** Objective notes about the surface used, reset state, response completion, citations, tool activity, errors, side effects, timing, retries, and evidence.
-
-| Gate | Status | Score | Rationale |
-|---|---|---:|---|
-| LLM-as-Judge | PASS/FAIL/NOT_APPLICABLE/NOT_OBSERVABLE | 0-4 | Evidence-based rationale |
-| Tool Use | PASS/FAIL/NOT_APPLICABLE/NOT_OBSERVABLE | 0-4 | Evidence-based rationale |
-| Groundedness | PASS/FAIL/NOT_APPLICABLE/NOT_OBSERVABLE | 0-4 | Evidence-based rationale |
-| Regression | PASS/FAIL/NOT_APPLICABLE/NOT_OBSERVABLE | 0-4 | Evidence-based rationale |
-
-**Overall result:** PASS/FAIL/BLOCKED/NOT_RUN
-
-**Failure reasons or blocker:** None, or a specific evidence-based explanation.
+```powershell
+python "<skill-dir>\scripts\render_evaluation.py" --root "<basePath>\output\evaluation"
 ```
 
-Quote actual agent text accurately. Clearly distinguish observed evidence from evaluator judgment. Do not rewrite a failed response to make it appear correct.
-
-In `## Optimizer Handoff`, list only evidence-backed findings from `optimizerHandoff`. Do not modify the agent, draft replacement instructions, or claim a root cause that was not observed. Set `eligibleForOptimization=false` for authentication/consent blockers, wrong test surfaces, portal failures, inaccessible sources, or other platform/tooling blockers that must be fixed before agent optimization.
+The renderer copies dataset fields into the observations, recomputes counts and gate averages,
+and writes `evaluation-dataset.csv`, `evaluation-run-report.md`, `deployment-gate-summary.md`,
+and (only when absent) `regression-baseline.json`. It returns `manifestStatus` and `sourceRuns`
+for the publisher. Do not hand-write or edit these files, and do not echo them into chat.
 
 ### Step 9: Enforce the deployment gate
-
-Create `deployment-gate-summary.md` (in the `evaluation` folder) containing:
-
-- Overall decision: `PASS` or `FAIL`
-- Agent harness and the harness-matched test surface actually used
-- Counts of passed, failed, blocked, and not-run tests
-- Result of each mandatory gate
-- Critical and high-severity failures
-- Blockers and unobservable criteria (distinguish a surface/tooling failure from a genuine agent defect)
-- Regression status and baseline used
-- Artifact paths (all under `<basePath>\output\evaluation\`)
-- Required remediation and retest scope
-- Optimizer-handoff eligibility and finding IDs
 
 The deployment gate passes only when:
 
@@ -493,7 +363,9 @@ The deployment gate passes only when:
 - Playwright evidence and observations exist for every executed case
 - The packaged artifact validator returns `passed`
 
-If any condition is unmet, set the overall decision to `FAIL`. Never describe a dataset-only run, a partially executed run, a run on the wrong harness surface, or a run with missing evidence as passed.
+If any condition is unmet, set `evaluationDecision` to `FAIL`. The renderer rejects a `PASS` that
+contradicts the recorded results. Never describe a dataset-only run, a partially executed run, a
+run on the wrong harness surface, or a run with missing evidence as passed.
 
 ## Quality and Integrity Rules
 

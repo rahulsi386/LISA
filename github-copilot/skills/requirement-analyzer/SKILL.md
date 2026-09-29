@@ -354,38 +354,15 @@ The Markdown must begin with `# Requirement Analysis`. Its top-level sections ar
 
 The final manifest contains a `publication` marker with `status: validated`, run ID, validation timestamp, and SHA-256-linked ledger/Markdown siblings. Pending candidates and failed validation are not eligible handoffs. A validated run cannot be overwritten: prepare a new run to change or republish an analysis.
 
-The standalone CLI remains supported: `normalize --run ... --ledger ...`, then `render --run ... --ledger ...`, then `validate --run ... --ledger ... --markdown ...`. **Use the actual staged Markdown path returned by `render` for `validate`**, not the final path reserved by `prepare`. `render` does not publish final artifacts; `validate` returns their final paths after committing the validated marker.
-
-Independent validation must pass before completion. It checks:
-
-- exact source root and path containment
-- complete physical-source annotations
-- extraction, every evidence batch, and manual-review coverage
-- schema conformance
-- atomic stable finding IDs
-- evidence-source validity
-- finding-reference coverage
-- exact knowledge-source locations
-- controlled platforms and agentic behaviors
-- third-party provider placement
-- mandatory section order
-- Markdown tables and unresolved placeholders
-- traceability definitions and citations
-- timestamped filename
+Use `publish`; the separate `normalize`, `render`, and `validate` subcommands exist only for
+debugging (pass the staged Markdown path returned by `render` to `validate`). Independent
+validation must pass before completion; report its exact message when it fails.
 
 ## Performance and caching
 
-- Extraction is parallelized with bounded workers.
-- Cache entries are keyed by source SHA-256, media type, extension, and extractor version.
-- Inventory hashes every source. Before reopening any binary, an extraction-cache hit verifies that inventory hash, extraction payload hash, format, and implementation/dependency fingerprints. Cold extraction verifies the bytes again.
-- Derived cache files are processing artifacts, never independent evidence.
-- Changed files are re-extracted automatically.
-- A fully validated analysis is cached only when source hashes, root, extractor dependencies, schema, vocabulary, template, artifact contract, review policy, and shared batching/handoff helper fingerprints all match. The prior published handoff and batch hashes are verified before reuse.
-- An unchanged corpus uses the validated-analysis fast path and bypasses visual review and ledger reconstruction.
-- The validated-ledger cache is checked before creating model-facing review artifacts; exact hits copy verified bounded batches rather than rebuilding or rereading evidence prompts.
-- A single `publish` invocation shares parsed immutable evidence indexes and validates identical ledger semantics once, while retaining independent final source/artifact integrity checks. No persisted flag bypasses validation.
-- Use extraction artifacts instead of repeatedly reopening unchanged binaries.
-- For large corpora, process source extraction files sequentially or in bounded batches and persist findings to the draft ledger between batches.
+Extraction, caching, and cache verification are automatic. Do not reopen unchanged binaries: use
+the extraction artifacts. For large corpora, process review batches in bounded groups and persist
+findings to the draft ledger between groups.
 
 ## Failure rules
 

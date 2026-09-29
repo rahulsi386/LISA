@@ -1,6 +1,6 @@
 ---
 name: "cad-orchestrator"
-description: "Runs the LISA Copilot Agent Delivery (CAD) pipeline end to end: reads lisa-config.json, then invokes requirement-analyzer, complexity-classifier, solution-designer, agent-builder, agent-evaluator, agent-optimizer, artifact-generator and artifact-publisher in order, and finally offers consented post-publish cleanup. Use when asked to run the LISA pipeline, build and publish a Copilot Studio agent from a requirements folder, or orchestrate the CAD lifecycle."
+description: "Runs the LISA Copilot Agent Delivery (CAD) pipeline end to end, from a requirements folder to a built, evaluated, optimized, and published Copilot Studio or Cowork solution, with human review gates and consented cleanup. Use to run or resume the LISA pipeline."
 ---
 
 # CAD Orchestrator
@@ -21,6 +21,7 @@ Resolve the configuration file in this order:
 
 Resolve `<plugin-skills-root>` from `AGENCY_PLUGIN_DIR\skills`. When Agency is running through
 Claude Code and only `CLAUDE_PLUGIN_ROOT` is available, use `CLAUDE_PLUGIN_ROOT\skills` instead.
+When neither is set (for example, GitHub Copilot CLI), use the parent directory of this skill.
 
 Read it before any stage runs, and use these fields wherever a later stage needs them:
 
@@ -75,6 +76,11 @@ interrupted stage.
   skill owns its own retry, caching and validation behaviour. A user-selected **Revise** decision
   may start a new run of the same stage with a new stage run ID and the supplied feedback.
 - Pass no input or output paths. Every stage skill resolves its own paths from `lisa-config.json`.
+- Keep context lean across stages. After a stage commits, carry forward only its completion
+  marker path, status, and a one-line outcome. Do not re-read, quote, or summarize earlier stage
+  artifacts; each stage loads its own inputs. Progress updates are one or two sentences.
+- A committed stage boundary is a safe point to compact or restart the host session: `recover`
+  resumes the exact next stage.
 - Follow `<plugin-skills-root>\workflow-checkpointing.md` at every phase boundary. A stage starts
   checkpointing immediately after it obtains its stage run ID and commits only after its terminal
   completion marker validates.
@@ -136,7 +142,7 @@ Use `--status RUNNING` for **Accept**, `--status WAITING` while collecting **Rev
 After the classification Markdown, JSON, and `classification-manifest.json` validate, but before
 committing the classification stage:
 
-1. Present a concise review containing the selected agentic platform, any Copilot Studio harness,
+1. Present a concise review (at most about 200 words, bullets only) containing the selected agentic platform, any Copilot Studio harness,
    complexity, code tier, native-build and PoC-demonstration coverage, PoC treatments, simulations,
    blocked or deferred capabilities, and production-readiness gaps.
 2. Persist the pause:
@@ -183,7 +189,7 @@ committing the classification stage:
 After `build-manifest.json` and all builder artifacts validate, but before committing the build
 stage:
 
-1. Present a concise review containing the agentic platform, any Copilot Studio harness, agent and
+1. Present a concise review (at most about 200 words, bullets only) containing the agentic platform, any Copilot Studio harness, agent and
    component identities, actual dispositions, planned-versus-actual coverage, live construction
    verification, simulations, blocked or deferred components, package or Cowork configuration
    evidence, and evaluator handoff risks.

@@ -652,6 +652,69 @@ class ArtifactContractTests(unittest.TestCase):
         with self.assertRaises(ArtifactError):
             self.publish_fixture()
 
+    def add_foundry_component(self, disposition: str, contract: bool) -> None:
+        classification_path = (
+            self.root.parent / "output" / "classification"
+            / "complexity-classification_20260818_120000.json"
+        )
+        classification = load_object(classification_path)
+        classification["solution_topology"]["components"].append({
+            "id": "claims-reasoning-service",
+            "product_service": "Microsoft Foundry Agent Service",
+            "hosting_runtime": "Azure subscription",
+        })
+        write_json(classification_path, classification)
+        handoff_path = self.root / "agent-build-handoff.json"
+        handoff = load_object(handoff_path)
+        handoff["componentDispositions"].append({
+            "componentId": "claims-reasoning-service",
+            "capabilityIds": ["CAP-001"],
+            "plannedDisposition": "defer",
+            "actualDisposition": disposition,
+            "expectedImplementation": "Foundry agent on the LISA roadmap.",
+            "actualImplementation": "Recorded as a future-platform integration.",
+            "verification": "Integration contract reviewed.",
+            "gapIds": [],
+        })
+        handoff["deferredComponents"] = ["claims-reasoning-service"]
+        if contract:
+            handoff["futurePlatformContracts"] = [{
+                "componentId": "claims-reasoning-service",
+                "targetPlatform": "Microsoft Foundry",
+                "responsibility": "Score complex claims.",
+                "interface": {
+                    "kind": "connected-agent",
+                    "inputs": "claimId: string",
+                    "outputs": "score: number; rationale: string",
+                },
+                "identity": "Microsoft Entra ID on-behalf-of",
+                "dataBoundary": "Claims data stays in the tenant.",
+                "owner": "Claims platform team",
+                "consumerComponentId": "fixture-agent",
+            }]
+        write_json(handoff_path, handoff)
+
+    def test_foundry_component_with_contract_is_accepted(self) -> None:
+        if self.contract["stage"] != "build":
+            self.skipTest("Builder-only reconciliation test")
+        self.add_foundry_component("deferred", contract=True)
+        self.publish_fixture()
+        self.assertEqual(validate(self.root)["status"], "passed")
+
+    def test_foundry_component_without_contract_is_rejected(self) -> None:
+        if self.contract["stage"] != "build":
+            self.skipTest("Builder-only reconciliation test")
+        self.add_foundry_component("deferred", contract=False)
+        with self.assertRaisesRegex(ArtifactError, "futurePlatformContracts"):
+            self.publish_fixture()
+
+    def test_built_foundry_component_is_rejected(self) -> None:
+        if self.contract["stage"] != "build":
+            self.skipTest("Builder-only reconciliation test")
+        self.add_foundry_component("built", contract=True)
+        with self.assertRaisesRegex(ArtifactError, "cannot be built"):
+            self.publish_fixture()
+
 
 if __name__ == "__main__":
     unittest.main()

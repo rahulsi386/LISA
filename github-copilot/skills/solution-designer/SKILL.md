@@ -228,11 +228,9 @@ When `cache_hit` is true:
 & "<resourceDir>\scripts\Invoke-SolutionDesigner.ps1" reuse --run "<run.json>"
 ```
 
-The cache key includes the classification, normalized model, artifact contract, schemas,
-manifests, every packaged icon, source exporter, renderer/preview/generator/validator scripts,
-inspection collector, and orchestrator. Only a previously inspected, validated source, diagram,
-preview, and evidence set can be reused. Missing or changed sources, preview bytes, or inspection
-evidence invalidate the cache just like changed diagram bytes.
+The cache key covers the classification, normalized model, contract, schemas, icons, and every
+packaged script. Only a previously inspected, validated set is reused; any changed input or
+evidence invalidates it.
 
 ### Cache miss
 
@@ -256,10 +254,11 @@ The command:
    image dimensions, and fit-width/actual-size viewing. No external assets or server are needed.
 9. Runs raster checks and returns `pending inspection`; machine success never means publication.
 
-Open both returned PNGs and the returned HTML preview. Wait for both images to decode; an early
-full-page screenshot is not proof that an image is absent. Verify natural dimensions, all four
-SVG/PNG links, editable-source links, and actual-size controls. Record browser observations and
-screenshots using the packaged collector, then inspect the actual screenshots and PNGs.
+View each returned PNG once for visual judgment. Do not take extra page snapshots or screenshots
+of the preview: the packaged collector below loads it, waits for both images to decode, and records
+natural dimensions, all four SVG/PNG links, editable-source links, and actual-size controls. Open
+the collector's `inspection-*.png` screenshots only when its evidence reports a load, link, or size
+problem.
 
 Emit the browser collector into the current run directory:
 
@@ -303,7 +302,7 @@ Repair selects an eligible, not-yet-visually-inspected layout profile, retains t
 for diagnosis, and creates a fresh preview, inspection template, and artifact hashes. Geometry
 evaluation of a profile is not a visual inspection of it. An explicit
 `--layout-profile Balanced|Spacious|Wide` selects an eligible profile. Collect fresh browser
-evidence and inspect both revised PNGs and their preview again. Never manually edit a sealed preview.
+evidence and view both revised PNGs again. Never manually edit a sealed preview.
 
 Preparation accepts `--max-repair-attempts 0..2` (default `2`). If the available repairs cannot meet the quality gates, report the blocking defects rather than publish an inferior result. Inspection timestamps must be consistent with the run; there is no arbitrary seven-minute cutoff for thoughtful inspection.
 
@@ -325,21 +324,14 @@ The published preview is `<basePath>\output\design\artifacts\preview.html`. Move
 
 ## 8. Bounded candidate repair and publication
 
-Do not mistake the first structurally valid candidate for a visually accepted result. Use only the bounded, revision-preserving repair workflow.
+Do not mistake the first structurally valid candidate for a visually accepted result. Candidates are
+generated in bounded complexity-adaptive order: Balanced first for at most 18 components
+(Balanced, Spacious, Wide); Spacious first for larger topologies (Spacious, Balanced, Wide). Failed
+candidates keep their diagnostics and only the best passing candidate is rendered. Use only the
+revision-preserving repair in Section 7; if no candidate passes or the repair limit is reached,
+return the exact blocking gates instead of publishing.
 
-Within a single invocation:
-
-1. Generate candidates in bounded complexity-adaptive order: Balanced first for at most 18 components
-   (Balanced, Spacious, Wide); Spacious first for larger topologies (Spacious, Balanced, Wide).
-2. Run every structural and visual geometry gate after each candidate.
-3. Discard failed candidates while preserving their exact diagnostics in the run report.
-4. Rank passing candidates by measured quality; render only the selected candidate.
-5. Run deterministic PNG sanity checks, inspect both renders, and finalize only when every inspection check is true.
-6. If rendered inspection fails, record the exact defects and invoke repair while an eligible,
-   not-yet-visually-inspected profile and repair attempt remain. Inspect the newly hashed revision.
-7. If no candidate passes or the repair limit is reached, do not publish a defective set. Return the exact blocking gates.
-
-Never weaken a gate or mark a failed check as passed. Visual quality outranks speed: withhold publication if bounded repairs cannot produce an acceptable candidate.
+Never weaken a gate or mark a failed check as passed. Visual quality outranks speed.
 
 The design is invalid when a buildable component has no builder path, a blocked component appears implemented, a simulated interaction is not visibly disclosed, a sequence message lacks a matching architecture relationship, a high-impact write lacks its classified approval control, ownership or PoC treatment is missing, or displayed coverage differs from the classifier output.
 
