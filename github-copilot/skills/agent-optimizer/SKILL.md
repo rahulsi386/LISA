@@ -1,6 +1,6 @@
 ---
 name: "agent-optimizer"
-description: "Harness-aware Microsoft Copilot Studio optimizer with LISA-decided GEPA instruction evolution for Standard, GitHub Copilot (GHCP) and Copilot chat harnesses. Audits builder instructions, delegates candidate and target scoring to agent-evaluator, preserves rollback safety, and reports measured optimization impact."
+description: "Improves a Copilot Studio agent from agent-evaluator evidence across Standard, GitHub Copilot and Copilot chat harnesses, with LISA-decided GEPA instruction evolution, rollback safety, and measured impact."
 ---
 
 # Agent Optimizer
@@ -159,7 +159,7 @@ Before editing, create the next immutable `rounds\round-NNN\` directory. Pull/do
 ### 4. Apply through the harness-correct path
 
 - **Standard harness:** pull the PAC workspace, make the minimal supported YAML/component change, validate, push, publish to the validated test target, and pull again to verify persistence. Use the Copilot Studio UI only for components PAC cannot manage.
-- **GitHub Copilot harness:** follow Builder Section B's verified `cli-copilot` workspace path: pull, change only approved instructions, push/publish, then pull to verify persistence and the `CliCopilot` / `CLICopilotRecognizer` / `cliagent-1.0.0` signature. If the instruction surface is not supported by PAC, use the new agent UI with real keyboard insertion, Save, reload, and verify the Dataverse configuration. Never convert it to a Standard agent. For GEPA, record the chosen authoring path, keep skills/tools/knowledge/connected agents unchanged, and follow the GHCP memory and preview-surface checks in the execution protocol.
+- **GitHub Copilot harness:** follow the verified `cli-copilot` workspace path in `..\agent-builder\resources\build-path-github-copilot.md`: pull, change only approved instructions, push/publish, then pull to verify persistence and the `CliCopilot` / `CLICopilotRecognizer` / `cliagent-1.0.0` signature. If the instruction surface is not supported by PAC, use the new agent UI with real keyboard insertion, Save, reload, and verify the Dataverse configuration. Never convert it to a Standard agent. For GEPA, record the chosen authoring path, keep skills/tools/knowledge/connected agents unchanged, and follow the GHCP memory and preview-surface checks in the execution protocol.
 - **Copilot chat harness:** edit the agent from the Microsoft 365 Copilot agent page, not by changing a Standard-harness channel. Save/reload, publish internally, and verify the correct M365 Copilot agent resource.
 
 Never combine unrelated changes in one batch. After persistence verification, store the verified state under the same round and write `after-state-manifest.json`. If the batch is rejected, restore the before-state, verify it remotely, and write `rollback-state-manifest.json`. Resolve build errors, live-state drift, and missing dependencies before retesting.

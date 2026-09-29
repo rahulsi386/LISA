@@ -1,6 +1,6 @@
 ---
 name: "video-generator"
-description: "Generate or revise a developer-focused marketing video for an existing solution, with current product visuals, neural narration, timed captions, and verified MP4 output. Run only when the user explicitly invokes /video-generator or /lisa:video-generator; never run automatically after building, evaluating, or publishing a solution."
+description: "Explicit invocation only: generates or revises a developer-focused marketing video for an existing solution with current visuals, neural narration, timed captions, and verified MP4 output."
 user-invocable: true
 disable-model-invocation: true
 argument-hint: "Solution name or configuration path, optional UI references and video brief"

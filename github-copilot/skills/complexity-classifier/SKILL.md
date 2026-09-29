@@ -15,8 +15,15 @@ demonstration coverage. Never hide a missing capability to make the allowed tool
   Cowork, and Microsoft Teams. Other required products/services remain explicit architecture
   dependencies, never team-buildable coverage. Prefer the missing capability over prescribing an
   out-of-bound product when several implementations could satisfy it.
-- Read `..\Platform-Decision.md`: its gates, work types, action impact, state distinctions, hybrid
-  patterns, evidence rules, category scoring and PoC acceptance rules are mandatory.
+- Read `..\Platform-Decision.md` by section, not in full: its gates, work types, action impact,
+  state distinctions, hybrid patterns, evidence rules, category scoring and PoC acceptance rules
+  are mandatory.
+
+  | When | Sections |
+  |---|---|
+  | Every run | Team PoC/MVP Delivery Profile through Phase 5 (including the Evidence Register); Hybrid Architecture Patterns; Control Requirements for Agentic Actions; State, Memory, and Evidence; Evaluation and Operational Readiness; Final Golden Rules; and the Copilot Chat, Standard, GitHub Copilot, and Microsoft Cowork platform guidance |
+  | Stage 2 or 3 research only | Microsoft Foundry Prompt Agents, Microsoft Foundry Hosted Agents, Microsoft Agent Framework |
+  | Only when a decision needs it | Common Anti-Patterns, Architecture Decision Record Template, Authoritative References |
 - Classify every in-scope finding: Required, Confirmed, Current, Preferred and Near-term. Do not
   inflate required scope with Future, Potential, Optional, Explicitly excluded, Not evidenced,
   analyst gaps or prohibited classic Copilot Studio Topics.

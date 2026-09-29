@@ -403,9 +403,13 @@ the [complete skills reference](skills/README.md).
 - Do not put credentials, access tokens, connection strings, or client secrets in plugin manifests
   or `lisa-config.json`.
 
-The plugin also bundles Playwright, Azure MCP, and Microsoft Learn MCP configuration. Microsoft
-Learn requires network access but no API key. Azure MCP requires a separately authenticated Azure
-identity. See the [Azure MCP documentation](https://learn.microsoft.com/en-us/azure/developer/azure-mcp-server/how-to/github-copilot-cli)
+The plugin also bundles Playwright, Azure MCP (`azure-mcp`), Microsoft Learn MCP (`ms-learn-mcp`),
+Microsoft IcM MCP (`ms-icm-mcp`), and Microsoft Engineering Hub MCP (`ms-eng-hub-mcp`)
+configuration. Microsoft Learn requires network access but no API key. Azure MCP requires a
+separately authenticated Azure identity. IcM and Engineering Hub are Microsoft-internal remote
+servers: they require a Microsoft corporate identity and sign-in when the host first connects, and
+their content must not appear in customer-facing artifacts. Send them generalized capability
+questions, not customer requirement text. See the [Azure MCP documentation](https://learn.microsoft.com/en-us/azure/developer/azure-mcp-server/how-to/github-copilot-cli)
 and [Microsoft Learn MCP documentation](https://learn.microsoft.com/en-us/training/support/mcp)
 for current service-specific guidance.
 

@@ -73,8 +73,8 @@ The pilot still excludes multi-agent optimization and binding/state-changing too
 | Harness | Instruction persistence | Candidate and target tests |
 |---|---|---|
 | Standard | Existing PAC pull/change/push/publish/pull path | Existing harness-correct evaluator routing, normally `/bots/<agentId>/overview` |
-| GitHub Copilot | Builder Section B's `cli-copilot` workspace; verify PAC support and live signature before push/publish/pull. If unsupported, new-agent UI keyboard insertion, Save/reload and Dataverse read-back | Pinned `/environments/<environmentId>/agents/<agentId>/preview` on `copilotstudio.preview.microsoft.com`; `surfaceUsed: preview-canvas` |
-| Copilot chat | Builder Section C's Microsoft 365 Copilot agent page: edit, Save/reload, publish internally, then read back the M365 Copilot agent resource. Never convert it to a Standard agent | Published Microsoft 365 Copilot channel; `surfaceUsed: m365-copilot` |
+| GitHub Copilot | Builder Path B's `cli-copilot` workspace; verify PAC support and live signature before push/publish/pull. If unsupported, new-agent UI keyboard insertion, Save/reload and Dataverse read-back | Pinned `/environments/<environmentId>/agents/<agentId>/preview` on `copilotstudio.preview.microsoft.com`; `surfaceUsed: preview-canvas` |
+| Copilot chat | Builder Path C's Microsoft 365 Copilot agent page: edit, Save/reload, publish internally, then read back the M365 Copilot agent resource. Never convert it to a Standard agent | Published Microsoft 365 Copilot channel; `surfaceUsed: m365-copilot` |
 
 Before provisioning a GHCP shadow, verify `pac copilot init help` exposes `--authoring-mode`
 and `cli-copilot`. Use `--authoring-mode cli-copilot` when creating through PAC, not the Standard

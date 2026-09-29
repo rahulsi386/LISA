@@ -177,11 +177,15 @@ class AgencyPluginTests(unittest.TestCase):
         claude = json.loads(
             (PLUGIN_ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
         )["mcpServers"]
-        self.assertEqual({"playwright", "azure-mcp", "microsoft-learn"}, set(shared))
+        self.assertEqual(
+            {"playwright", "azure-mcp", "ms-learn-mcp", "ms-icm-mcp", "ms-eng-hub-mcp"},
+            set(shared),
+        )
         self.assertEqual(set(shared), set(claude))
         for name in shared:
             with self.subTest(server=name):
-                normalized = [{key: value for key, value in item.items() if key != "type"}
+                # `tools` is a Copilot CLI allow-list; Claude Code exposes every server tool.
+                normalized = [{key: value for key, value in item.items() if key not in {"type", "tools"}}
                               for item in (shared[name], claude[name])]
                 self.assertEqual(normalized[0], normalized[1])
                 self.assertEqual(shared[name].get("type", "stdio"), claude[name].get("type", "stdio"))
@@ -192,9 +196,10 @@ class AgencyPluginTests(unittest.TestCase):
         self.assertEqual("stdio", azure["type"])
         self.assertEqual("npx", azure["command"])
         self.assertEqual(
-            ["-y", "@azure/mcp@latest", "server", "start", "--mode", "namespace"],
+            ["-y", "@azure/mcp@latest", "server", "start"],
             azure["args"],
         )
+        self.assertEqual(["*"], azure["tools"])
         for option in ("--prerelease", "--ignore-failed-sources", "--read-only", "--namespace",
                        "--tool", "--disable-user-confirmation", "--enable-insecure-transports"):
             self.assertNotIn(option, azure["args"])
@@ -205,10 +210,22 @@ class AgencyPluginTests(unittest.TestCase):
 
     def test_learn_mcp_uses_the_official_anonymous_remote_endpoint(self) -> None:
         servers = json.loads((PLUGIN_ROOT / ".mcp.json").read_text(encoding="utf-8"))["mcpServers"]
-        learn = servers["microsoft-learn"]
+        learn = servers["ms-learn-mcp"]
         self.assertEqual("http", learn["type"])
         self.assertEqual("https://learn.microsoft.com/api/mcp", learn["url"])
         self.assertEqual({"type", "url", "description"}, set(learn))
+
+    def test_internal_microsoft_mcp_servers_use_official_remote_endpoints(self) -> None:
+        servers = json.loads((PLUGIN_ROOT / ".mcp.json").read_text(encoding="utf-8"))["mcpServers"]
+        expected = {
+            "ms-icm-mcp": "https://icm-mcp-prod.azure-api.net/v1/",
+            "ms-eng-hub-mcp": "https://mcp.eng.ms",
+        }
+        for name, url in expected.items():
+            with self.subTest(server=name):
+                self.assertEqual("http", servers[name]["type"])
+                self.assertEqual(url, servers[name]["url"])
+                self.assertEqual({"type", "url", "description"}, set(servers[name]))
 
     def test_prerequisites_cover_bundled_mcp_runtime(self) -> None:
         script = (PLUGIN_ROOT / "scripts" / "Test-LisaAgencyPrerequisites.ps1").read_text(encoding="utf-8")
@@ -241,6 +258,54 @@ class AgencyPluginTests(unittest.TestCase):
                 path = Path(directory) / name
                 with self.subTest(path=path.relative_to(PLUGIN_ROOT)):
                     self.assertLess(path.stat().st_size, 33_554_432)
+
+    def test_skill_instructions_stay_within_token_budgets(self) -> None:
+        # Byte ceilings keep stage instructions from regrowing; raise one only with a reason.
+        budgets = {
+            "cad-orchestrator": 15_500,
+            "requirement-analyzer": 22_500,
+            "complexity-classifier": 14_000,
+            "solution-designer": 28_000,
+            "agent-builder": 43_000,
+            "agent-evaluator": 31_000,
+            "agent-optimizer": 22_500,
+            "artifact-generator": 3_500,
+            "artifact-publisher": 11_500,
+            "postpublish-cleanup": 4_000,
+            "video-generator": 9_000,
+        }
+        self.assertEqual(set(EXPECTED_SKILLS), set(budgets))
+        for name, limit in budgets.items():
+            with self.subTest(skill=name):
+                text = (PLUGIN_ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
+                self.assertLessEqual(len(text.encode("utf-8")), limit)
+                description = re.search(r'^description:\s*"(.+)"\s*$', text, re.MULTILINE)
+                self.assertIsNotNone(description)
+                self.assertLessEqual(len(description.group(1)), 300)
+                self.assertTrue(description.group(1).endswith("."), "description looks truncated")
+
+    def test_builder_loads_only_the_selected_platform_path(self) -> None:
+        builder = PLUGIN_ROOT / "skills" / "agent-builder"
+        skill = (builder / "SKILL.md").read_text(encoding="utf-8")
+        for path_file in ("build-path-standard.md", "build-path-github-copilot.md",
+                          "build-path-copilot-chat.md", "build-path-cowork.md"):
+            with self.subTest(path_file=path_file):
+                self.assertTrue((builder / "resources" / path_file).is_file())
+                self.assertIn(f"resources\\{path_file}", skill)
+        for inline in ("## Section A", "## Section B", "## Section C", "## Section D"):
+            self.assertNotIn(inline, skill)
+        self.assertIn("| F | Microsoft Foundry agents | None yet | Roadmap |", skill)
+        self.assertIn("futurePlatformContracts", skill)
+
+    def test_evaluator_derives_reports_instead_of_authoring_them(self) -> None:
+        evaluator = PLUGIN_ROOT / "skills" / "agent-evaluator"
+        skill = (evaluator / "SKILL.md").read_text(encoding="utf-8")
+        self.assertTrue((evaluator / "scripts" / "render_evaluation.py").is_file())
+        self.assertIn("render_evaluation.py", skill)
+        self.assertNotIn("Create `evaluation-run-report.md`", skill)
+        self.assertNotIn("Create `deployment-gate-summary.md`", skill)
+        self.assertNotIn("### Agency GEPA candidate mode", skill)
+        self.assertTrue((evaluator / "resources" / "gepa-candidate-mode.md").is_file())
 
 
 if __name__ == "__main__":

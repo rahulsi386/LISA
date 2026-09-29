@@ -232,6 +232,33 @@
     },
     "manualDemoSteps": {"type": "array", "items": {"type": "string", "minLength": 1}},
     "deferredComponents": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "futurePlatformContracts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["componentId", "targetPlatform", "responsibility", "interface", "identity", "dataBoundary", "owner", "consumerComponentId"],
+        "properties": {
+          "componentId": {"type": "string", "minLength": 1},
+          "targetPlatform": {"enum": ["Microsoft Foundry", "Microsoft Agent Framework"]},
+          "responsibility": {"type": "string", "minLength": 1},
+          "interface": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "inputs", "outputs"],
+            "properties": {
+              "kind": {"enum": ["tool", "connected-agent", "api"]},
+              "inputs": {"type": "string", "minLength": 1},
+              "outputs": {"type": "string", "minLength": 1}
+            }
+          },
+          "identity": {"type": "string", "minLength": 1},
+          "dataBoundary": {"type": "string", "minLength": 1},
+          "owner": {"type": "string", "minLength": 1},
+          "consumerComponentId": {"type": "string", "minLength": 1}
+        }
+      }
+    },
     "productionReadinessGaps": {"type": "array", "items": {"type": "string", "minLength": 1}},
     "demoScript": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
     "requiredCustomerInputs": {"type": "array", "items": {"type": "string", "minLength": 1}},
