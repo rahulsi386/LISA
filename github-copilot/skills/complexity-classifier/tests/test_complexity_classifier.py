@@ -2234,6 +2234,39 @@ class ComplexityClassifierTests(unittest.TestCase):
         assert final == set(texts)
         return index, texts
 
+    def test_analyst_findings_are_hints_and_context_sections_are_carried(self) -> None:
+        ledger = {
+            "run_id": "RA-TEST",
+            "findings": [
+                {"finding_id": "REQ-0000000001", "kind": "Explicit requirement",
+                 "status": "Required", "statement": "Prepare my weekly briefing."},
+                {"finding_id": "CLS-0000000002", "kind": "Derived classification",
+                 "status": "Confirmed", "statement": "The work is conversational."},
+                {"finding_id": "CTX-0000000003", "kind": "Context",
+                 "status": "Current", "statement": "Finance leads own the process."},
+                {"finding_id": "GAP-0000000004", "kind": "Analyst-identified gap",
+                 "status": "Not evidenced", "statement": "No channel is evidenced."},
+            ],
+            "source_annotations": [], "knowledge_sources": [], "integrations": [],
+            "agentic_behaviors": [{
+                "behavior": "Delegated personal work", "requirement_status": "Confirmed",
+                "finding_ids": ["REQ-0000000001", "CLS-0000000002"],
+            }],
+            "sections": {"Stakeholders and Personas": [{
+                "type": "paragraph", "text": "Finance leads own the process.",
+                "finding_ids": ["CTX-0000000003"],
+            }]},
+        }
+        summary = classifier._build_evidence_summary(ledger, None, None)
+        self.assertEqual(["REQ-0000000001"], [item["finding_id"] for item in summary["in_scope_findings"]])
+        self.assertEqual(["CLS-0000000002"], [item["finding_id"] for item in summary["analyst_hints"]])
+        self.assertEqual(["GAP-0000000004"], [item["finding_id"] for item in summary["gaps_and_conflicts"]])
+        self.assertEqual(
+            [{"text": "Finance leads own the process.", "evidence_ids": ["CTX-0000000003"]}],
+            summary["stakeholders"],
+        )
+        self.assertEqual(["REQ-0000000001"], summary["agentic_behaviors"][0]["finding_ids"])
+
     def test_compact_context_preserves_all_findings_and_oversized_provenance(self) -> None:
         with tempfile.TemporaryDirectory(dir=SKILL_ROOT / "tests") as directory:
             root = Path(directory)

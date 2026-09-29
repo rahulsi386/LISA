@@ -229,7 +229,9 @@ Known failures are emitted as JSON to stderr with exit code `2`; success exits `
 
 This is stage **1 — analysis**. The orchestrator checkpoints preparation, source batches, visual targets, ledger completion, and publication. It commits only the timestamped manifest after validation.
 
-Missing/empty roots, reparse points, path escapes, unsafe archives, corpus limits, unreadable evidence, incomplete manual review, source drift, invalid provenance, unused/duplicate findings, vocabulary/schema errors, render drift, or output tampering fail the stage. Classification must not start, and already-created diagnostics remain under Analysis.
+Missing/empty roots, reparse points, path escapes, unsafe archives, corpus limits, unreadable evidence, incomplete manual review, uncovered extracted records, source drift, invalid provenance, unused/duplicate findings, source findings carrying interpretation, vocabulary/schema errors, render drift, or output tampering fail the stage. Classification must not start, and already-created diagnostics remain under Analysis.
+
+Ledger schema 2.0 separates `source` findings (explicit requirements, observed facts, context, decisions) from `analyst` findings (derived classifications, gaps, conflicts), requires every substantive extracted record to be cited or dispositioned, and records platform mentions with their verbatim wording. The `coverage` command lists records that still need a finding or disposition.
 
 ### Extending it without regression
 

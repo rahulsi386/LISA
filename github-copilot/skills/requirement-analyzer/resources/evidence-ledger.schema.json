@@ -12,6 +12,7 @@
     "referred_artifacts",
     "manual_reviews",
     "batch_reviews",
+    "record_dispositions",
     "knowledge_sources",
     "platforms",
     "platform_absence_finding_ids",
@@ -35,8 +36,12 @@
         }
       }
     },
+    "record_dispositions": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/recordDisposition"}
+    },
     "schema_version": {
-      "const": "1.0"
+      "const": "2.0"
     },
     "run_id": {
       "type": "string",
@@ -300,17 +305,31 @@
         "Problem Statement",
         "Current State",
         "Desired Future State",
+        "Stakeholders and Personas",
         "Goals",
         "Success Criteria",
         "Metrics and Baselines",
+        "Non-Functional Requirements",
         "Data Sources",
         "Data Types",
         "Dependencies and Constraints",
+        "Assumptions",
+        "Risks",
         "Solution Components",
         "Scope and Delivery Phases",
+        "Timeline and Budget",
+        "Glossary",
+        "Open Questions",
         "Gaps and Conflicts"
       ],
       "properties": {
+        "Stakeholders and Personas": {"$ref": "#/$defs/blocks"},
+        "Non-Functional Requirements": {"$ref": "#/$defs/blocks"},
+        "Assumptions": {"$ref": "#/$defs/blocks"},
+        "Risks": {"$ref": "#/$defs/blocks"},
+        "Timeline and Budget": {"$ref": "#/$defs/blocks"},
+        "Glossary": {"$ref": "#/$defs/blocks"},
+        "Open Questions": {"$ref": "#/$defs/blocks"},
         "Executive Summary": {
           "$ref": "#/$defs/blocks"
         },
@@ -360,7 +379,7 @@
       "uniqueItems": true,
       "items": {
         "type": "string",
-        "pattern": "^(D-[0-9]{3,}|(REQ|OBS|CLS|GAP|CON|DEC)-[A-F0-9]{10})$"
+        "pattern": "^(D-[0-9]{3,}|(REQ|OBS|CTX|CLS|GAP|CON|DEC)-[A-F0-9]{10})$"
       }
     },
     "optionalFindingIds": {
@@ -368,8 +387,28 @@
       "uniqueItems": true,
       "items": {
         "type": "string",
-        "pattern": "^(D-[0-9]{3,}|(REQ|OBS|CLS|GAP|CON|DEC)-[A-F0-9]{10})$"
+        "pattern": "^(D-[0-9]{3,}|(REQ|OBS|CTX|CLS|GAP|CON|DEC)-[A-F0-9]{10})$"
       }
+    },
+    "recordDisposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["owner_id", "locators", "disposition", "reason"],
+      "properties": {
+        "owner_id": {"type": "string", "pattern": "^(SRC|EMB)-[A-F0-9]{12}$"},
+        "locators": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "disposition": {"enum": ["non-substantive", "captured-by-findings"]},
+        "reason": {"type": "string", "minLength": 1},
+        "finding_ids": {"$ref": "#/$defs/findingIds"}
+      },
+      "if": {"properties": {"disposition": {"const": "captured-by-findings"}}},
+      "then": {"required": ["finding_ids"]},
+      "else": {"not": {"required": ["finding_ids"]}}
     },
     "evidence": {
       "type": "object",
@@ -416,17 +455,21 @@
       "properties": {
         "finding_id": {
           "type": "string",
-          "pattern": "^(D-[0-9]{3,}|(REQ|OBS|CLS|GAP|CON|DEC)-[A-F0-9]{10})$"
+          "pattern": "^(D-[0-9]{3,}|(REQ|OBS|CTX|CLS|GAP|CON|DEC)-[A-F0-9]{10})$"
         },
         "kind": {
           "enum": [
             "Explicit requirement",
             "Observed fact",
+            "Context",
+            "Decision",
             "Derived classification",
             "Analyst-identified gap",
-            "Conflict",
-            "Decision"
+            "Conflict"
           ]
+        },
+        "origin": {
+          "enum": ["source", "analyst"]
         },
         "statement": {
           "type": "string",
@@ -674,6 +717,7 @@
       "additionalProperties": false,
       "required": [
         "platform",
+        "source_wording",
         "provider",
         "requirement_status",
         "intended_role",
@@ -683,12 +727,18 @@
       "properties": {
         "platform": {
           "enum": [
+            "Microsoft Cowork",
             "Copilot Studio",
             "Agent Builder",
             "Azure Foundry",
+            "Microsoft Agent Framework",
             "Pro Code",
             "Third Party Provider"
           ]
+        },
+        "source_wording": {
+          "type": "string",
+          "minLength": 1
         },
         "provider": {
           "type": "string"
@@ -788,6 +838,7 @@
           "enum": [
             "Conversational",
             "Autonomous",
+            "Delegated personal work",
             "Child-Agent/Multi-Agent",
             "Human Handoff/oversight"
           ]

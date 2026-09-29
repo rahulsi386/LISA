@@ -195,14 +195,17 @@ or within its cited range, not elsewhere in the same document. Preserve case and
 values; a cell citation cannot borrow another cell's value. Quotes do not replace the need to
 check that the assertion is actually supported by the cited text.
 
-Permitted finding kinds are:
+Permitted finding kinds are split by origin. Normalization records `origin` from the kind.
 
-- `Explicit requirement`
-- `Observed fact`
-- `Derived classification`
-- `Analyst-identified gap`
-- `Conflict`
-- `Decision`
+| Origin | Kinds | Purpose | Evidence types |
+|---|---|---|---|
+| `source` | `Explicit requirement`, `Observed fact`, `Context`, `Decision` | Restate what the inputs say, without interpretation | `explicit`, `metadata`, `configuration` |
+| `analyst` | `Derived classification`, `Analyst-identified gap`, `Conflict` | Interpretation or completeness checks; downstream stages treat them as hints | any |
+
+Use `Context` for information that is not a requirement but must not be lost: background,
+stakeholders, roles, terminology, history, timelines, budgets, assumptions, risks, and open
+questions. The `Strong candidate` status is an analyst judgment and is allowed only on analyst
+findings.
 
 Evidence types:
 
@@ -224,6 +227,38 @@ Preserve recall while avoiding redundant assertions:
 - Do not create separate findings that merely paraphrase the same source statement.
 - Normalization merges only matching assertion text, kind, status, and confidence, unions all distinct evidence entries, and rewrites references. Do not merge statements with different conditions, actors, scope, or polarity merely because they share a topic.
 
+#### Record coverage (nothing omitted)
+
+Every substantive extracted record and manual-review observation must be either cited by a finding
+or listed in `record_dispositions`. Blank records, exact duplicates within one source, and XLSX
+sheet profiles are exempt automatically. A record counts as cited when a finding cites its exact
+locator, a containing range (`lines 3-9`, `pages 2-4`, `paragraphs 5-8`, `slides 1-3`,
+`sheet 'Name' rows 10-40`), or every non-blank cell of an XLSX row.
+
+```json
+{
+  "record_dispositions": [
+    {"owner_id": "SRC-0123456789AB", "locators": ["lines 40-44"],
+     "disposition": "non-substantive", "reason": "Page footer and navigation text"},
+    {"owner_id": "SRC-0123456789AB", "locators": ["sheet 'Log' rows 2-900"],
+     "disposition": "captured-by-findings", "reason": "Rows restate the approval rule",
+     "finding_ids": ["D-014"]}
+  ]
+}
+```
+
+Use `non-substantive` only for text with no requirement or context value. Use
+`captured-by-findings` when the content is fully expressed by the cited findings. Anything else
+needs a finding (use `Context` for non-requirement information). Before publishing, list what is
+still uncovered:
+
+```powershell
+& "<skill-dir>\scripts\Invoke-RequirementAnalyzer.ps1" coverage --run "<run.json>" --ledger "<draft.json>"
+```
+
+Publication fails while any record is uncovered, and the report renders a `Record Coverage`
+section with the counts and every disposition.
+
 #### Source annotations
 
 Create exactly one `source_annotations` entry for every physical source in `manifest.json`. Reference at least one finding that explains its evidence-based role and classification.
@@ -238,15 +273,25 @@ Populate every block array under `sections`:
 - Problem Statement
 - Current State
 - Desired Future State
+- Stakeholders and Personas
 - Goals
 - Success Criteria
 - Metrics and Baselines
+- Non-Functional Requirements (security, privacy, compliance, performance, availability, accessibility, localization)
 - Data Sources
 - Data Types
 - Dependencies and Constraints
+- Assumptions
+- Risks
 - Solution Components
 - Scope and Delivery Phases
+- Timeline and Budget
+- Glossary
+- Open Questions
 - Gaps and Conflicts
+
+When the sources say nothing for a section, cite a `CORPUS` absence-check gap instead of leaving
+it empty. `Analyst Annotations`, `Record Coverage`, and `Source Traceability` are rendered.
 
 Every paragraph, heading, list item, and table row requires one or more `finding_ids`. Do not add uncited prose.
 
@@ -254,13 +299,12 @@ Distinguish:
 
 - explicit requirements
 - observed current facts
-- derived classifications
+- context
 - confirmed scope
 - candidates and options
 - future scope
 - exclusions
-- conflicts
-- analyst-identified gaps
+- analyst interpretation (derived classifications, gaps, conflicts)
 
 Do not convert a gap into an assumed component, integration, control, metric, or requirement.
 
@@ -294,21 +338,27 @@ When none qualify, leave `knowledge_sources` empty and add a cited `knowledge_so
 
 Only these platform values are allowed:
 
+- `Microsoft Cowork`
 - `Copilot Studio`
 - `Agent Builder`
 - `Azure Foundry`
+- `Microsoft Agent Framework`
 - `Pro Code`
 - `Third Party Provider`
 
-Normalize explicit `Azure AI Foundry` evidence to `Azure Foundry`, preserving the source wording in the finding. Put the provider name only in the `provider` field for `Third Party Provider`.
+Record only platforms the sources name. Copy the exact phrase into `source_wording` (it must appear
+at a locator cited by the row's source finding) and keep the source's own status. Each row must
+cite at least one source-origin finding; a derived classification alone is not enough. Normalize
+explicit `Azure AI Foundry` evidence to `Azure Foundry`. Put the provider name only in the
+`provider` field for `Third Party Provider`.
 
-Do not infer a platform from generic words such as “Copilot,” “agent,” “Microsoft,” “Power Platform,” or “Microsoft environment.” Never recommend a platform.
+Do not infer a platform from generic words such as “Copilot,” “agent,” “Microsoft,” “Power Platform,” or “Microsoft environment.” Never recommend a platform; platform selection belongs to the classifier.
 
 When none is evidenced, leave `platforms` empty and populate `platform_absence_finding_ids` with a cited analyst-identified gap.
 
 ### Integrations
 
-Record every evidenced tool, service, runtime, database, workflow product, collaboration product, repository, website, API, cloud service, or vendor technology that is not one of the five agent-development platform values.
+Record every evidenced tool, service, runtime, database, workflow product, collaboration product, repository, website, API, cloud service, or vendor technology that is not one of the agent-development platform values.
 
 Do not infer a connector, protocol, gateway, authentication method, middleware, trigger, read/write direction, or API. Use explicit “Not evidenced” or “Unspecified” values when details are absent.
 
@@ -320,17 +370,20 @@ Populate each category exactly once:
 
 - `Conversational`
 - `Autonomous`
+- `Delegated personal work`
 - `Child-Agent/Multi-Agent`
 - `Human Handoff/oversight`
 
-Use `Not evidenced` when a category is absent, supported by an analyst-identified gap.
+Use `Not evidenced` when a category is absent, supported by an analyst-identified gap. Every other
+status must cite at least one source-origin finding that states the behavior.
 
 - Conversational means user-initiated dialogue, questions, clarifications, responses, or recommendations.
 - Autonomous means monitoring, deciding, or acting without a user prompt. Ordinary tool calls and deterministic workflow steps are not autonomous by themselves.
+- Delegated personal work means one employee hands tasks to an assistant that acts on that employee's behalf and for their own use (for example, preparing their briefings or managing their inbox).
 - Child-Agent/Multi-Agent means delegation or collaboration among distinct agents.
 - Human Handoff/oversight means escalation, review, approval, confirmation, intervention, or final human decision.
 
-Do not use `Action-oriented`, `Advisory`, `Delegated`, `Workflow`, `Tool-calling`, or any other behavior category.
+Do not use `Action-oriented`, `Advisory`, bare `Delegated`, `Workflow`, `Tool-calling`, or any other behavior category.
 
 ## Stable IDs and publication
 

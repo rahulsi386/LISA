@@ -1,9 +1,11 @@
 {
   "schemaVersion": "1.0",
   "agentDevelopmentPlatforms": [
+    "Microsoft Cowork",
     "Copilot Studio",
     "Agent Builder",
     "Azure Foundry",
+    "Microsoft Agent Framework",
     "Pro Code",
     "Third Party Provider"
   ],
@@ -17,6 +19,7 @@
   "agenticBehaviors": [
     "Conversational",
     "Autonomous",
+    "Delegated personal work",
     "Child-Agent/Multi-Agent",
     "Human Handoff/oversight"
   ],
@@ -30,10 +33,26 @@
   "findingKinds": [
     "Explicit requirement",
     "Observed fact",
+    "Context",
+    "Decision",
     "Derived classification",
     "Analyst-identified gap",
-    "Conflict",
+    "Conflict"
+  ],
+  "sourceFindingKinds": [
+    "Explicit requirement",
+    "Observed fact",
+    "Context",
     "Decision"
+  ],
+  "analystFindingKinds": [
+    "Derived classification",
+    "Analyst-identified gap",
+    "Conflict"
+  ],
+  "recordDispositions": [
+    "non-substantive",
+    "captured-by-findings"
   ],
   "findingStatuses": [
     "Confirmed",
