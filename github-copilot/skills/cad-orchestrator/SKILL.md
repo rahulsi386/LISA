@@ -142,7 +142,7 @@ Use `--status RUNNING` for **Accept**, `--status WAITING` while collecting **Rev
 After the classification Markdown, JSON, and `classification-manifest.json` validate, but before
 committing the classification stage:
 
-1. Present a concise review (at most about 200 words, bullets only) containing the selected agentic platform, any Copilot Studio harness,
+1. Present a concise review (at most about 200 words, bullets only) containing the agentic suitability recommendation, the selected platform with its precedence rationale, any Copilot Studio harness,
    complexity, code tier, native-build and PoC-demonstration coverage, PoC treatments, simulations,
    blocked or deferred capabilities, and production-readiness gaps.
 2. Persist the pause:
@@ -167,7 +167,10 @@ committing the classification stage:
 
 4. Stop immediately after the call.
 5. On **Accept**, checkpoint `RUNNING` with unit `classification-accepted`, commit the validated
-   classification marker as `COMMITTED`, and continue to solution design.
+   classification marker as `COMMITTED`, and continue to solution design. If the accepted
+   `agentic_platform` is `Deterministic (no agent)`, run no agent stages: run `workflow_checkpoint.py
+   finish --status COMPLETED` and report the suitability recommendation, deterministic alternative,
+   platform comparison and classification paths as the deterministic handoff.
 6. On **Revise**, checkpoint `WAITING` with unit `classification-revision-feedback`, then call
   the host's free-text user-question interaction without `answers`:
 

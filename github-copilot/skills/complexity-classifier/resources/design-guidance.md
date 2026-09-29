@@ -80,6 +80,41 @@ For every run:
 
 Azure supporting services do not by themselves require selecting Azure AI Foundry. A Copilot Studio solution can use a researched Azure Function, API Management instance, Key Vault, Application Insights resource, custom connector, or custom API while retaining Copilot Studio as the agent platform.
 
+## Research plan, sources, suitability, and precedence
+
+### Research plan (`research_plan`)
+
+`prepare` writes `research-plan-seed.json`, derived from the analysis: agentic suitability, platform precedence, identity/security, governance/ALM, and one topic per scoped knowledge source, integration, in-scope behavior, configured or evidenced channel, and the non-functional requirements. The draft pre-populates these topics. Keep every seeded ID and category; add `requirement` topics until every in-scope finding appears in at least one topic's `finding_ids`. Each topic records its vendor, questions, cited `source_ids`, and a resolution. Suitability and platform topics must be `resolved`; other topics may be `research-gap` only with a resolution explaining what is unknown and its impact.
+
+### Source register (`research_register`)
+
+Record every consulted source as `RS-###` with source type, MCP tool, query, locator, retrieval time, vendor, product, confidentiality, and the concrete finding. Record each MCP server once in `mcp_usage`:
+
+| Server | Use for | Confidentiality |
+|---|---|---|
+| `ms-learn-mcp` | Official documentation for Microsoft and allied products: capabilities, limits, prerequisites, best practices, known issues. Mandatory; `https` locators. | public |
+| `azure-mcp` | Azure and Power Platform best practices, architecture references, service guidance, deployment tooling. | public |
+| `ms-eng-hub-mcp` | Microsoft-internal engineering depth: design notes, internals, supported patterns. | microsoft-internal |
+| `ms-icm-mcp` | Microsoft-internal open incidents and bugs that affect a design choice or risk. | microsoft-internal |
+
+A server marked `used` must have at least one source. When a server fails or is not authorized, mark it `unavailable` with the failure detail and record the impact as a research gap; never cite it. For any non-Microsoft product, cite only the vendor's official documentation as `vendor-official` with a `trust_basis` (vendor-owned domain, official vendor repository, or vendor-linked documentation), an `https` locator, and a version or date when published; community posts, blogs, and aggregators are not authoritative. Microsoft topics must cite an MCP source; non-Microsoft topics must cite that vendor's official source. Every requirement assessment cites at least one register source.
+
+Internal sources inform the design but must never reach customer documents: do not mention internal IDs or their content in justification paragraphs, the decision summary, harness rationale, billing implication, suitability text, or platform comparison text. Each comparison row cites at least one public source.
+
+### Agentic suitability (`agentic_suitability`)
+
+Decide first whether an agent is warranted. Assess all seven criteria once (`input-ambiguity`, `reasoning-need`, `process-variability`, `tool-orchestration`, `action-impact`, `determinism-auditability`, `cost-latency`) with in-scope evidence or sources. Describe the best deterministic alternative (rules, forms, flows, workflow automation, conventional software) and why the non-selected approach was rejected.
+
+- `deterministic`: select `Deterministic (no agent)`, harness null, no agents, only `conventional-software` or `deterministic-execution` capabilities, and no in-scope Conversational, Delegated personal work, or Child-Agent behavior. Stage 1 only. Identity cites Entra ID; security, governance, and ALM cite Power Platform or Azure controls. The lifecycle ends after classification with a deterministic handoff.
+- `agentic`: at least one agentic capability work type (`knowledge-retrieval`, `adaptive-reasoning`, `delegated-personal-work`, `custom-agent-software`) and at least one agent.
+- `hybrid`: both agentic and deterministic capability work types.
+
+Every capability carries a `work_type_rationale`; every requirement assessment carries a `rationale`.
+
+### Platform precedence (`platform_comparison`)
+
+List exactly five rows in order: Microsoft Cowork, Copilot Studio, Azure AI Foundry, Microsoft Agent Framework, Deterministic (no agent). Each row states fit, whether selected, pros, cons, decision rationale, and sources. Agentic fits must equal `platform_assessment`. Always assess Cowork (`cowork_fit` is never `not-assessed`). The selected agentic platform must be the first full fit in precedence; every earlier platform must be `partial` or `not-fit`. Platforms after the selection may stay `not-assessed` for fit, but still give researched pros and cons. Hybrid selects at least two agentic rows with full or partial fit.
+
 ## Staged research
 
 ### Stage 1: Allowed Microsoft tools
@@ -108,7 +143,7 @@ After reviewing those references, assess every in-scope requirement:
 ```json
 {
   "copilot_studio_fit": "full | partial | not-fit",
-  "cowork_fit": "not-assessed | full | partial | not-fit",
+  "cowork_fit": "full | partial | not-fit",
   "unmet_requirements": []
 }
 ```
