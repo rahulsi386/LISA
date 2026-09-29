@@ -22,11 +22,37 @@ Microsoft Copilot Studio and Microsoft Cowork are independent agentic platforms/
 
 | Harness | Choose when | Signature capabilities | Billing | Build path |
 |---|---|---|---|---|
-| **GitHub Copilot harness** | Reasoning-heavy, multi-step business processes; the agent must take a goal, break it into steps, adapt and recover, and orchestrate across connectors, knowledge, MCP, and connected agents | Native Word/Excel/PowerPoint/PDF create & edit, **skills**, **memory**, autonomous multi-step tool orchestration, secure sandbox | Copilot Credits from build time; verify environment allocation before creation | **Section B — new agent UI** |
-| **Standard harness** | Rule-based, well-defined, predictable, potentially high-volume agents and structured conversations/agent flows | Generative orchestration, approved prompts/flows, knowledge, tools, and deterministic paths; classic orchestration only for approved compatibility needs | Standard licensing plus prepaid Copilot Credits or PAYG; validate quotas and peak throughput | **Section A — PAC CLI / classic authoring** |
-| **Copilot chat harness** | The goal is a focused internal agent inside **Microsoft 365 Copilot Chat** | Instructions, suggested prompts, enterprise knowledge, and approved tools for internal users; not the harness for GitHub-exclusive skills, memory, native file work, or long autonomous processes | Consumption-based or included in eligible Microsoft 365 Copilot licensing | **Section C — Microsoft 365 Copilot agent page** |
+| **GitHub Copilot harness** | Reasoning-heavy, multi-step business processes; the agent must take a goal, break it into steps, adapt and recover, and orchestrate across connectors, knowledge, MCP, and connected agents | Native Word/Excel/PowerPoint/PDF create & edit, **skills**, **memory**, autonomous multi-step tool orchestration, secure sandbox | Copilot Credits from build time; verify environment allocation before creation | **Path B** |
+| **Standard harness** | Rule-based, well-defined, predictable, potentially high-volume agents and structured conversations/agent flows | Generative orchestration, approved prompts/flows, knowledge, tools, and deterministic paths; classic orchestration only for approved compatibility needs | Standard licensing plus prepaid Copilot Credits or PAYG; validate quotas and peak throughput | **Path A** |
+| **Copilot chat harness** | The goal is a focused internal agent inside **Microsoft 365 Copilot Chat** | Instructions, suggested prompts, enterprise knowledge, and approved tools for internal users; not the harness for GitHub-exclusive skills, memory, native file work, or long autonomous processes | Consumption-based or included in eligible Microsoft 365 Copilot licensing | **Path C** |
 
 Microsoft Cowork has no Copilot Studio harness. Record it as `agenticPlatform: Microsoft Cowork` and `harness: null`.
+
+### Build path registry
+
+Read **only** the path file(s) for the validated platform/harness. A mixed build reads each
+applicable path; never load the others.
+
+| Path | Platform / harness | Instructions | Status |
+|---|---|---|---|
+| A | Copilot Studio · Standard | `resources\build-path-standard.md` | Supported |
+| B | Copilot Studio · GitHub Copilot | `resources\build-path-github-copilot.md` | Supported |
+| C | Copilot Studio · Copilot chat | `resources\build-path-copilot-chat.md` | Supported |
+| D | Microsoft Cowork | `resources\build-path-cowork.md` | Supported |
+| F | Microsoft Foundry agents | None yet | Roadmap |
+
+Paths A–D cover every integration the platforms expose: knowledge (SharePoint, OneDrive,
+Dataverse, public sites, files, Graph connectors), connectors, agent flows and workflows, MCP,
+REST API, computer use, prompts, skills, memory, connected agents, Cowork skills/plugins, and
+Teams/Microsoft 365 channels.
+
+**Foundry roadmap.** LISA does not build Foundry or Agent Framework agents yet. Reconcile each such
+component as `deferred` (or `blocked` when critical), list it in `deferredComponents`, and add a
+`futurePlatformContracts` entry: responsibility, interface (`tool`, `connected-agent`, or `api`)
+with typed inputs/outputs, identity and authorization, data boundary, owner, and the Copilot
+Studio or Cowork component that will call it. That contract lets a future Path F build it without
+reclassification. The packaged validator rejects a Foundry component that is marked built or lacks
+a contract. Never count it as native coverage or simulate it as a live call.
 
 ## 1. Agentic platform and harness selection (do this first, every time)
 
@@ -48,7 +74,7 @@ Then:
 
 1. Read the complete classification `delivery_assessment`, deterministic `coverage`, canonical topology, and design model. Build a ledger containing every capability and topology component before any remote operation.
 2. Select the agentic platform first:
-   - Personal delegated work owned and privately consumed by one authenticated employee, with Cowork skills/plugins and tenant availability → **Microsoft Cowork**. Set `harness` to `null` and follow Section D.
+   - Personal delegated work owned and privately consumed by one authenticated employee, with Cowork skills/plugins and tenant availability → **Microsoft Cowork**. Set `harness` to `null` and follow Path D.
    - Managed agent authoring, channels, topics, flows, knowledge, tools, or connected agents in Copilot Studio → **Microsoft Copilot Studio**. Continue to harness selection.
 3. For Microsoft Copilot Studio only, choose the harness using these decision signals:
    - Requires file authoring, **skills**, **memory**, **MCP**, autonomous planning/recovery, or long multi-step processes across many tools → **GitHub Copilot harness**.
@@ -100,12 +126,12 @@ pac org who
 5. **Instructions must be model-agnostic, grounded, right-sized, and aligned** with the actual configured knowledge, tools, flows, connected agents, authentication, response format, and safety boundaries. After every change, re-align description + instructions.
 6. **Disable general web browsing and code interpreter unless explicitly required.**
 7. **For a Copilot Studio build, package every built component into exactly one governed Power Platform solution and one deployable ZIP beneath `<basePath>\output\build\packages`.** A Cowork-only or assessment-only run has no package and must provide configuration evidence. A mixed run has one package for all packageable components and records Cowork configuration separately.
-8. **Any component the primary build tool cannot create must be completed via the fallback path — never silently dropped** (see each section's fallback).
+8. **Any component the primary build tool cannot create must be completed via the fallback path — never silently dropped** (see the selected path's fallback).
 9. **Re-verify the live agent** (expected vs present) before claiming completion (Section 6).
 10. **Right-size the instructions** after full development: reference only components actually built; remove redundancy, contradictions, verbose platform-default restatement, and speculative edge cases. If you tighten them, re-align, re-publish, re-verify.
 11. **Use a governed Power Platform solution and custom publisher/prefix.** PAC-authored agents enter the solution from the start. For new-UI harnesses, use a solution context up front when supported; otherwise record the UI limitation and add the live agent plus required components to the governed solution before the first non-development deployment or package. Use environment variables and connection references for environment-specific values; never embed URLs, IDs, credentials, or secrets in instructions, flows, or source.
 12. **Use Microsoft Entra ID authentication by default.** Apply least privilege, end-user credentials for user-delegated connectors unless explicitly justified, source-system permissions, environment security groups, and Azure Key Vault-backed secret environment variables.
-13. **Apply the relevant current Microsoft guidance**, including Copilot Studio harnesses, architecture, quotas, security/governance, ALM, analytics, and all five Power Platform Well-Architected pillars. Do not claim that every Microsoft document was reviewed; record the specific current sources consulted for the scenario.
+13. **Apply the relevant current Microsoft guidance**, including Copilot Studio harnesses, architecture, quotas, security/governance, ALM, analytics, and all five Power Platform Well-Architected pillars. Do not claim that every Microsoft document was reviewed; record the specific current sources consulted for the scenario. The source list is in `resources\guidance-baseline.md`; open it only when a scenario decision needs a citation.
 14. **Build the strongest practical security and governance posture without making optional enterprise services universal blockers.** Assess DLP, sharing, security scan, audit, observability, capacity, Managed Environments, Microsoft Purview, Application Insights, and deployment controls. Implement controls required by policy, risk, availability, and the approved architecture. Record every applicable but unavailable, unapproved, or deferred control as a recommendation with rationale, priority, owner, and implementation path.
 
 ## Build artifact contract
@@ -325,311 +351,12 @@ editable. Record protection for mandatory rules even when they occur inside an e
 This is construction metadata, not behavioral optimization. GEPA requires a new validated build
 handoff if the contract is missing; do not silently retrofit a committed build artifact.
 
-For an Agency GitHub Copilot (GHCP) GEPA build, retain the Section B harness signature and exact
-configured skill/tool/knowledge inventory in construction evidence. Record the approved GHCP
-memory isolation mode (`disabled` or `reset-between-tests`) before initial evaluation. Use
-`disabled` only when
-memory is not required; otherwise verify a supported `reset-between-tests` procedure. Never
-disable a required capability just to make the shadow testable. If state cannot be isolated,
-record a GEPA blocker. Copilot Credits, native file/sandbox state and autonomous triggers must be
-checked for both the original and shadow agent before GEPA execution.
+GitHub Copilot-harness GEPA readiness is in Path B, step B5.
 
----
+## 5.5 Execute the selected build path
 
-## Section A — Standard-harness build (PAC CLI / classic authoring)
-
-Use for rule-based and predictable Standard-harness agents.
-
-### A1. Create after confirmation
-
-```powershell
-pac copilot init `
-  --name "<display name>" `
-  --publisher-prefix "<prefix>" `
-  --schema-name "<prefix_schemaName>" `
-  --instructions "Short initial instruction; full instructions follow after scaffold." `
-  --project-dir "<project-dir>" `
-  --template minimal `
-  --environment "<confirmed environment URL>"
-```
-
-Use a short one-line initial instruction (multiline CLI args can fail). Treat successful `init` as a remote import; record the agent ID and schema name. Ensure the agent is solution-aware under the approved custom publisher. Then update `agent.mcs.yml` with the Section 5 instruction contract and inspect `settings.mcs.yml` to align model knowledge, file analysis, semantic search, authentication, access, connectability, and orchestration mode with the approved design instead of accepting scaffold defaults.
-
-Prefer generative orchestration for new Standard-harness agents. Do not introduce classic orchestration or classic topics unless the approved design explicitly requires migration/compatibility behavior and the rationale is recorded.
-
-Disable capabilities unless required:
-
-```yaml
-gptCapabilities:
-  webBrowsing: false
-  codeInterpreter: false
-```
-
-### A2. Add only approved components
-
-Knowledge files go under `<project-dir>\knowledge\`. Patterns:
-
-```yaml
-# SharePoint
-kind: KnowledgeSourceConfiguration
-source: { kind: SharePointSearchSource, site: <verified URL> }
-```
-```yaml
-# Public website (Bing grounding — affects compliance boundary)
-kind: KnowledgeSourceConfiguration
-source: { kind: PublicSiteSearchSource, site: <verified URL> }
-```
-
-Do not use `PublicWebsiteSearchSource`. For Dataverse, verify Dataverse Search, table permissions, search config, and Quick Find columns. If PAC-authored YAML for a source fails, configure it through the Copilot Studio UI, then pull and use the platform-generated YAML. Add nothing the approved design does not require.
-
-For every action/connector/flow, apply Section 5.3 descriptions and Section 4 resilience controls. Use environment variables and connection references, configure end-user credentials unless an approved service identity is required, and keep secrets in Key Vault-backed environment variables. Configure Application Insights/correlation telemetry when required or approved; otherwise add it to the recommendation backlog.
-
-### A3. Push, publish, verify
-
-```powershell
-pac copilot push --project-dir "<project-dir>"
-pac copilot publish --bot "<schema name or agent ID>" --environment "<confirmed environment URL>"
-pac copilot list --environment "<confirmed environment URL>"
-```
-
-Before publishing the build for evaluation, run the available construction/security checks, resolve build-breaking findings, and record non-blocking recommendations. Confirm Published/Active/Provisioned — do not rely only on exit code. After any UI change, `pac copilot pull` and confirm it did not drift the aligned instructions. Behavioral scoring remains out of scope for this skill.
-
-### A4. Browser fallback (after the first publish)
-
-Some components PAC cannot create/upload: **file/document knowledge (PDF/DOCX uploads)**, **agent flows / Power Automate flows and connection references**, **channels**, and the agent **Details-page Description** field. Procedure: isolate (remove only the failing local definition so CLI-supported components publish), complete the first publish, then open the agent in Copilot Studio for the confirmed environment via browser automation and finish each pending component (upload files and wait for indexing; build flows and bind connections; set the Details description; add approved channels). Then `pac copilot pull`, reconcile, re-publish, re-verify.
-
-### A5. Package
-
-```powershell
-pac copilot pack --publisher-prefix "<prefix>" --project-dir "<basePath>\output\build\project\<schemaName>" --solution-name "<solution name>" --output-path "<basePath>\output\build\packages"
-```
-
-If `pack` rejects the workspace, fall back to `pac solution export --name "<solution unique name>" --path "<output folder>" --overwrite`. Keep the unpacked source project and produce exactly one deployable ZIP using the managed state required by deployment policy. Confirm the `.zip` exists, inspect solution contents and missing dependencies, and record its absolute path.
-
----
-
-## Section B — GitHub Copilot-harness build
-
-Use this path for every currently supported GitHub Copilot-harness composition. Component types are composable, not mutually exclusive: build an instructions-only agent, or any required combination of knowledge, tools, workflows, skills, memory, file capabilities, and connected agents. Build exactly the non-empty component set defined by the validated classification and design; never force unnecessary components and never omit a required component because another component is present.
-
-### B0. Resolve the component matrix and dependency graph
-
-Before creation, build one inventory row for every deployable agent:
-
-| Component | Supported composition |
-|---|---|
-| Instructions | Required for every agent |
-| Knowledge | None, one source, or multiple public website, SharePoint, OneDrive, Dataverse, uploaded-file, or supported connector sources |
-| Tools | None, or any supported combination of modern Workflow, connector, MCP, REST API, computer use, prompt, and other GitHub-harness tools |
-| Skills | None, one, or multiple focused uploaded/generated skills |
-| Memory | Off by default; enable only when required |
-| Connected agents | None for a single agent; one or more separately authored GitHub-harness agents that are packaged into the same scenario solution |
-
-For a multi-agent solution:
-
-1. Create a directed dependency graph with the user-facing parent as the root.
-2. Give every child one domain responsibility, its own functional name, instructions, knowledge, skills, tools, source workspace, and lifecycle boundary. All scenario agents still belong to the same final Power Platform solution.
-3. Build and publish leaves before parents. Never connect an unpublished child.
-4. Require every connected child to pass the same GitHub-harness signature checks as the parent; never connect a classic/Standard agent by mistake.
-5. Define a distinct ≤50-word routing description for every connection. The parent must be the only agent that responds to the user; every delegated task tells the child to return findings only.
-
-### B1. Verify PAC support and create with `cli-copilot`
-
-Prefer the PAC `cli-copilot` path because it creates a governed, sync-ready workspace that can be pulled, diffed, packaged, and deployed. Before the first remote write:
-
-```powershell
-pac copilot init help
-```
-
-Require the help output to expose `--authoring-mode` and `cli-copilot`. Create a local disposable scaffold beneath the build run, inspect it, then delete or retain it as evidence:
-
-```powershell
-pac copilot init `
-  --name "<functional display name>" `
-  --publisher-prefix "<prefix>" `
-  --authoring-mode cli-copilot `
-  --project-dir "<basePath>\output\build\evidence\cli-scaffold-check"
-```
-
-The scaffold must contain:
-
-```yaml
-configuration:
-  authoringModel: CliCopilot
-  recognizer:
-    kind: CLICopilotRecognizer
-template: cliagent-1.0.0
-```
-
-For every parent or child, create a separate remote workspace:
-
-```powershell
-pac copilot init `
-  --name "<functional display name>" `
-  --publisher-prefix "<prefix>" `
-  --schema-name "<prefix_functionalSchemaName>" `
-  --instructions "<short one-line bootstrap instruction>" `
-  --authoring-mode cli-copilot `
-  --project-dir "<basePath>\output\build\project\<schemaName>" `
-  --environment "<verified environment URL>"
-```
-
-Record the agent ID and schema name returned by PAC. Immediately inspect the live-synced `settings.mcs.yml`; stop if `authoringModel`, recognizer, or template does not match the GitHub-harness signature. Replace the bootstrap instruction with the Section 5 contract, then use `pac copilot push` and `pac copilot pull` to verify persistence. Use the new Build UI only for component types PAC cannot author.
-
-When PAC lacks `cli-copilot`, use `https://copilotstudio.preview.microsoft.com/environments/<environment-id>/agents/new`, verify browser identity and environment, create the GitHub-harness agent, and then clone/pull it into the governed project directory before adding components.
-
-### B2. Implement every required component type
-
-#### Knowledge
-
-- Add each exact validated source through Build → Knowledge.
-- Public website URLs must satisfy the current picker depth rules; never broaden to general web search to work around a rejected URL.
-- For SharePoint, OneDrive, and Dataverse, verify tenant/site/table scope, runtime identity, source permissions, indexing/readiness, Dataverse Search and Quick Find configuration where applicable.
-- For uploaded files, wait for upload and indexing to complete.
-- Keep `Search all websites` off unless the design explicitly requires general web search.
-- Configured knowledge is available to Copilot Studio orchestration by default. Do not enumerate every source in instructions. Add instruction text only for evidence-backed priority, conflict resolution, scope, freshness, citation, access, or missing-evidence behavior.
-
-#### Skills
-
-- Create a focused `SKILL.md` with YAML frontmatter (`name`, `description`), one responsibility, typed tool expectations, explicit failure behavior, and no duplicated parent instructions.
-- Upload the file or a ZIP whose root contains `SKILL.md`.
-- Verify the saved workspace contains `behaviors\<name>*.mcs.yml` with `kind: InlineAgentSkill`.
-
-#### Workflow tools
-
-1. Create a modern GitHub-harness Workflow from the Workflows surface.
-2. Use `When an agent calls the workflow`; do not substitute a Standard agent flow.
-3. Add narrow typed inputs with descriptions and required fields.
-4. Use only the necessary workflow nodes: functions, variables, branching, loops, connectors, human review, agents, or AI actions. An Agent node is optional, not mandatory.
-5. Configure deterministic action ordering and explicit error paths.
-6. Configure `Respond to the agent` with non-empty typed success, partial, and error outputs. Wire outputs to actual upstream action values.
-7. Never return placeholder, timestamp-invented, or success-shaped receipt IDs. If the downstream integration is not implemented, return an explicit blocked/not-integrated result.
-8. Save and publish the workflow, then add it to the owning agent through Build → Tools → Workflows.
-9. Pull the agent and verify both `capabilities\tools\*.mcs.yml` with `kind: WorkflowTool` and `workflows\<name>-<id>\workflow.json`.
-
-#### Other tools
-
-- Add connector, MCP, REST API, computer-use, prompt, or other supported tools only when the design selects that creation method.
-- Do not substitute a generic connector or MCP server when the required tool is a workflow.
-- Verify exact inputs, outputs, authentication, connection references, permissions, timeouts, retry/idempotency, side effects, and error behavior.
-
-#### Connected agents
-
-- Publish each child, refresh the parent agent picker, then connect it using an exact, distinct routing description.
-- Verify the parent workspace contains one `ConnectedAgentTool` definition per child under `capabilities\tools`.
-- Keep child knowledge and tools focused on its domain. Avoid duplicate knowledge across children unless the architecture explicitly requires overlap.
-
-#### Memory and native file capabilities
-
-- Enable memory only when the design specifies its purpose, allowed data, retention/reset behavior, transparency, and evaluation scope.
-- Configure native Word, Excel, PowerPoint, and PDF capabilities only when required and verify the corresponding live capability rather than relying on harness defaults.
-
-### B3. Persist descriptions and instructions
-
-Persist a functional ≤50-word description wherever the UI exposes it. Connected-agent routing always requires a description. If the preview UI does not expose a primary description, use a supported API/classic path when available; otherwise record the limitation as a blocker. After every component change, re-align instructions with exact live component names without restating platform-default knowledge behavior.
-
-When a rich-text instruction edit is required, use real keyboard insertion rather than Playwright `fill()`, then Save, reload, and verify the Dataverse instruction segment:
-
-```javascript
-const editor = page.getByRole('textbox', { name: 'Agent instructions' });
-await editor.click();
-await page.keyboard.press('Control+A');
-await page.keyboard.insertText(instructions);
-```
-
-### B4. Publish, pull, verify, and package one scenario solution
-
-Publish every leaf agent first and the parent last. Pull and verify each source workspace independently:
-
-```powershell
-pac copilot list --environment "<verified environment URL>"
-pac copilot pull --project-dir "<basePath>\output\build\project\<schemaName>"
-```
-
-Require Published/Active/Provisioned and verify the pulled GitHub workspace:
-
-- `settings.mcs.yml`: `CliCopilot`, `CLICopilotRecognizer`, and `cliagent-1.0.0`
-- `behaviors\`: every expected `InlineAgentSkill`
-- `capabilities\knowledge\`: every expected knowledge source
-- `capabilities\tools\`: every expected `WorkflowTool`, `ConnectedAgentTool`, connector, MCP, REST, or other tool
-- `workflows\`: every expected workflow definition
-
-Semantically inspect every `workflow.json`: input and response schemas are non-empty when data is required, outputs are wired to real action values, failure paths are explicit, and receipts cannot be fabricated. Treat missing integration or placeholder output as a blocked build.
-
-Create or resolve one functional, scenario-level unmanaged solution in the verified environment. Its name describes the scenario capability and must not use the company/customer name. Add every live agent to that same solution with required components:
-
-```powershell
-pac solution add-solution-component `
-  --environment "<verified environment URL>" `
-  --solutionUniqueName "<functional scenario solution>" `
-  --component "<agent-id>" `
-  --componentType bot `
-  --AddRequiredComponents
-```
-
-Repeat for the parent and every child. `--AddRequiredComponents` is necessary but not sufficient proof: inspect the live solution inventory and ensure every skill, knowledge source, workflow, tool, connection reference, environment variable, and connected-agent dependency is included. Add any missing required component explicitly using its verified component identity and type.
-
-Export exactly one deployable ZIP:
-
-```powershell
-pac solution export `
-  --environment "<verified environment URL>" `
-  --name "<functional scenario solution>" `
-  --path "<basePath>\output\build\packages\<functional-scenario-name>.zip" `
-  --overwrite
-```
-
-Choose the managed state required by the deployment policy, but produce one deployable ZIP for the run. Retain unpacked/source projects rather than additional deployable ZIP variants.
-
-Inspect the single ZIP and require all expected agents, bot components, skills, knowledge, tools, workflows, connection references, environment variables, and dependencies. Reject a ZIP that contains only the parent, only one child, or unresolved `MissingDependencies`.
-
-Create `agent-solution-manifest.json` containing the scenario solution identity, the single package path/hash, primary agent, every child ID/schema/role, relationships, deployment order, project paths, and per-agent component inventories. A single-agent build uses the same manifest with one agent and no relationships.
-
----
-
-## Section C — Copilot chat-harness build (Microsoft 365 Copilot agent page)
-
-Use when the selected runtime is the Copilot chat harness. Do not create a Standard-harness custom agent and infer that adding the Microsoft 365 channel changes its harness.
-
-### C1. Create after confirmation
-
-Open Copilot Studio for the verified environment. Verify the browser identity/tenant matches the PAC-confirmed user/tenant and the environment picker matches the verified environment. Record both; on any mismatch, stop and report it before the first remote Save/Create. When they match, proceed.
-
-After confirmation:
-
-1. Select **Agents** in the sidebar.
-2. Select **Microsoft 365 Copilot** from the agent list.
-3. On the **Agents** card, select **Add**.
-4. Set a representative name (current limit: 42 characters), a ≤50-word routing description, the Section 5 instructions, and approved suggested prompts.
-5. Add approved SharePoint or Copilot/Graph connector knowledge. Web browsing remains off unless explicitly approved.
-6. Select **Create**, record the agent ID/resource identity, save/reload, and verify the instructions and description persisted.
-
-This starting surface creates an **agent for Microsoft 365 Copilot** powered by the Copilot chat harness. It is different from publishing a custom Standard-harness agent to the Teams + Microsoft 365 channel.
-
-### C2. Add bounded tools and knowledge
-
-Copilot chat-harness agents can use approved prompts, agent flows, computer use, custom connectors, MCP, and REST API tools where the tenant/UI supports them. Apply Sections 4 and 5.3 to each tool. If the design grows into GitHub-exclusive skills, memory, native Office/PDF file creation/editing, long autonomous planning/recovery, or external-customer publishing, stop and reassess the harness instead of forcing the capability into this path.
-
-SharePoint knowledge uses the runtime user's permissions. Verify site/library scope, permissions, freshness, and missing-evidence behavior. For each tool, verify user versus maker authentication, narrow inputs, descriptions, completion output, side effects, confirmation, error behavior, and first-run connection experience.
-
-### C3. Publish, deploy internally, verify, and package
-
-Publish from the agent overview. Complete the catalog information and availability options required by the organization's Microsoft 365/Teams catalog and admin policy. This harness publishes to internal users; verify availability in Microsoft 365 Copilot/Teams with an authorized test user.
-
-Use supported PAC/solution tooling to add the live bot and required components to the governed solution before non-development deployment or packaging. If the preview surface exposes no supported solution operation, record the limitation and use the documented tenant-supported export path; never relabel a Standard-harness artifact as a Copilot chat-harness package. Inspect dependencies and retain source and managed release artifacts as required.
-
----
-
-## Section D — Microsoft Cowork configuration
-
-Microsoft Cowork is an independent agentic platform/tool, not a Copilot Studio harness. Use Cowork only when the classifier marks the capability buildable and current tenant evidence confirms a reproducible configuration path, required plugins or skills, identity behavior, governance, and user availability. Persist `agenticPlatform: Microsoft Cowork` and `harness: null`.
-
-1. Verify browser identity, tenant, licensing, and product availability before saving configuration.
-2. Configure only the classified skills, plugins, data access, and delegated-work boundaries.
-3. Store screenshots or exported configuration evidence beneath `build\evidence`.
-4. Verify user-visible simulation disclosures, permissions, and the actual delegated result without claiming shared-application behavior.
-5. When no supported package mechanism exists, use `buildMode: cowork-configuration`, emit no ZIP, and record portability as a production-readiness gap.
-6. If Cowork is unavailable or differs from the classification, mark the component blocked or deferred and recalculate coverage. Do not substitute Copilot Studio without classifier review.
+Open the path file selected from the build path registry (Section 0) and complete it. Apply
+Sections 4 and 5 to every component it creates, then return here for Sections 6–8.
 
 ---
 
@@ -730,6 +457,7 @@ Write all required files from the Build artifact contract. Keep secrets/tokens o
   "simulationRegister": [],
   "manualDemoSteps": [],
   "deferredComponents": [],
+  "futurePlatformContracts": [],
   "productionReadinessGaps": [],
   "demoScript": [],
   "requiredCustomerInputs": [],
@@ -771,72 +499,16 @@ Write all required files from the Build artifact contract. Keep secrets/tokens o
 
 ## 8. Completion checklist
 
-Do not mark complete until:
+Do not mark complete until every item holds:
 
-- The **agentic platform was selected** with a recorded rationale and billing model; a harness was selected only for Copilot Studio, and the matching build path was used.
-- Platform-specific and, where applicable, harness-specific billing/capacity, publishing, exclusive-capability, and quota gates passed.
-- Authentication and the active environment were checked and matched the configured target exactly before any remote write.
-- Environment type, security group, custom publisher, and solution boundary were confirmed; Managed Environment applicability was implemented or recorded as a recommendation.
-- Every primary and child agent name is functional, requirement-specific, and free of company/customer/tenant/department/brand names; schema names are stable and descriptions are meaningful, ≤50 words, persisted remotely, and verified.
-- Instructions pass Section 5 construction checks: model-agnostic, exact-component aligned, grounded, injection-resistant, no hidden-reasoning requests, right-sized, versioned, persisted, and hashed.
-- Capability/scaffold defaults were reviewed (web browsing / code interpreter / memory).
-- All five Power Platform Well-Architected pillars have recorded design decisions and no required quality attribute is left implicit.
-- Peak throughput, quotas, Copilot Credits, p50/p95 latency, availability, error-rate, load, and cost targets were defined and included in the evaluator handoff; the builder did not score them.
-- Every external dependency has timeout, transient retry/backoff, idempotency, fallback, escalation, monitoring, and owner.
-- Required Entra authorization, source permissions, DLP, and secret protections were implemented; applicable Purview/audit, security-scan, and responsible-AI controls were implemented or recorded as recommendations.
-- Copilot Studio analytics, Application Insights, correlation telemetry, alerts, dashboard, runbook, retention, and capacity monitoring were implemented where required/approved; remaining applicable controls are explicit recommendations.
-- Push/publish for evaluator access succeeded in the confirmed environment; Published status was verified.
-- Every component the primary tool could not create was completed via fallback (browser for the new UI; browser/UI for PAC) or recorded as an explicit accepted blocker — nothing silently missing.
-- Every GitHub-harness workspace passed the `CliCopilot`/`CLICopilotRecognizer`/`cliagent-1.0.0` signature check.
-- Every Copilot Studio or mixed scenario was exported as exactly one Power Platform solution ZIP, and `agent-solution-manifest.json` proves that the package contains all agents, relationships, projects, workflows, tools, skills, knowledge, connection references, environment variables, and required dependencies.
-- For Cowork-only or assessment-only runs, no ZIP was fabricated; configuration evidence and portability limitations were recorded instead.
-- Every classifier topology component has exactly one actual disposition, and every simulation has user disclosure, isolated test data, verification, and a production replacement path.
-- Planned and actual native and PoC coverage are recorded, and every variance is explained.
-- The deployed agent was re-verified against the expected-vs-present checklist and the counts match.
-- Unmanaged source and required managed deployment artifacts were exported to the configured output folder, inspected for content/dependencies, and recorded; UI changes were pulled locally.
-- Every required Build contract artifact exists under `<basePath>\output\build`, `build-manifest.json` contains verified relative hashes/sizes, and the packaged validator returns `passed`.
-- No behavioral evaluation, scoring, regression-baseline creation, or evaluation-driven optimization was performed by the builder.
-
-## 9. Reusable request pattern
-
-```text
-Build an agentic solution for this scenario: [scenario].
-First determine whether Microsoft Copilot Studio or Microsoft Cowork is the correct agentic platform and explain the choice and billing implication. Only for Copilot Studio, select GitHub Copilot, Standard, or Copilot chat as the harness. For Cowork set harness to null. Then verify the platform-specific authenticated target and stop on mismatch.
-Before building, define the reusable component architecture, quality decisions, SLOs/capacity, resilience, security/governance, observability, lifecycle, and evaluator handoff targets. Build through the selected platform path. Create and persist a discoverable description and right-sized instruction contract aligned with every live component. Complete unsupported functional components via fallback, record deferred controls, verify construction, export only platform-supported artifacts, and produce the builder handoff. Do not evaluate or optimize the agent.
-```
-
-## 10. Authoritative guidance baseline
-
-Use the current versions of the relevant sources; record the pages and review date for each build.
-
-### Microsoft
-
-- Harness selection: https://learn.microsoft.com/en-us/microsoft-copilot-studio/harnesses-overview
-- Copilot chat-harness authoring: https://learn.microsoft.com/en-us/microsoft-copilot-studio/microsoft-365-copilot-extend-with-agents
-- Architecture: https://learn.microsoft.com/en-us/microsoft-copilot-studio/guidance/architecture-overview
-- Quotas and throughput: https://learn.microsoft.com/en-us/microsoft-copilot-studio/requirements-quotas and https://learn.microsoft.com/en-us/microsoft-copilot-studio/guidance/plan-agent-throughput-rate-limits
-- Security/governance, DLP, authentication, scan, and audit:  
-  https://learn.microsoft.com/en-us/microsoft-copilot-studio/security-and-governance  
-  https://learn.microsoft.com/en-us/microsoft-copilot-studio/admin-data-loss-prevention  
-  https://learn.microsoft.com/en-us/microsoft-copilot-studio/configuration-end-user-authentication  
-  https://learn.microsoft.com/en-us/microsoft-copilot-studio/security-scan  
-  https://learn.microsoft.com/en-us/microsoft-copilot-studio/admin-logging-copilot-studio
-- ALM, analytics, and operations:  
-  https://learn.microsoft.com/en-us/microsoft-copilot-studio/guidance/alm  
-  https://learn.microsoft.com/en-us/microsoft-copilot-studio/analytics-overview  
-  https://learn.microsoft.com/en-us/power-platform/admin/overview-integration-application-insights
-- Power Platform Well-Architected pillars: https://learn.microsoft.com/en-us/power-platform/well-architected/pillars
-
-### Anthropic instruction and tool-design principles
-
-- Prompting best practices: https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices
-- Tool definitions: https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools
-- Prompt-injection guardrails: https://platform.claude.com/docs/en/test-and-evaluate/strengthen-guardrails/mitigate-jailbreaks
-- Context and tool engineering: https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents and https://www.anthropic.com/engineering/writing-tools-for-agents
-
-### OpenAI instruction and evaluation principles
-
-- Prompt engineering and structure: https://developers.openai.com/api/docs/guides/prompt-engineering
-- Function/tool design: https://developers.openai.com/api/docs/guides/function-calling
-- Safety and instruction hierarchy: https://model-spec.openai.com/2025-02-12.html
-- Reasoning guidance: https://developers.openai.com/api/docs/guides/reasoning-best-practices
+- Platform and, for Copilot Studio only, harness selected with rationale, billing, and passed platform/harness gates (Section 1); the matching build path was used.
+- The authenticated target matched the configured environment before any remote write; environment type, security group, custom publisher, solution boundary, and Managed Environment applicability were recorded (Section 2).
+- Every agent name, schema name, ≤50-word description, and instruction set passes Sections 2 and 5 and is persisted, versioned, hashed, and re-verified; capability defaults (web browsing, code interpreter, memory) were reviewed.
+- Section 4 decisions exist for all five pillars; SLO/capacity/cost targets are in the evaluator handoff and were not scored; every external dependency has timeout, retry/backoff, idempotency, fallback, escalation, monitoring, and owner.
+- Required identity, DLP, secret, audit, security-scan, and telemetry controls are implemented; other applicable controls are explicit recommendations.
+- The selected path completed: Published/Active verified, fallbacks finished or recorded as accepted blockers, and GitHub-harness signature checks passed where applicable.
+- Copilot Studio or mixed: exactly one solution ZIP, proven complete by `agent-solution-manifest.json`. Cowork-only or assessment-only: no ZIP; configuration evidence and portability gaps recorded.
+- Every classifier topology component has exactly one disposition; simulations meet Section 1.2; planned versus actual coverage and variances are recorded; every Foundry component carries its integration contract.
+- Section 6 expected-versus-present counts match.
+- Every Build contract artifact exists under `<basePath>\output\build` and the packaged publisher returned `passed`.
+- No behavioral evaluation, scoring, regression-baseline creation, or evaluation-driven optimization was performed.

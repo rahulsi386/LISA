@@ -6,6 +6,7 @@ The implementation is shared; see `lifecycle_artifacts.py` in the local-skills r
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -25,6 +26,39 @@ __all__ = [
     "validate",
     "validate_classification_reconciliation",
 ]
+
+# Roadmap platforms LISA designs for but does not build yet.
+FUTURE_PLATFORM = re.compile(r"\b(foundry|agent framework)\b", re.IGNORECASE)
+
+
+def validate_future_platform_contracts(classification: dict, handoff: dict) -> None:
+    future_ids = {
+        item["id"]
+        for item in classification.get("solution_topology", {}).get("components", [])
+        if FUTURE_PLATFORM.search(
+            f"{item.get('product_service', '')} {item.get('hosting_runtime', '')}"
+        )
+    }
+    if not future_ids:
+        return
+    built = sorted(
+        item["componentId"]
+        for item in handoff["componentDispositions"]
+        if item["componentId"] in future_ids
+        and item["actualDisposition"] in {"built", "configured"}
+    )
+    if built:
+        raise ArtifactError(
+            f"Roadmap-platform components cannot be built by LISA yet: {built}"
+        )
+    contracted = {
+        item["componentId"] for item in handoff.get("futurePlatformContracts", [])
+    }
+    missing = sorted(future_ids - contracted)
+    if missing:
+        raise ArtifactError(
+            f"Roadmap-platform components need futurePlatformContracts entries: {missing}"
+        )
 
 
 def validate_classification_reconciliation(root: Path) -> None:
@@ -61,6 +95,7 @@ def validate_classification_reconciliation(root: Path) -> None:
             f"missing={sorted(expected_component_ids - set(disposition_ids))}, "
             f"extra={sorted(set(disposition_ids) - expected_component_ids)}"
         )
+    validate_future_platform_contracts(classification, handoff)
 
     planned = classification.get("coverage", {})
     plan = handoff["classificationPlan"]

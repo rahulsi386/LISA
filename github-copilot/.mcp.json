@@ -19,19 +19,28 @@
         "-y",
         "@azure/mcp@latest",
         "server",
-        "start",
-        "--mode",
-        "namespace"
+        "start"
       ],
+      "tools": ["*"],
       "env": {
         "AZURE_MCP_COLLECT_TELEMETRY": "false"
       },
-      "description": "Full Azure MCP toolset for LISA. Use for the best practices, architectural guidance, and azure-specific service deployment."
+      "description": "Full Azure MCP toolset for LISA: Azure best practices, service limits, pricing, architecture guidance, and Azure-specific deployment research."
     },
-    "microsoft-learn": {
+    "ms-learn-mcp": {
       "type": "http",
       "url": "https://learn.microsoft.com/api/mcp",
-      "description": "Official Microsoft Learn documentation search, article retrieval, and code samples through the remote HTTPS MCP endpoint."
+      "description": "Official Microsoft Learn documentation search, article retrieval, and code samples through the remote streamable HTTP MCP endpoint."
+    },
+    "ms-icm-mcp": {
+      "type": "http",
+      "url": "https://icm-mcp-prod.azure-api.net/v1/",
+      "description": "Microsoft IcM incidents and known service issues for feasibility and risk research. Requires a Microsoft corporate identity; internal data only."
+    },
+    "ms-eng-hub-mcp": {
+      "type": "http",
+      "url": "https://mcp.eng.ms",
+      "description": "Microsoft Engineering Hub internal engineering guidance and known limitations. Requires a Microsoft corporate identity; internal data only."
     }
   }
 }

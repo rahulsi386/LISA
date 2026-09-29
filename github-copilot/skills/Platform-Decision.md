@@ -30,6 +30,7 @@ When this framework is used by the local `complexity-classifier`, `solution-desi
 - **Build-credit rule:** Only functionality genuinely implementable with an allowed tool contributes to native build coverage.
 - **Demonstration rule:** Explicitly disclosed simulations, static sample data, and manual PoC steps may contribute only to PoC demonstration coverage.
 - **Out-of-bound technologies:** Microsoft Foundry, Microsoft Agent Framework, custom services, and other technologies can describe a complete-solution dependency or future implementation path, but the local builder must not implement them or count them as native coverage.
+- **Foundry roadmap:** Microsoft Foundry agents are the next planned LISA build target. Until that build path ships, the builder reconciles each Foundry or Agent Framework component as deferred or blocked and records its integration contract (interface, identity, data boundary, owner, calling component) so it can be built later without reclassification.
 - **Honesty rule:** Never represent a mock, manual step, deferred dependency, or unsupported integration as a completed external action.
 
 For this profile, platform selection has two outputs:
