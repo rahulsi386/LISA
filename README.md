@@ -22,7 +22,7 @@ standalone, explicitly invoked `video-generator`.
 |---|---|---|---|
 | 1 | Analysis | `requirement-analyzer` | Traceable analysis and a structured evidence ledger |
 | 2 | Classification | `complexity-classifier` | Solution design, buildable coverage, complexity |
-| 3 | Design | `solution-designer` | Architecture and sequence diagrams |
+| 3 | Design | `solution-designer` | Business architecture, engineering architecture, sequence diagram, Architecture Review page |
 | 4 | Build | `agent-builder` | The built agent, package, and evidence |
 | 5 | Evaluation | `agent-evaluator` | Test results, scores, deployment gate |
 | 6 | Optimization | `agent-optimizer` | Instruction improvements with rollback safety |

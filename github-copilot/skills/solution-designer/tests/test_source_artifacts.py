@@ -51,6 +51,21 @@ class SourceArtifactTests(unittest.TestCase):
                  "type": "call", "implementationMode": mode, "phase": "Execution", "evidenceIds": ["E-002"]}
                 for mode in sources.MODES
             ],
+            "businessArchitecture": {
+                "headline": "Source stage test", "statement": "Business view for the source test.",
+                "cards": [
+                    {"id": "BIZ-ENTRY", "role": "entry", "code": "PEOPLE", "title": "Who starts the work",
+                     "tone": "slate", "lines": ["Requester"], "componentIds": ["requester"], "capabilityIds": []},
+                    {"id": "BIZ-WORK", "role": "capability", "code": "WORK", "title": "What it does",
+                     "tone": "blue", "lines": ["Exact agent name"], "componentIds": ["agent"], "capabilityIds": []},
+                    {"id": "BIZ-OUTCOME", "role": "outcome", "code": "OUTCOME", "title": "What the business gets",
+                     "tone": "green", "lines": ["Exact result"], "componentIds": [], "capabilityIds": []},
+                ],
+                "flows": [
+                    {"from": "BIZ-ENTRY", "to": "BIZ-CAPABILITIES", "label": "Request", "tone": "blue"},
+                    {"from": "BIZ-CAPABILITIES", "to": "BIZ-OUTCOME", "label": "Delivered outcome", "tone": "green"},
+                ],
+            },
         }
         self.model["relationships"].append({
             "id": "r-self", "from": "agent", "to": "agent", "label": "Reason locally",
@@ -91,14 +106,16 @@ class SourceArtifactTests(unittest.TestCase):
             report["stageDetails"][1]["inputSha256"] = report["sources"][kind]["sha256"]
         path.write_text(json.dumps(report), encoding="utf-8")
 
-    def test_cli_creates_two_editable_pages_then_mermaid_with_hashed_stage_order(self):
+    def test_cli_creates_three_editable_pages_then_mermaid_with_hashed_stage_order(self):
         report = self.cli()
         self.assertEqual(report, self.cli("validate"))
         self.assertEqual(report["stages"], ["drawio", "mermaid"])
         self.assertEqual([stage["order"] for stage in report["stageDetails"]], [1, 2])
         self.assertEqual(report["artifactOrder"], [
-            "Design_Source_Test.drawio", "SA_Source_Test.mmd", "SD_Source_Test.mmd", "source-report.json",
+            "Design_Source_Test.drawio", "BA_Source_Test.mmd", "SA_Source_Test.mmd", "SD_Source_Test.mmd",
+            "source-report.json",
         ])
+        self.assertEqual(report["coverage"]["businessCardIds"], ["BIZ-ENTRY", "BIZ-WORK", "BIZ-OUTCOME"])
         self.assertEqual(report["model"]["sha256"], hashlib.sha256(self.model_path.read_bytes()).hexdigest())
         for entry in report["sources"].values():
             self.assertEqual(entry["sha256"], sources.sha256(self.output / entry["path"]))
@@ -106,7 +123,11 @@ class SourceArtifactTests(unittest.TestCase):
         self.assertEqual(report["stageDetails"][1]["inputSha256"], report["sources"]["drawio"]["sha256"])
         document = ET.parse(self.source_path("drawio")).getroot()
         self.assertEqual([page.get("name") for page in document], list(sources.PAGES))
-        for index, page in enumerate(document):
+        business = document[0].findall("mxGraphModel/root/mxCell")
+        self.assertEqual([cell.get("lisaId") for cell in business if cell.get("lisaRole") == "business-card"],
+                         ["BIZ-ENTRY", "BIZ-WORK", "BIZ-OUTCOME"])
+        self.assertEqual(len([cell for cell in business if cell.get("lisaRole") == "business-flow"]), 2)
+        for index, page in enumerate(document[1:]):
             cells = page.findall("mxGraphModel/root/mxCell")
             identities = {cell.get("id") for cell in cells}
             nodes = [cell for cell in cells if cell.get("lisaRole") == ("component" if index == 0 else "participant")]

@@ -7,6 +7,8 @@ const { pathToFileURL } = require("node:url");
 
 const sha256 = bytes => crypto.createHash("sha256").update(bytes).digest("hex");
 const readJson = async file => JSON.parse(await fs.readFile(file, "utf8"));
+// [review key, file prefix, architecture view toggle]
+const DIAGRAMS = [["business", "BA", "view-business"], ["architecture", "SA", "view-engineering"], ["sequence", "SD", null]];
 
 async function assertLocal(file, root) {
   const relative = path.relative(root, file);
@@ -78,7 +80,7 @@ async function collectBrowserEvidence(page, args) {
   const slug = model.scenarioSlug;
   if (!/^[A-Za-z0-9_]+$/.test(slug)) throw new Error("Unsafe scenario slug");
   const names = ["design-model.json", "preview.html",
-    ...["SA", "SD"].flatMap(prefix => ["svg", "png"].map(ext => `${prefix}_${slug}.${ext}`))];
+    ...DIAGRAMS.flatMap(([, prefix]) => ["svg", "png"].map(ext => `${prefix}_${slug}.${ext}`))];
   const artifact_sha256 = {};
   for (const name of names) {
     await assertLocal(path.join(root, name), root);
@@ -93,7 +95,8 @@ async function collectBrowserEvidence(page, args) {
   const previewUrl = pathToFileURL(path.join(root, "preview.html")).href;
   await page.goto(previewUrl);
   const diagrams = {};
-  for (const [key, prefix] of [["architecture", "SA"], ["sequence", "SD"]]) {
+  for (const [key, prefix, toggle] of DIAGRAMS) {
+    if (toggle) await page.locator(`label[for="${toggle}"]`).click();
     const image = page.locator(`#${key} img`);
     const checkbox = page.locator(`#${key}-native`);
     await checkbox.uncheck();
@@ -113,11 +116,11 @@ async function collectBrowserEvidence(page, args) {
   }
   const downloadHrefs = await page.locator(".downloads a").evaluateAll(links => links.map(link => link.getAttribute("href")));
   const expectedLinks = names.filter(name => /\.(svg|png)$/.test(name));
-  const sourceLinks = [`SA_${slug}.mmd`, `SD_${slug}.mmd`];
+  const sourceLinks = DIAGRAMS.map(([, prefix]) => `${prefix}_${slug}.mmd`);
   const hrefs = downloadHrefs.filter(href => expectedLinks.includes(href));
-  if (hrefs.length !== 4 || new Set(hrefs).size !== 4 ||
+  if (hrefs.length !== 6 || new Set(hrefs).size !== 6 ||
       downloadHrefs.some(href => !expectedLinks.includes(href) && !sourceLinks.includes(href))) {
-    throw new Error("Expected four distinct sibling diagram links and optional sibling Mermaid links");
+    throw new Error("Expected six distinct sibling diagram links and optional sibling Mermaid links");
   }
   const screenshots = {};
   async function capture(key, asset) {
@@ -146,7 +149,7 @@ async function collectBrowserEvidence(page, args) {
     });
     if (!decoded) throw new Error(`Diagram link could not be decoded: ${href}`);
     links.push({ href, sha256: artifact_sha256[href], opened: true, decoded });
-    if (href.endsWith(".png")) await capture(href.startsWith("SA_") ? "architecture" : "sequence", href);
+    if (href.endsWith(".png")) await capture(DIAGRAMS.find(([, prefix]) => href.startsWith(`${prefix}_`))[0], href);
   }
   for (const name of names) {
     if (sha256(await fs.readFile(path.join(root, name))) !== artifact_sha256[name]) {
@@ -241,7 +244,7 @@ async function collectBrowserEvidenceInPage(page, args) {
   const slug = model.scenarioSlug;
   if (!/^[A-Za-z0-9_]+$/.test(slug)) throw new Error("Unsafe scenario slug");
   const names = ["design-model.json", "preview.html",
-    ...["SA", "SD"].flatMap(prefix => ["svg", "png"].map(ext => `${prefix}_${slug}.${ext}`))];
+    ...["BA", "SA", "SD"].flatMap(prefix => ["svg", "png"].map(ext => `${prefix}_${slug}.${ext}`))];
   const artifact_sha256 = {};
   for (const name of names) {
     artifact_sha256[name] = (await readFile(root + "\\" + name)).sha256;
@@ -262,7 +265,8 @@ async function collectBrowserEvidenceInPage(page, args) {
     });
   }
   const diagrams = {};
-  for (const [key, prefix] of [["architecture", "SA"], ["sequence", "SD"]]) {
+  for (const [key, prefix, toggle] of [["business", "BA", "view-business"], ["architecture", "SA", "view-engineering"], ["sequence", "SD", null]]) {
+    if (toggle) await page.locator(`label[for="${toggle}"]`).click();
     const image = page.locator(`#${key} img`);
     const checkbox = page.locator(`#${key}-native`);
     await checkbox.uncheck();
@@ -281,11 +285,11 @@ async function collectBrowserEvidenceInPage(page, args) {
   }
   const downloadHrefs = await page.locator(".downloads a").evaluateAll(links => links.map(link => link.getAttribute("href")));
   const expectedLinks = names.filter(name => /\.(svg|png)$/.test(name));
-  const sourceLinks = [`SA_${slug}.mmd`, `SD_${slug}.mmd`];
+  const sourceLinks = [`BA_${slug}.mmd`, `SA_${slug}.mmd`, `SD_${slug}.mmd`];
   const hrefs = downloadHrefs.filter(href => expectedLinks.includes(href));
-  if (hrefs.length !== 4 || new Set(hrefs).size !== 4 ||
+  if (hrefs.length !== 6 || new Set(hrefs).size !== 6 ||
       downloadHrefs.some(href => !expectedLinks.includes(href) && !sourceLinks.includes(href))) {
-    throw new Error("Expected four distinct sibling diagram links and optional sibling Mermaid links");
+    throw new Error("Expected six distinct sibling diagram links and optional sibling Mermaid links");
   }
   const screenshots = {};
   async function screenshot(key, viewed_asset) {
@@ -311,7 +315,7 @@ async function collectBrowserEvidenceInPage(page, args) {
     });
     if (!decoded) throw new Error("Diagram link could not decode");
     links.push({ href, sha256: artifact_sha256[href], opened: true, decoded });
-    if (href.endsWith(".png")) await screenshot(href.startsWith("SA_") ? "architecture" : "sequence", href);
+    if (href.endsWith(".png")) await screenshot(href.startsWith("BA_") ? "business" : href.startsWith("SA_") ? "architecture" : "sequence", href);
   }
   for (const name of names) {
     if ((await readFile(root + "\\" + name)).sha256 !== artifact_sha256[name]) throw new Error("Artifacts changed while inspecting");
@@ -363,7 +367,7 @@ async function emitMcpInvocation(runPath, outputPath) {
     await assertLocal(file, root);
     if (sha256(await fs.readFile(file)) !== expected) throw new Error(`Staged artifact changed: ${name}`);
   }
-  for (const name of ["browser-evidence.json", "inspection-architecture.png", "inspection-sequence.png", "inspection-preview.png"]) {
+  for (const name of ["browser-evidence.json", "inspection-business.png", "inspection-architecture.png", "inspection-sequence.png", "inspection-preview.png"]) {
     try { await assertLocal(path.join(root, name), root); }
     catch (error) { if (error.code !== "ENOENT") throw error; }
   }

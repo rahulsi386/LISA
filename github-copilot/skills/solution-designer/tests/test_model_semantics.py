@@ -31,15 +31,16 @@ def fixture_browser_evidence(module, run: dict, inspection: dict) -> None:
         raise AssertionError("Synthetic browser evidence may only be written beneath the owned tests directory")
     slug = run["scenario_slug"]
     context = module._json_load(root / "run-report.json")["inspectionContext"]
+    prefixes = {key: prefix for key, prefix, _ in module.DIAGRAM_KINDS}
     names = ["design-model.json", "preview.html"] + [
-        f"{prefix}_{slug}.{extension}" for prefix in ("SA", "SD") for extension in ("svg", "png")
+        f"{prefix}_{slug}.{extension}" for prefix in prefixes.values() for extension in ("svg", "png")
     ]
     hashes = {name: module._sha256_file(root / name) for name in names}
     screenshots, diagrams = {}, {}
-    for number, key in enumerate(("architecture", "sequence", "preview")):
+    for number, key in enumerate((*prefixes, "preview")):
         filename = f"inspection-{key}.png"
         (root / filename).write_bytes(fixture_png(color=110 + number))
-        asset = "preview.html" if key == "preview" else f"{'SA' if key == 'architecture' else 'SD'}_{slug}.png"
+        asset = "preview.html" if key == "preview" else f"{prefixes[key]}_{slug}.png"
         screenshots[key] = {"path": filename, "sha256": module._sha256_file(root / filename),
                             "width": 640, "height": 480, "viewed_asset": asset}
         if key != "preview":
@@ -117,6 +118,61 @@ class ModelSemanticTests(unittest.TestCase):
 
     def model(self, classification=None):
         return designer._build_design_model(FIXTURE, classification or topology_classification())
+
+    def test_business_view_groups_capabilities_and_keeps_human_decisions(self):
+        classification = topology_classification()
+        capabilities = classification["delivery_assessment"]["capabilities"]
+        capabilities[0].update(name="Answer policy questions", work_type="knowledge-retrieval", business_priority="must")
+        capabilities[1].update(name="Update analytics", work_type="deterministic-execution", business_priority="should")
+        classification["platform_assessment"] = {"decision_summary": "Copilot Studio is the first full fit."}
+        classification["agentic_suitability"] = {
+            "recommendation": "hybrid", "summary": "Judgment and rules both apply.",
+            "deterministic_alternative": "A scheduled flow.",
+        }
+        model = self.model(classification)
+        business = model["businessArchitecture"]
+        cards = {card["id"]: card for card in business["cards"]}
+        self.assertEqual(["CAP-CORE"], cards["BIZ-FIND-EXPLAIN"]["capabilityIds"])
+        self.assertEqual("CONFIGURE", cards["BIZ-FIND-EXPLAIN"]["tag"])
+        self.assertEqual(["Update analytics"], cards["BIZ-EXECUTE"]["lines"])
+        self.assertEqual("SAMPLE DATA", cards["BIZ-EXECUTE"]["tag"])
+        self.assertNotIn("BIZ-DECISION", cards)
+        self.assertEqual("Delivered outcome", business["flows"][1]["label"])
+        approval = copy.deepcopy(model)
+        approval["capabilityAssessments"][1]["build_contract"] = {"approval_required": True}
+        business = designer._business_architecture(approval)
+        cards = {card["id"]: card for card in business["cards"]}
+        self.assertEqual(["Approval before: Update analytics"], cards["BIZ-DECISION"]["lines"])
+        self.assertEqual(["Analyst", "Microsoft Teams"], cards["BIZ-ENTRY"]["lines"])
+        self.assertIn("External Analytics API", cards["BIZ-KNOWLEDGE"]["lines"])
+        self.assertIn("1 must, 1 should, 0 could capabilities", cards["BIZ-OUTCOME"]["lines"])
+        self.assertEqual(
+            [("BIZ-ENTRY", "BIZ-CAPABILITIES"), ("BIZ-CAPABILITIES", "BIZ-DECISION"), ("BIZ-DECISION", "BIZ-OUTCOME")],
+            [(flow["from"], flow["to"]) for flow in business["flows"][:3]],
+        )
+        self.assertIn("deterministic automation", business["statement"])
+        self.assertEqual("Copilot Studio is the first full fit.", model["decision"]["summary"])
+        self.assertEqual("hybrid", model["decision"]["suitability"]["recommendation"])
+
+    def test_business_view_must_trace_to_classified_components_and_capabilities(self):
+        model = self.model()
+        broken = copy.deepcopy(model)
+        broken["businessArchitecture"]["cards"][0]["componentIds"].append("invented")
+        with self.assertRaisesRegex(designer.DesignerError, "unknown components"):
+            designer._validate_model_semantics(broken)
+        broken = copy.deepcopy(model)
+        card = next(card for card in broken["businessArchitecture"]["cards"] if card["role"] == "capability")
+        card["capabilityIds"] = card["capabilityIds"][:1]
+        with self.assertRaisesRegex(designer.DesignerError, "Every classified capability"):
+            designer._validate_model_semantics(broken)
+        broken = copy.deepcopy(model)
+        broken["businessArchitecture"]["flows"].append({"from": "BIZ-ENTRY", "to": "BIZ-MISSING", "label": "x", "tone": "blue"})
+        with self.assertRaisesRegex(designer.DesignerError, "unknown or identical endpoint"):
+            designer._validate_model_semantics(broken)
+        broken = copy.deepcopy(model)
+        del broken["businessArchitecture"]
+        with self.assertRaisesRegex(designer.DesignerError, "schema error"):
+            designer._validate_model_semantics(broken)
 
     def test_runtime_does_not_inherit_external_sample_capability(self):
         model = self.model()

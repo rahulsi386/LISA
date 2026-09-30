@@ -391,9 +391,11 @@ class SolutionDesignerTests(unittest.TestCase):
             )
             self.assertEqual("passed", result["validation"])
             for path in (
+                result["business_architecture_diagram"],
                 result["solution_architecture_diagram"],
                 result["sequence_diagram"],
                 result["html_preview"],
+                result["renders"]["business_architecture_png"],
                 result["renders"]["solution_architecture_png"],
                 result["renders"]["sequence_png"],
             ):
@@ -423,11 +425,9 @@ class SolutionDesignerTests(unittest.TestCase):
             references = PreviewParser(preview_bytes.decode("utf-8")).resources()
             self.assertEqual(references, {
                 f"{kind}_{result['scenario_slug']}.{extension}"
-                for kind in ("SA", "SD") for extension in ("svg", "png")
+                for kind in ("BA", "SA", "SD") for extension in ("svg", "png", "mmd")
             } | {
                 f"Design_{result['scenario_slug']}.drawio",
-                f"SA_{result['scenario_slug']}.mmd",
-                f"SD_{result['scenario_slug']}.mmd",
             })
             self.assertTrue(all((artifact_root / name).is_file() for name in references))
             self.assertFalse(any(path.is_dir() for path in artifact_root.iterdir()))

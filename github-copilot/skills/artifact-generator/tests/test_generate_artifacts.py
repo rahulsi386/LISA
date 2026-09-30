@@ -140,6 +140,7 @@ The fixture uses a governed single-agent architecture.
                 ],
             },
         )
+        (artifacts / "business.png").write_bytes(b"png")
         (artifacts / "architecture.png").write_bytes(b"png")
         (artifacts / "sequence.png").write_bytes(b"png")
         write_json(
@@ -150,6 +151,7 @@ The fixture uses a governed single-agent architecture.
                 "validation": "passed",
                 "result": {
                     "renders": {
+                        "business_architecture_png": (artifacts / "business.png").relative_to(self.project).as_posix(),
                         "solution_architecture_png": (artifacts / "architecture.png").relative_to(self.project).as_posix(),
                         "sequence_png": (artifacts / "sequence.png").relative_to(self.project).as_posix(),
                     },
@@ -335,8 +337,11 @@ The fixture uses a governed single-agent architecture.
         self.assertNotIn("Core Artifact Inventory", markdown)
         self.assertNotIn("Source Markdown Register", markdown)
         self.assertNotIn("Persisted Agent Instructions", markdown)
+        self.assertIn("](solution-business-architecture.png)", markdown)
+        self.assertIn("### Engineering Architecture Diagram", markdown)
         self.assertIn("](solution-architecture.png)", markdown)
         self.assertIn("](solution-sequence.png)", markdown)
+        self.assertTrue((artifact_root / "solution-business-architecture.png").is_file())
         self.assertTrue((artifact_root / "solution-architecture.png").is_file())
         self.assertTrue((artifact_root / "solution-sequence.png").is_file())
         self.assertFalse((self.output / "solution-document.md").exists())

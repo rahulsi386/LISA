@@ -56,13 +56,14 @@ function Assert-Budget {
 
 $model = Get-Content -LiteralPath $ModelPath -Raw | ConvertFrom-Json
 $slug = [string]$model.scenarioSlug
+$baPath = Join-Path $designDirectory "BA_$slug.svg"
 $saPath = Join-Path $designDirectory "SA_$slug.svg"
 $sdPath = Join-Path $designDirectory "SD_$slug.svg"
 $previewPath = Join-Path $designDirectory 'preview.html'
 $validationPath = Join-Path $designDirectory 'validation-report.json'
 $renderPath = Join-Path $designDirectory 'render-report.json'
 $candidateReportPath = Join-Path $designDirectory 'candidate-report.json'
-$sourceNames = @("Design_$slug.drawio", "SA_$slug.mmd", "SD_$slug.mmd", 'source-report.json')
+$sourceNames = @("Design_$slug.drawio", "BA_$slug.mmd", "SA_$slug.mmd", "SD_$slug.mmd", 'source-report.json')
 
 $referenceManifest = Get-Content -LiteralPath $referenceManifestPath -Raw | ConvertFrom-Json
 $cacheAge = ([DateTimeOffset]::Now - [DateTimeOffset]::Parse([string]$referenceManifest.refreshedAt)).TotalDays
@@ -152,10 +153,11 @@ try {
         Select-Object -First 1)
     if ($selected.Count -gt 0) {
         $selectedLayoutProfile = $selected[0].profile
-        foreach ($name in @("SA_$slug.svg", "SD_$slug.svg", 'preview.html', 'diagram-manifest.json', 'validation-report.json')) {
+        foreach ($name in @("BA_$slug.svg", "SA_$slug.svg", "SD_$slug.svg", 'preview.html', 'diagram-manifest.json', 'validation-report.json')) {
             Copy-Item -LiteralPath (Join-Path $selected[0].directory $name) -Destination (Join-Path $designDirectory $name)
         }
         $manifest = Get-Content -LiteralPath (Join-Path $designDirectory 'diagram-manifest.json') -Raw | ConvertFrom-Json
+        $manifest.businessArchitecture = $baPath
         $manifest.solutionArchitecture = $saPath
         $manifest.sequenceDiagram = $sdPath
         $manifest.layoutQuality.candidateReport = 'candidate-report.json'
@@ -168,7 +170,7 @@ try {
     $remainingSeconds = [Math]::Floor($DeadlineSeconds - $stopwatch.Elapsed.TotalSeconds - 5)
     if ($remainingSeconds -lt 5) { throw 'Insufficient budget remains for rendering.' }
     $mark = $stopwatch.ElapsedMilliseconds
-    & (Join-Path $PSScriptRoot 'Render-Diagrams.ps1') -SvgPaths @($saPath, $sdPath) -OutputPath $renderPath -ProfileRoot (Join-Path $designDirectory '.browser-profiles') -TimeoutSeconds ([Math]::Min(45, $remainingSeconds)) | Out-Null
+    & (Join-Path $PSScriptRoot 'Render-Diagrams.ps1') -SvgPaths @($baPath, $saPath, $sdPath) -OutputPath $renderPath -ProfileRoot (Join-Path $designDirectory '.browser-profiles') -TimeoutSeconds ([Math]::Min(45, $remainingSeconds)) | Out-Null
     $phase.render = $stopwatch.ElapsedMilliseconds - $mark
     Assert-Budget
     $status = 'passed'
@@ -189,11 +191,12 @@ if ($selectedLayoutProfile -and (Test-Path -LiteralPath $validationPath -PathTyp
         candidates = $candidates.ToArray()
     } | ConvertTo-Json -Depth 50), $Utf8)
 }
+$pngBa = [IO.Path]::ChangeExtension($baPath, '.png')
 $pngSa = [IO.Path]::ChangeExtension($saPath, '.png')
 $pngSd = [IO.Path]::ChangeExtension($sdPath, '.png')
-if (-not (Test-Path -LiteralPath $pngSa -PathType Leaf) -or -not (Test-Path -LiteralPath $pngSd -PathType Leaf)) {
+if (-not (Test-Path -LiteralPath $pngBa -PathType Leaf) -or -not (Test-Path -LiteralPath $pngSa -PathType Leaf) -or -not (Test-Path -LiteralPath $pngSd -PathType Leaf)) {
     $status = 'failed'
-    if (-not $errors.Contains('One or both PNG renders are missing.')) { $errors.Add('One or both PNG renders are missing.') }
+    if (-not $errors.Contains('One or more PNG renders are missing.')) { $errors.Add('One or more PNG renders are missing.') }
 }
 if (-not (Test-Path -LiteralPath $previewPath -PathType Leaf) -or (Get-Item -LiteralPath $previewPath).Length -eq 0) {
     $status = 'failed'
@@ -223,8 +226,10 @@ $report = [ordered]@{
     tempOutputPath = $tempOutputRoot
     designDirectory = $designDirectory
     modelPath = $ModelPath
+    businessArchitecture = $baPath
     solutionArchitecture = $saPath
     sequenceDiagram = $sdPath
+    businessArchitecturePng = $pngBa
     solutionArchitecturePng = $pngSa
     sequenceDiagramPng = $pngSd
     htmlPreview = $previewPath

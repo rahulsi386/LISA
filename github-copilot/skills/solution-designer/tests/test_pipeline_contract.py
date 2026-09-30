@@ -46,11 +46,11 @@ class PipelineContractTests(unittest.TestCase):
         source = json.loads((self.output / "source-report.json").read_text())
         self.assertEqual(source["validation"], "passed")
         pages = ET.parse(self.output / "Design_Service_Request_Agent.drawio").findall("diagram")
-        self.assertEqual(len(pages), 2)
+        self.assertEqual(len(pages), 3)
         for page in pages:
             self.assertGreater(len(page.findall(".//mxCell[@vertex='1']")), 1)
             self.assertGreater(len(page.findall(".//mxCell[@edge='1']")), 0)
-        for prefix in ("SA", "SD"):
+        for prefix in ("BA", "SA", "SD"):
             for suffix in ("mmd", "svg", "png"):
                 self.assertGreater((self.output / f"{prefix}_Service_Request_Agent.{suffix}").stat().st_size, 0)
         self.assertEqual(self.model_hash, hashlib.sha256(self.model.read_bytes()).hexdigest())

@@ -33,6 +33,7 @@ STAGE_SPECS = (
 )
 FINAL_MARKDOWN = "solution-document.md"
 FINAL_HTML = "lisa-execution-tree.html"
+FINAL_BUSINESS = "solution-business-architecture.png"
 FINAL_ARCHITECTURE = "solution-architecture.png"
 FINAL_SEQUENCE = "solution-sequence.png"
 FINAL_MANIFEST = "artifact-generation-manifest.json"
@@ -923,6 +924,7 @@ def render_solution_document(
     architecture_png = relative_image(
         design_pointer, output_root, "solution_architecture_png"
     )
+    business_png = relative_image(design_pointer, output_root, "business_architecture_png")
     sequence_png = relative_image(design_pointer, output_root, "sequence_png")
 
     eval_summary: dict[str, Any] = {}
@@ -1029,10 +1031,19 @@ def render_solution_document(
             "",
         ]
     )
+    if business_png:
+        lines.extend(
+            [
+                "### Business Architecture Diagram",
+                "",
+                f"![Business architecture diagram]({FINAL_BUSINESS})",
+                "",
+            ]
+        )
     if architecture_png:
         lines.extend(
             [
-                "### Solution Architecture Diagram",
+                "### Engineering Architecture Diagram",
                 "",
                 f"![Solution architecture diagram]({FINAL_ARCHITECTURE})",
                 "",
@@ -1245,6 +1256,8 @@ def render_solution_document(
             "- [LISA execution tree](lisa-execution-tree.html)",
         ]
     )
+    if business_png:
+        lines.append(f"- [Business architecture diagram]({FINAL_BUSINESS})")
     if architecture_png:
         lines.append(f"- [Solution architecture diagram]({FINAL_ARCHITECTURE})")
     if sequence_png:
@@ -1758,7 +1771,16 @@ def generate(config_path: Path) -> dict[str, Any]:
         design_pointer, output_root, "solution_architecture_png"
     )
     sequence_relative = relative_image(design_pointer, output_root, "sequence_png")
+    business_relative = relative_image(design_pointer, output_root, "business_architecture_png")
     diagram_outputs: list[tuple[Path, Path, str]] = []
+    if business_relative:
+        diagram_outputs.append(
+            (
+                output_root / Path(business_relative),
+                artifact_root / FINAL_BUSINESS,
+                "Customer business architecture diagram",
+            )
+        )
     if architecture_relative:
         diagram_outputs.append(
             (

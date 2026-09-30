@@ -45,22 +45,70 @@ class HtmlPreviewTests(unittest.TestCase):
             "coverage": {"nativeBuildPercent": 70, "pocDemonstrationPercent": 90},
         }
 
-    def test_preview_has_two_images_four_portable_files_and_no_scripts(self):
+    def test_review_has_three_images_six_portable_files_and_no_scripts(self):
         html = self.render(self.model())
         parsed = PreviewParser(html)
         self.assertEqual(parsed.resources(), {
             f"{kind}_Procurement_Test.{extension}"
-            for kind in ("SA", "SD") for extension in ("svg", "png")
+            for kind in ("BA", "SA", "SD") for extension in ("svg", "png")
         })
         images = [attrs for tag, attrs in parsed.elements if tag == "img"]
         self.assertEqual([image["src"] for image in images], [
-            "SA_Procurement_Test.png", "SD_Procurement_Test.png",
+            "BA_Procurement_Test.png", "SA_Procurement_Test.png", "SD_Procurement_Test.png",
         ])
         self.assertTrue(all(image.get("alt") for image in images))
         self.assertTrue(all(image.get("loading") == "eager" and image.get("decoding") == "sync" for image in images))
         self.assertFalse(any(tag in {"script", "iframe", "object", "base"} for tag, _ in parsed.elements))
         self.assertIn("default-src 'none'", html)
+        self.assertIn("<title>Procurement | Architecture Review</title>", html)
         self.assertEqual(html, self.render(self.model()))
+
+    def test_review_sections_follow_the_architecture_review_style(self):
+        model = self.model()
+        model.update({
+            "components": [{"id": "agent", "name": "Procurement agent", "productService": "Copilot Studio",
+                            "deploymentBoundary": "power-platform", "buildOwner": "agent-builder",
+                            "implementationStatus": "configure", "layer": "agent-platform"}],
+            "relationships": [],
+            "sequence": [{"order": 1, "from": "user", "to": "agent", "label": "Ask for guidance",
+                          "type": "call", "implementationMode": "real", "phase": "Request"}],
+            "capabilityAssessments": [
+                {"id": "CAP-001", "name": "Answer policy questions", "poc_treatment": "configure",
+                 "business_priority": "must", "component_ids": ["agent"]},
+                {"id": "CAP-002", "name": "Create purchase order", "poc_treatment": "simulate",
+                 "business_priority": "should", "component_ids": ["agent"]},
+            ],
+            "productionReadinessGaps": [{"id": "PRG-ERP", "capability_ids": ["CAP-002"],
+                                         "description": "ERP write access is not approved",
+                                         "poc_impact": "Simulated", "production_impact": "Blocks production",
+                                         "owner": "Customer"}],
+            "architecturePrinciples": [{"dimension": "secure", "decision": "Least privilege everywhere."}],
+            "decision": {
+                "agenticPlatform": "Copilot Studio", "harness": "Standard", "codeTier": "Low-code",
+                "summary": "Copilot Studio fully fits after Cowork was assessed.",
+                "suitability": {"recommendation": "agentic", "summary": "Ambiguous questions need reasoning.",
+                                "deterministicAlternative": "A keyword search portal."},
+                "comparison": [
+                    {"platform": "Microsoft Cowork", "fit": "not-fit", "selected": False, "pros": ["Personal work"],
+                     "cons": ["Not shared"], "rationale": "Not a shared assistant."},
+                    {"platform": "Copilot Studio", "fit": "full", "selected": True, "pros": ["Managed"],
+                     "cons": ["Licensing"], "rationale": "First full fit."},
+                ],
+            },
+        })
+        html = self.render(model)
+        for expected in (
+            "Architecture review / decision brief", "Recommended decision",
+            "Copilot Studio fully fits after Cowork was assessed.", "01 / Delivery path",
+            "P1 / BUILD", "P2 / DEMONSTRATE", "Two views of one solution.", "Business overview",
+            "Engineering view", "03 / Interaction sequence", "GATE 01 / PRG-ERP",
+            "ERP write access is not approved", "05 / Platform decision", "An agent is warranted.",
+            "Selected</span>", "Least privilege everywhere.", "Component index / 1 components",
+            "Capability-to-component mapping",
+        ):
+            self.assertIn(expected, html)
+        nav = [attrs["href"] for tag, attrs in PreviewParser(html).elements if tag == "a" and attrs.get("href", "").startswith("#")]
+        self.assertEqual(nav, ["#main", "#delivery", "#solution-architecture", "#sequences", "#gates", "#decision", "#reference"])
 
     def test_model_text_is_escaped_in_text_and_image_attributes(self):
         model = self.model()
@@ -71,32 +119,38 @@ class HtmlPreviewTests(unittest.TestCase):
         self.assertIn("&lt;script&gt;", html)
         self.assertIn("&amp;", html)
         self.assertIn("\u00e9", html)
-        self.assertEqual(sum(tag == "img" for tag, _ in parsed.elements), 2)
+        self.assertEqual(sum(tag == "img" for tag, _ in parsed.elements), 3)
         self.assertFalse(any(tag == "script" for tag, _ in parsed.elements))
         self.assertFalse(any(key.startswith("on") for _, attrs in parsed.elements for key in attrs))
         self.assertTrue(all(not value.startswith("http") for value in parsed.resources()))
         self.assertEqual(
             next(attrs["alt"] for tag, attrs in parsed.elements if tag == "img"),
-            model["title"] + " - Solution architecture",
+            model["title"] + " - Business architecture",
         )
 
     def test_view_controls_are_independent_and_accessible_without_javascript(self):
         parsed = PreviewParser(self.render(self.model()))
-        checkboxes = [attrs for tag, attrs in parsed.elements if tag == "input"]
+        inputs = [attrs for tag, attrs in parsed.elements if tag == "input"]
         labels = [attrs.get("for") for tag, attrs in parsed.elements if tag == "label"]
-        self.assertEqual({box["id"] for box in checkboxes}, {"architecture-native", "sequence-native"})
-        self.assertEqual({box["id"] for box in checkboxes}, set(labels))
-        self.assertTrue(all(box["type"] == "checkbox" for box in checkboxes))
-        regions = [attrs for _, attrs in parsed.elements if attrs.get("class") == "viewport"]
-        self.assertEqual(len(regions), 2)
+        checkboxes = [box for box in inputs if box["type"] == "checkbox"]
+        radios = [box for box in inputs if box["type"] == "radio"]
+        self.assertEqual({box["id"] for box in checkboxes}, {"business-native", "architecture-native", "sequence-native"})
+        self.assertEqual([box["id"] for box in radios], ["view-business", "view-engineering"])
+        self.assertIn("checked", radios[0])
+        self.assertTrue(all(box["name"] == "architecture-view" for box in radios))
+        self.assertEqual({box["id"] for box in inputs}, set(labels))
+        regions = [attrs for _, attrs in parsed.elements if attrs.get("class") == "diagram-stage"]
+        self.assertEqual(len(regions), 3)
         self.assertTrue(all(region.get("tabindex") == "0" and region.get("aria-label") for region in regions))
         ids = {attrs.get("id") for _, attrs in parsed.elements}
         self.assertTrue(all(region.get("aria-describedby") in ids for region in regions))
-        self.assertIn(".native-size:checked ~ .viewport img { max-width: none;", self.render(self.model()))
-        self.assertIn("blank or unavailable", self.render(self.model()))
-        self.assertIn("no JavaScript is required", self.render(self.model()))
+        html = self.render(self.model())
+        self.assertIn(".native-size:checked~.diagram-stage img{max-width:none;", html)
+        self.assertIn("#view-business:checked~.views .view-business", html)
+        self.assertIn("#view-engineering:checked~.views .view-architecture", html)
+        self.assertIn("no JavaScript", html)
 
-    def test_source_downloads_are_local_optional_and_keep_exactly_two_sections(self):
+    def test_source_downloads_are_local_optional_and_keep_exactly_three_figures(self):
         metadata = {
             "drawio": {"path": "Design_Procurement_Test.drawio"},
             "architectureMermaid": {"path": "SA_Procurement_Test.mmd"},
@@ -110,14 +164,14 @@ class HtmlPreviewTests(unittest.TestCase):
                 html = self.render(self.model(), options)
                 parsed = PreviewParser(html)
                 self.assertEqual(parsed.resources(), {
-                    "Design_Procurement_Test.drawio", "SA_Procurement_Test.mmd", "SD_Procurement_Test.mmd",
-                    "SA_Procurement_Test.svg", "SA_Procurement_Test.png", "SD_Procurement_Test.svg", "SD_Procurement_Test.png",
+                    "Design_Procurement_Test.drawio",
+                    *(f"{kind}_Procurement_Test.{extension}" for kind in ("BA", "SA", "SD")
+                      for extension in ("svg", "png", "mmd")),
                 })
-                self.assertEqual(sum(tag == "section" for tag, _ in parsed.elements), 2)
-                self.assertEqual(sum(tag == "img" for tag, _ in parsed.elements), 2)
+                self.assertEqual(sum(tag == "figure" for tag, _ in parsed.elements), 3)
+                self.assertEqual(sum(tag == "img" for tag, _ in parsed.elements), 3)
                 downloads = [attrs for tag, attrs in parsed.elements if tag == "a" and attrs.get("href", "").endswith((".mmd", ".drawio"))]
                 self.assertTrue(all("download" in attrs for attrs in downloads))
-                self.assertIn("same two diagrams", html)
         self.assertFalse(any(path.endswith(".mmd") for path in PreviewParser(self.render(
             self.model(), {"sources": {"drawio": metadata["drawio"]}}
         )).resources()))
@@ -142,12 +196,12 @@ class HtmlPreviewTests(unittest.TestCase):
              "const decoded=PNG.sync.read(PNG.sync.write(image));"
              "return {width:decoded.width,height:decoded.height};}"
              f"process.stdout.write(createPreview({json.dumps(self.model())},"
-             "{architecture:dims(123,45),sequence:dims(67,189)}));"],
+             "{business:dims(321,99),architecture:dims(123,45),sequence:dims(67,189)}));"],
             cwd=ROOT / "renderer", capture_output=True, text=True, encoding="utf-8", timeout=30, check=False,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         images = [attrs for tag, attrs in PreviewParser(result.stdout).elements if tag == "img"]
-        self.assertEqual([(image.get("width"), image.get("height")) for image in images], [("123", "45"), ("67", "189")])
+        self.assertEqual([(image.get("width"), image.get("height")) for image in images], [("321", "99"), ("123", "45"), ("67", "189")])
         self.assertTrue(all(image["decoding"] == "sync" and image["loading"] == "eager" for image in images))
         for options in ({}, {"architecture": {"width": -1, "height": 20}},
                         {"architecture": {"width": '1" onload="bad', "height": 20}},

@@ -60,7 +60,7 @@ Before platform and harness selection, read only these config-relative inputs:
 
 1. `lisa-config.json`, including `basePath`, Copilot Studio `envId`/`envUrl`, and other necessary configuration.
 2. The latest direct child `<basePath>\output\classification\complexity-classification_<timestamp>.json`.
-3. `<basePath>\output\design\current-design.json` and the exact current Solution Architecture and Sequence Diagram referenced by that pointer.
+3. `<basePath>\output\design\current-design.json` and the exact current Engineering (Solution) Architecture and Sequence Diagram referenced by that pointer.
 
 Reject absolute paths, traversal outside `basePath`, caller-selected classification/design files, stale design runs, and diagram paths not referenced by `current-design.json`.
 
