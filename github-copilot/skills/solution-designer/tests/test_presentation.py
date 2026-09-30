@@ -63,6 +63,30 @@ console.log(JSON.stringify({
         )
         self.assertTrue(all(result.values()), result)
 
+    def test_embedded_font_is_a_verified_subset_with_full_font_fallback(self):
+        result = self.run_node(
+            """
+const fs = require('fs');
+const crypto = require('crypto');
+const {Typography} = require('./typography');
+const t = new Typography();
+const coverage = JSON.parse(fs.readFileSync('fonts/InterVariable-latin.json','utf8'));
+const subset = fs.readFileSync('fonts/InterVariable-latin.ttf');
+const full = fs.readFileSync('fonts/InterVariable.ttf').toString('base64');
+const embedded = face => face.match(/base64,([A-Za-z0-9+\\/=]+)\\)/)[1];
+console.log(JSON.stringify({
+    subsetHashMatches: crypto.createHash('sha256').update(subset).digest('hex') === coverage.sha256,
+    sourceHashMatches: crypto.createHash('sha256').update(fs.readFileSync('fonts/InterVariable.ttf')).digest('hex') === coverage.source_sha256,
+    keepsAxes: ['opsz','wght'].every(axis => coverage.axes.includes(axis)),
+    latinUsesSubset: embedded(t.fontFace('Caf\\u00e9 \\u2192 R01 \\u00b7 \\u2013 \\u2026\\n')) === subset.toString('base64'),
+    greekFallsBack: embedded(t.fontFace('\\u03a9 flow')) === full,
+    cjkFallsBack: embedded(t.fontFace('\\u6771\\u4eac')) === full,
+    noMarkupFallsBack: embedded(t.fontFace()) === full
+}));
+"""
+        )
+        self.assertTrue(all(result.values()), result)
+
     def test_sequence_long_names_phases_and_last_lifeline_self_call(self):
         result = self.run_node(
             """
@@ -107,7 +131,11 @@ console.log(JSON.stringify({
     fragments:(result.svg.match(/data-kind="fragment"/g)||[]).length,
     fontEmbedded:result.svg.includes('data:font/ttf;base64,'),
     fixedArrowheads:result.svg.includes('markerUnits="userSpaceOnUse"'),
-    matchingSimulationArrowhead:result.svg.includes('fill="#08788F"'),
+    matchingSimulationArrowhead:(()=>{
+        const message=result.svg.match(/<g data-kind="message"[^>]*data-implementation-mode="simulated"[^>]*>[^]*?<path d="M[^"]*" fill="none" stroke="(#[0-9A-F]{6})"[^>]*stroke-dasharray="2 5"[^>]*marker-end="url[(]#(arrow-[0-9]+)[)]"/);
+        return Boolean(message) && result.svg.includes('<marker id="'+message[2]+'"') &&
+            new RegExp('<marker id="'+message[2]+'"[^]*?fill="'+message[1]+'"').test(result.svg);
+    })(),
     lastSelfTurnsInward:lastSelfRoute[1][0] < lastSelfRoute[0][0],
     renderedWidth:image.width,
     allFontsReadable:[...result.svg.matchAll(/font-size="([\\d.]+)"/g)].every(m=>Number(m[1])>=11)
@@ -233,7 +261,7 @@ const icons=new Map(model.components.map(c=>[c.id,{verified:true,uri}]));
 const result=sequenceDiagram(model,icons,new Typography(),'Balanced');
 console.log(JSON.stringify({quality:result.quality,
   conditionVisible:result.drawing.texts.map(t=>t.text).join(' ').includes('Condition: only after explicit approval'),
-  orderVisible:result.drawing.texts.some(t=>t.text.startsWith('10.')),
+  orderVisible:result.drawing.texts.some(t=>t.text==='10'&&t.role==='step-number'),
   fragments:(result.svg.match(/data-kind="fragment"/g)||[]).length,
   metadata:result.svg.includes('data-order="10"')&&result.svg.includes('data-relationship-id="exact-relationship"'),
   unchanged:JSON.stringify(model)===before}));

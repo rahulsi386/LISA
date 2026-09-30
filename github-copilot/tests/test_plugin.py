@@ -265,7 +265,7 @@ class AgencyPluginTests(unittest.TestCase):
             "cad-orchestrator": 15_500,
             "requirement-analyzer": 22_500,
             "complexity-classifier": 14_000,
-            "solution-designer": 28_000,
+            "solution-designer": 11_000,
             "agent-builder": 43_000,
             "agent-evaluator": 31_000,
             "agent-optimizer": 22_500,

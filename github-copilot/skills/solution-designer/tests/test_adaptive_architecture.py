@@ -268,6 +268,9 @@ class AdaptiveRenderTests(unittest.TestCase):
         integration["scenarioSlug"] = "Integration"
         integration["title"] = "Procurement integration and insights"
         integration["summary"] = "Controlled ERP integration and governed analytics without a conversational channel."
+        from test_model_semantics import designer
+        for model in (retrieval, integration):
+            model["businessArchitecture"] = designer._business_architecture(model)
         for model in (procurement, retrieval, integration):
             with self.subTest(scenario=model["scenarioSlug"]):
                 temporary = tempfile.mkdtemp(prefix=".adaptive-", dir=ROOT / "tests")

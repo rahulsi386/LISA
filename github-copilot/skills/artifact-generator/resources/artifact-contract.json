@@ -21,6 +21,7 @@
     {"relativePath": "artifact-generation-manifest.json", "required": true, "schema": "artifact-generation-manifest.schema.json", "kind": "json"},
     {"relativePath": "solution-document.md", "required": true, "schema": null, "kind": "markdown"},
     {"relativePath": "lisa-execution-tree.html", "required": true, "schema": null, "kind": "html"},
+    {"relativePath": "solution-business-architecture.png", "required": false, "schema": null, "kind": "image"},
     {"relativePath": "solution-architecture.png", "required": false, "schema": null, "kind": "image"},
     {"relativePath": "solution-sequence.png", "required": false, "schema": null, "kind": "image"}
   ],

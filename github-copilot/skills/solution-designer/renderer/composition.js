@@ -342,7 +342,7 @@ function composeArchitecture(model, profile, prepare, top, measureLabel = () => 
   }
   if (controls.length) {
     if (!cards.length) y = top + 74;
-    else y -= profile.rowGap - 82;
+    else y -= profile.rowGap - 110;
     headings.push({ x: margin, y: y - 28, text: "CROSS-CUTTING CONTROLS / SOURCE ID → TARGET ID" });
     const count = Math.min(controls.length, Math.max(1, Math.floor((width - 2 * margin + 32) / 362)));
     const controlWidth = count > 1 ? Math.min(460, (width - 2 * margin - (count - 1) * 32) / count) : 330;
@@ -382,56 +382,115 @@ function composeArchitecture(model, profile, prepare, top, measureLabel = () => 
       if (heading.text === "SUPPORTING CAPABILITIES") heading.y = mainTop - 28;
     }
   }
+  const zones = [];
   if (family === "boundary") {
-    // Evidenced boundaries group deployment responsibility, never semantic layers.
-    // Without boundaries this is a dependency-cluster composition, not invented trust geometry.
+    // Evidenced deployment boundaries become dashed zones packed in flow order, so a
+    // relationship that leaves a zone visibly crosses a trust boundary. Without boundary
+    // evidence the same blocks are unpainted dependency clusters, never invented trust geometry.
     const operational = cards.filter(card => card.storyRole !== "control");
-    const groups = new Map();
     const hasBoundaries = operational.some(card => boundaryOf(card.component));
     const dependencyGroups = supportClusters(graph.components, graph);
+    const spineRank = id => spine.includes(id) ? spine.indexOf(id) : null;
+    const cardRank = card => spineRank(card.id) ?? Math.min(spine.length + 1, ...[
+      ...(graph.incoming.get(card.id) || []).map(edge => edge.from),
+      ...(graph.outgoing.get(card.id) || []).map(edge => edge.to),
+    ].map(spineRank).filter(rank => rank !== null).map(rank => rank + .5));
+    const groups = new Map();
     for (const card of operational) {
       const group = visualGroup(card.component);
-      const key = hasBoundaries ? [boundaryOf(card.component) || "Boundary not specified", group].filter(Boolean).join(" / ") :
+      const boundary = boundaryOf(card.component);
+      const key = hasBoundaries ? boundary || "Boundary not specified" :
         group || `Dependency cluster ${dependencyGroups.findIndex(items => items.some(c => c.id === card.id)) + 1}`;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(card);
+      if (!groups.has(key)) groups.set(key, { key, painted: hasBoundaries && Boolean(boundary), members: [] });
+      groups.get(key).members.push(card);
+    }
+    const pad = 24, titleRow = 46;
+    const cardGap = Math.max(profile.supportGap, supportGap, mainGap);
+    const blockGap = cardGap;
+    const bandGap = Math.max(110, profile.rowGap - 20);
+    const innerRowGap = Math.max(110, Math.round(profile.rowGap * .8));
+    const layoutBlock = (block, available) => {
+      let rows = splitRows(block.members, available - 2 * pad, cardGap);
+      // Fold evenly (2+2 rather than 3+1) whenever the balanced rows still fit.
+      const perRow = Math.ceil(block.members.length / rows.length);
+      const balanced = Array.from({ length: rows.length }, (_, i) => block.members.slice(i * perRow, (i + 1) * perRow))
+        .filter(row => row.length);
+      const fits = row => row.reduce((sum, card) => sum + card.width, 0) + (row.length - 1) * cardGap <= available - 2 * pad;
+      if (balanced.every(fits)) rows = balanced;
+      const rowWidths = rows.map(row => row.reduce((sum, card) => sum + card.width, 0) + (row.length - 1) * cardGap);
+      const rowHeights = rows.map(row => Math.max(...row.map(card => card.height)));
+      return { ...block, rows, rowWidths, rowHeights, width: Math.max(...rowWidths) + 2 * pad,
+        contentHeight: rowHeights.reduce((sum, h) => sum + h, 0) + (rows.length - 1) * innerRowGap };
+    };
+    const bandWidth = width - 2 * (margin - pad);
+    const ordered = [...groups.values()].map((group, index) => {
+      group.members.sort((a, b) => cardRank(a) - cardRank(b) || compare(a.id, b.id));
+      return { ...group, index, rank: Math.min(...group.members.map(cardRank)) };
+    }).sort((a, b) => a.rank - b.rank || a.index - b.index);
+    // Greedy packing keeps flow order; a zone may fold into at most two rows to share a band.
+    const bands = [];
+    for (const group of ordered) {
+      const band = bands.at(-1);
+      const natural = layoutBlock(group, bandWidth);
+      if (band) {
+        const used = band.reduce((sum, block) => sum + block.width, 0) + band.length * blockGap;
+        const remaining = bandWidth - used;
+        const folded = layoutBlock(group, Math.max(remaining, 2 * pad + 1));
+        const tallest = Math.max(...band.map(block => block.rows.length));
+        if (natural.width <= remaining) { band.push(natural); continue; }
+        if (folded.width <= remaining && folded.rows.length <= Math.max(2, tallest) &&
+            folded.rows.every(row => row.length)) { band.push(folded); continue; }
+      }
+      bands.push([natural]);
     }
     headings.length = 0;
-    let groupY = top + 86;
-    for (const [key, members] of groups) {
-      headings.push({ x: margin, y: groupY - 28, text: key });
-      // Connection barycentres keep related components nearby without altering their identities.
-      members.sort((a, b) => (spine.includes(a.id) ? spine.indexOf(a.id) : 100) -
-        (spine.includes(b.id) ? spine.indexOf(b.id) : 100) || compare(a.id, b.id));
-      const boundaryGap = Math.max(profile.supportGap, supportGap, mainGap);
-      for (const row of splitRows(members, width - 2 * margin, boundaryGap)) {
-        const height = Math.max(...row.map(card => card.height));
-        let x = margin;
-        for (const card of row) {
-          card.x = x;
-          card.y = groupY + (height - card.height) / 2;
-          x += card.width + boundaryGap;
-        }
-        groupY += height + profile.rowGap;
+    let bandY = top + 40;
+    for (const band of bands) {
+      const bandHeight = titleRow + Math.max(...band.map(block => block.contentHeight)) + pad;
+      const bandUsed = band.reduce((sum, block) => sum + block.width, 0) + (band.length - 1) * blockGap;
+      let x = (width - bandUsed) / 2;
+      for (const block of band) {
+        const zone = { id: `zone-${zones.length + 1}`, name: block.key, painted: block.painted,
+          x, y: bandY, width: block.width, height: bandHeight, cardIds: block.members.map(card => card.id) };
+        zones.push(zone);
+        headings.push({ x: x + 18, y: bandY + 30, text: block.painted ? block.key.replace(/[-_]+/g, " ").toUpperCase() : block.key,
+          zone: zone.id });
+        let rowY = bandY + titleRow + (bandHeight - titleRow - pad - block.contentHeight) / 2;
+        block.rows.forEach((row, rowIndex) => {
+          let cardX = x + (block.width - block.rowWidths[rowIndex]) / 2;
+          for (const card of row) {
+            card.x = cardX;
+            card.y = rowY + (block.rowHeights[rowIndex] - card.height) / 2;
+            cardX += card.width + cardGap;
+          }
+          rowY += block.rowHeights[rowIndex] + innerRowGap;
+        });
+        x += block.width + blockGap;
       }
+      bandY += bandHeight + bandGap;
     }
     const controlCards = cards.filter(card => card.storyRole === "control");
     if (controlCards.length) {
+      const groupY = bandY - bandGap + 110;
       headings.push({ x: margin, y: groupY - 28, text: "CROSS-CUTTING CONTROLS / SCOPED RELATIONSHIPS" });
-      for (const row of splitRows(controlCards, width - 2 * margin, 40)) {
+      let rowY = groupY;
+      for (const row of splitRows(controlCards, width - 2 * margin, 32)) {
+        const used = row.reduce((sum, card) => sum + card.width, 0);
+        const gap = row.length > 1 ? Math.min(110, (width - 2 * margin - used) / (row.length - 1)) : 0;
         let x = margin;
         for (const card of row) {
           card.x = x;
-          card.y = groupY;
-          x += card.width + 40;
+          card.y = rowY;
+          x += card.width + gap;
         }
-        groupY += Math.max(...row.map(card => card.height)) + 40;
+        rowY += Math.max(...row.map(card => card.height)) + 40;
       }
     }
   }
-  const bottom = Math.max(top + 74, ...cards.map(card => card.y + card.height)) + 52;
+  const bottom = Math.max(top + 74, ...cards.map(card => card.y + card.height),
+    ...zones.map(zone => zone.y + zone.height)) + 52;
   return {
-    width, cards, headings, bottom, spine,
+    width, cards, headings, bottom, spine, zones,
     regions: semanticRegions(cards),
     strategy: `relationship-driven-${family}`, family,
     widthHint: { requested: requestedWidth ?? null, effectiveMaximum: maximumWidth,

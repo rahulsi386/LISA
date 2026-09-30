@@ -354,10 +354,28 @@ Solution Designer is a deterministic multi-language diagram pipeline. Python nor
 
 ### What it does
 
-It turns the classifier’s canonical topology into exactly two diagrams:
+It turns the classifier output into three diagrams and one review page:
 
-1. `SA_<ScenarioSlug>.svg/.png` — layered Solution Architecture.
-2. `SD_<ScenarioSlug>.svg/.png` — architecture-derived Sequence Diagram.
+1. `BA_<ScenarioSlug>.svg/.png`: Business Architecture, the leadership operating model. It is derived deterministically from classified capabilities, grouped by work type and tagged with their PoC treatment, and shows retained human decisions, outcomes, supporting information and platform, and cross-cutting controls.
+2. `SA_<ScenarioSlug>.svg/.png`: Engineering Architecture, the buildable component topology.
+3. `SD_<ScenarioSlug>.svg/.png`: a Sequence Diagram derived from the architecture.
+4. `preview.html`: the `<Title> | Architecture Review` page. It follows the SDM Intelligent Operations review style:
+   - a decision brief;
+   - the delivery path;
+   - a script-free Business/Engineering view toggle;
+   - the sequence, with a plain-language narrative;
+   - readiness gates;
+   - the platform decision, including suitability and the precedence comparison;
+   - a traceable reference section, including component codes and the relationship index.
+
+All three diagrams share one visual system, `renderer/style.js`, benchmarked against the SDM Intelligent Operations Architecture Review:
+
+- tinted responsibility cards with `C01` codes;
+- dashed deployment-boundary zones;
+- meaning-coloured links with `R01` codes, covering evidence, request/response, governed action, identity/access and control/audit;
+- a numbered sequence rail with toned branch bands.
+
+The `style-conformance` gate rejects any colour, stroke or font size outside the tokens.
 
 It preserves canonical names, boundaries, relationships, dispositions, simulation/manual/deferred/blocked styling, official icon provenance, trust/governance/lifecycle bands, and sequence semantics. It evaluates deterministic Balanced, Spacious, and Wide candidates, validates geometry and semantics, performs raster sanity checks, and publishes only a hash-bound inspected set.
 
@@ -374,9 +392,11 @@ It preserves canonical names, boundaries, relationships, dispositions, simulatio
 | Output | Purpose |
 |---|---|
 | `current-design.json` | Atomic pointer and terminal marker for the validated current set. |
-| `artifacts/design-model.json` | Shared normalized model used by both diagrams. |
-| `artifacts/SA_<slug>.svg/.png` | Architecture vector and raster. |
+| `artifacts/design-model.json` | Shared normalized model, including `businessArchitecture` and `decision`, used by all three diagrams. |
+| `artifacts/BA_<slug>.svg/.png` | Business architecture vector and raster. |
+| `artifacts/SA_<slug>.svg/.png` | Engineering architecture vector and raster. |
 | `artifacts/SD_<slug>.svg/.png` | Sequence vector and raster. |
+| `artifacts/preview.html` | Offline Architecture Review page referencing the sibling PNG, SVG and editable sources. |
 | Reports under `artifacts/` | Diagram, generation, validation, render, inspection, and run diagnostics. |
 | `.solution-designer/` | Immutable run data, cache entries, and staging trees. |
 
@@ -407,7 +427,7 @@ Run IDs match `SDR-YYYYMMDD_HHMMSS-XXXXXXXX-XXXXXXXX`; statuses are `prepared`, 
 6. [`layout_engine.py`](solution-designer/scripts/layout_engine.py) uses NetworkX A* over an obstacle-aware orthogonal visibility grid, preserves explicit port sides/offsets, simplifies routes, and places collision-checked labels. Exit `0` means no routing issues, `3` reports unplaceable labels, and `2` is input/routing failure. No .NET runtime or compiled layout executable is needed. The router source and installed NetworkX version participate in the design cache fingerprint.
 7. [`Test-Diagrams.ps1`](solution-designer/scripts/Test-Diagrams.ps1) validates XML, names, embedded icons, legends, arrows, bounds, overlap, routes, bridges, labels, fonts, truncation, lifelines, and simulation disclosure.
 8. [`Render-Diagrams.ps1`](solution-designer/scripts/Render-Diagrams.ps1) launches the bounded Node renderer and validates its identity, report, hashes, and sizes. [`renderer/render.js`](solution-designer/renderer/render.js) uses pinned `@resvg/resvg-js` and `pngjs`, disables system fonts, and checks dimensions, opacity, and color diversity.
-9. Open and inspect both PNGs once, complete the inspection JSON truthfully, and preserve the returned PNG hashes.
+9. Open and inspect all three PNGs once, complete the inspection JSON truthfully (including the `business_view` and `reference_style` checks), and preserve the returned PNG hashes.
 10. **Finalize.** Python validates inspection schema and every staged hash, transactionally replaces `design/artifacts`, builds the cache, and switches `current-design.json` only after durability.
 
     ```powershell
@@ -415,6 +435,7 @@ Run IDs match `SDR-YYYYMMDD_HHMMSS-XXXXXXXX-XXXXXXXX`; statuses are `prepared`, 
     ```
 
 11. [`Test-ReferenceCache.ps1`](solution-designer/scripts/Test-ReferenceCache.ps1) is a maintenance diagnostic that reports reference freshness; it does not fetch updates.
+    [`resources/design-rules.md`](solution-designer/resources/design-rules.md) (the full diagram specification) and [`resources/repair-and-publication.md`](solution-designer/resources/repair-and-publication.md) (repair, publication and cache detail) are read on demand. Loading them only when needed keeps the core `SKILL.md` small.
 12. [`resources/design-model.schema.json`](solution-designer/resources/design-model.schema.json), [`resources/inspection.schema.json`](solution-designer/resources/inspection.schema.json), [`resources/icon-manifest.json`](solution-designer/resources/icon-manifest.json), and [`resources/reference-manifest.json`](solution-designer/resources/reference-manifest.json) govern the model, manual gate, icons, and offline guidance. [`renderer/package.json`](solution-designer/renderer/package.json), [`renderer/package-lock.json`](solution-designer/renderer/package-lock.json), [`THIRD-PARTY-NOTICES.md`](solution-designer/THIRD-PARTY-NOTICES.md), and [`renderer/fonts/LICENSE.txt`](solution-designer/renderer/fonts/LICENSE.txt) govern dependencies and licensing.
 
 ### Orchestrator stage and failure behavior
@@ -758,6 +779,7 @@ The generator trusts selected upstream manifests and paths; it does not fully re
 |---|---|
 | `solution-document.md` | Customer-ready need, target/current solution, delivered state, readiness, risks, and next actions. |
 | `lisa-execution-tree.html` | Self-contained seven-stage searchable/expandable execution tree with portable relative links and Clawpilot theme variables. |
+| `solution-business-architecture.png` | Optional copy of current validated business architecture image. |
 | `solution-architecture.png` | Optional copy of current validated architecture image. |
 | `solution-sequence.png` | Optional copy of current validated sequence image. |
 | `artifact-generation-manifest.json` | Terminal hash inventory. |

@@ -46,11 +46,16 @@ def resolve_design(paths: Any) -> dict[str, str]:
         raise LisaConfigError("current-design.json must contain relative PNG paths")
     architecture = resolve_relative(paths.base, architecture_value, "architecture path")
     sequence = resolve_relative(paths.base, sequence_value, "sequence path")
-    return {
+    resolved = {
         "designPointer": require_file(pointer_path, "design pointer"),
         "solutionArchitecture": require_file(architecture, "solution architecture"),
         "sequenceDiagram": require_file(sequence, "sequence diagram"),
     }
+    business_value = renders.get("business_architecture_png")
+    if isinstance(business_value, str):
+        business = resolve_relative(paths.base, business_value, "business architecture path")
+        resolved["businessArchitecture"] = require_file(business, "business architecture")
+    return resolved
 
 
 def resolve_inputs(skill: str, config_path: Path) -> dict[str, Any]:

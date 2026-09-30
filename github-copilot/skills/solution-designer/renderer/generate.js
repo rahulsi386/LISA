@@ -4,12 +4,16 @@ const { spawnSync } = require("child_process");
 const { Typography, escapeXml: esc } = require("./typography");
 const { composeArchitecture, boundaryOf, compositionFamilies, isCrossCutting, visualRole, visualGroup } = require("./composition");
 const { createPreview } = require("./preview");
+const { businessArchitecture } = require("./business");
 const { visualQuality, identified } = require("./quality");
+const style = require("./style");
 
+const { PALETTE, TYPE, STROKE, DASH, ZONE, ICON } = style;
+// Named accents map one-to-one onto the shared review palette (renderer/style.js).
 const THEME = Object.freeze({
-  background: "#F6F8FC", paper: "#FFFFFF", ink: "#16263F", muted: "#53647D",
-  border: "#D4DDEB", blue: "#5365CD", green: "#0D776B", cyan: "#08788F",
-  amber: "#9C620C", gray: "#606E82", red: "#B93848", purple: "#7651B5",
+  background: style.CANVAS, paper: style.CANVAS, ink: style.INK, muted: style.MUTED,
+  border: ZONE.stroke, blue: PALETTE.blue.line, green: PALETTE.green.line, cyan: PALETTE.teal.line,
+  amber: PALETTE.amber.line, gray: PALETTE.slate.line, red: PALETTE.red.line, purple: PALETTE.violet.line,
 });
 const PROFILES = {
   Balanced: { width: 1920, mainGap: 120, supportGap: 120, rowGap: 154 },
@@ -26,24 +30,16 @@ const OWNERS = {
   "external-team": "External team", unassigned: "Owner TBD",
 };
 const PRODUCTION = { ready: "Production ready", "requires-hardening": "Needs hardening", gap: "Production gap" };
+const CARD_HEAD = 22;
+const PENDING_STATUS = new Set(["simulate", "static-sample-data", "manual-handoff", "defer"]);
 
 function number(value) { return Math.round(value * 100) / 100; }
 function boxAttrs(box) {
   return `data-x="${number(box.x)}" data-y="${number(box.y)}" ` +
     `data-width="${number(box.width)}" data-height="${number(box.height)}"`;
 }
-function modeColor(mode, type = "call") {
-  return ({ simulated: THEME.cyan, manual: THEME.amber, deferred: THEME.gray, blocked: THEME.red })[mode] ||
-    (type === "approval" ? THEME.green : type === "self" ? THEME.purple : THEME.blue);
-}
-function componentColor(component) {
-  const mode = {
-    simulate: "simulated", "static-sample-data": "simulated",
-    "manual-handoff": "manual", defer: "deferred", block: "blocked",
-  }[component.implementationStatus];
-  if (mode) return modeColor(mode);
-  return component.kind === "agent" ? THEME.blue :
-    component.kind === "human" ? THEME.green : THEME.border;
+function linkColor(edge, byId) {
+  return PALETTE[style.MEANINGS[style.linkMeaning(edge, byId)].tone].line;
 }
 function readJson(file) { return JSON.parse(fs.readFileSync(file, "utf8").replace(/^\uFEFF/, "")); }
 
@@ -57,15 +53,15 @@ class Drawing {
     this.serial = 0;
   }
   add(svg) { this.parts.push(svg); }
-  rect(box, fill, stroke = "none", radius = 14, extras = "") {
+  rect(box, fill, stroke = "none", radius = style.RADIUS.card, extras = "") {
     this.add(`<rect x="${number(box.x)}" y="${number(box.y)}" width="${number(box.width)}" ` +
       `height="${number(box.height)}" rx="${radius}" fill="${fill}" stroke="${stroke}" ${extras}/>`);
   }
-  text(text, x, baseline, size = 14, color = THEME.muted, weight = 400, owner = "", center = false, role = "body") {
+  text(text, x, baseline, size = 14, color = THEME.muted, weight = 400, owner = "", center = false, role = "body", anchorEnd = false) {
     if (!String(text).trim()) return;
     const glyph = this.typography.measure(text, size, weight);
     // Position the glyph extent rather than approximating character advance.
-    const drawX = x - glyph.x - (center ? glyph.width / 2 : 0);
+    const drawX = x - glyph.x - (center ? glyph.width / 2 : anchorEnd ? glyph.width : 0);
     const bounds = {
       x: drawX + glyph.x, y: baseline + glyph.y, width: glyph.width, height: glyph.height,
     };
@@ -78,72 +74,80 @@ class Drawing {
     lines.forEach((line, i) => this.text(line, x, y + i * leading, size, color, weight, owner, center, role));
   }
   image(icon, x, y, size) {
-    this.add(`<image href="${icon.uri}" xlink:href="${icon.uri}" x="${number(x)}" y="${number(y)}" ` +
+    this.add(`<image href="${icon.uri}" x="${number(x)}" y="${number(y)}" ` +
       `width="${size}" height="${size}" preserveAspectRatio="xMidYMid meet"/>`);
   }
-  arrow(points, color, dashed = false, attributes = "", bidirectional = false) {
+  arrow(points, color, dash = "", attributes = "", bidirectional = false) {
     if (!this.markers.has(color)) this.markers.set(color, `arrow-${this.markers.size}`);
     const marker = this.markers.get(color);
+    const pattern = dash === true ? DASH.response : dash || "";
     this.add(`<path d="M ${points.map(p => `${number(p.x)} ${number(p.y)}`).join(" L ")}" ` +
-      `fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" ` +
-      `${dashed ? 'stroke-dasharray="7 5"' : ""} marker-end="url(#${marker})" ` +
+      `fill="none" stroke="${color}" stroke-width="${STROKE.edge}" stroke-linejoin="round" ` +
+      `${pattern ? `stroke-dasharray="${pattern}"` : ""} marker-end="url(#${marker})" ` +
       `${bidirectional ? `marker-start="url(#${marker}-start)"` : ""} ${attributes}/>`);
   }
   header(model, kind, includeSummary = true) {
-    const title = this.typography.wrap(model.title, this.width - 180, 36, 600);
-    const subtitleY = 124 + (title.length - 1) * 44;
-    const summary = this.typography.wrap(includeSummary ? model.summary || "" : "", this.width - 120, 14);
-    const headerHeight = subtitleY + 26 + summary.length * 20;
-    this.rect({ x: 0, y: 0, width: this.width, height: headerHeight }, THEME.paper, "none", 0);
-    this.text(`SOLUTION DESIGN / ${kind.toUpperCase()}`, 60, 39, 12, THEME.blue, 600, "header");
-    this.lines(title, 60, 90, 36, THEME.ink, 600, "header", 44, false, "title");
-    this.text(`${kind} | ${model.complexity} complexity | Native ${model.coverage.nativeBuildPercent}% | PoC ${model.coverage.pocDemonstrationPercent}%`,
-      60, subtitleY, 15, THEME.muted, 400, "header");
-    this.lines(summary, 60, subtitleY + 26, 14, THEME.muted, 400, "header", 20);
+    const title = this.typography.wrap(model.title, this.width - 180, TYPE.diagramTitle.size, TYPE.diagramTitle.weight);
+    const subtitleY = 108 + (title.length - 1) * 34;
+    const summary = this.typography.wrap(includeSummary ? model.summary || "" : "", this.width - 120, TYPE.subtitle.size);
+    const headerHeight = subtitleY + 22 + summary.length * 20;
+    this.text(`SOLUTION DESIGN / ${kind.toUpperCase()}`, 60, 44, TYPE.kicker.size, PALETTE.teal.line, TYPE.kicker.weight, "header");
+    this.lines(title, 60, 80, TYPE.diagramTitle.size, THEME.ink, TYPE.diagramTitle.weight, "header", 34, false, "title");
+    this.text(`${model.complexity} complexity | Native ${model.coverage.nativeBuildPercent}% | PoC ${model.coverage.pocDemonstrationPercent}%`,
+      60, subtitleY, TYPE.subtitle.size, THEME.muted, 400, "header");
+    this.lines(summary, 60, subtitleY + 22, TYPE.subtitle.size, THEME.muted, 400, "header", 20);
+    this.add(`<path d="M 60 ${headerHeight} H ${this.width - 60}" stroke="${ZONE.stroke}" stroke-width="1"/>`);
     return headerHeight + 28;
   }
-  legend(y, icons, model, architecture = false) {
+  legend(y, icons, model, architecture = false, sequenceBands = [], sequenceLinks = null) {
     const legendId = "legend";
+    const byId = new Map(model.components.map(c => [c.id, c]));
+    const links = architecture ? model.relationships : sequenceLinks || model.sequence;
+    const shown = architecture ? model.components : model.components.filter(c => links.some(l => l.from === c.id || l.to === c.id));
+    const meanings = [...new Set(links.map(edge => style.linkMeaning(edge, byId)))];
     const entries = [
+      ...[...new Set(shown.map(style.componentTone))]
+        .map(name => style.KIND_LEGEND.find(([key]) => key === name))
+        .filter(Boolean).map(([name, text]) => ({ text, card: name })),
+      ...Object.entries(style.MEANINGS).filter(([key]) => meanings.includes(key))
+        .map(([, meaning]) => ({ text: meaning.label, color: PALETTE[meaning.tone].line })),
+      ...(links.some(edge => edge.style === "response" || edge.style === "optional" || edge.type === "response") ?
+        [{ text: architecture ? "Response / optional" : "Response", color: THEME.gray, dash: DASH.response }] : []),
+      ...(links.some(edge => ["simulated", "manual", "deferred"].includes(edge.implementationMode)) ?
+        [{ text: "Simulated, manual or deferred", color: THEME.gray, dash: DASH.pending }] : []),
+      ...(architecture && model.relationships.some(edge => edge.direction === "bidirectional")
+        ? [{ text: "Bidirectional", color: THEME.gray, bidirectional: true }] : []),
+      ...(architecture && model.components.some(c => style.componentTone(c) !== "red" && PENDING_STATUS.has(c.implementationStatus)) ?
+        [{ text: "Dashed card: not built as production", card: "slate", dashedCard: true }] : []),
+      ...sequenceBands.map(name => ({ text: { red: "Failure / rejection branch", green: "Success / approval branch",
+        amber: "Conditional branch", slate: "Alternative branch" }[name], card: name })),
       { text: "Official Microsoft icon", icon: [...icons.values()].find(icon => icon.verified && icon.displayName) ||
         [...icons.values()].find(icon => icon.verified) },
-      { text: "Generic component (not a product icon)", icon: [...icons.values()].find(icon => !icon.verified) },
-      { text: architecture ? "Main flow" : "Call / dependency", color: THEME.blue },
-      ...(architecture ? [{ text: "Supporting dependency", color: THEME.muted }] : []),
-      ...(architecture && model.relationships.some(edge => edge.direction === "bidirectional")
-        ? [{ text: "Bidirectional", color: THEME.blue, bidirectional: true }] : []),
-      { text: architecture ? "Response / optional" : "Response", color: THEME.blue, dash: true },
-    ].filter(entry => entry.color || entry.icon || !architecture && entry.text.startsWith("Generic"));
-    const modes = new Set([
-      ...model.relationships.map(edge => edge.implementationMode),
-      ...model.sequence.map(message => message.implementationMode),
-    ]);
-    if (model.sequence.some(message => message.type === "approval")) entries.push({ text: "Human approval", color: THEME.green });
-    for (const mode of ["simulated", "manual", "deferred", "blocked"]) {
-      if (modes.has(mode)) entries.push({
-        text: mode[0].toUpperCase() + mode.slice(1), color: modeColor(mode), dash: true,
-      });
-    }
+      ...([...icons.values()].some(icon => !icon.verified) ?
+        [{ text: "Generic component (not a product icon)", icon: [...icons.values()].find(icon => !icon.verified) }] : []),
+    ].filter(entry => entry.color || entry.icon || entry.card);
     let x = 82;
     let row = 0;
     const slots = entries.map(entry => {
-      const width = 70 + this.typography.measure(entry.text, 12).width;
+      const width = 56 + this.typography.measure(entry.text, TYPE.legend.size).width;
       if (x + width > this.width - 82) { row++; x = 82; }
-      const slot = { ...entry, x, y: y + (architecture ? 38 : 66) + row * 36 };
-      x += width + 28;
+      const slot = { ...entry, x, y: y + 58 + row * 34 };
+      x += width + 30;
       return slot;
     });
-    const height = (architecture ? 60 : 90) + row * 36;
+    const height = 80 + row * 34;
     this.add(`<g data-kind="legend" data-id="${legendId}" ${boxAttrs({ x: 60, y, width: this.width - 120, height })}>`);
-    if (!architecture) {
-      this.rect({ x: 60, y, width: this.width - 120, height }, THEME.paper, THEME.border);
-      this.text("Reading this diagram", 82, y + 29, 15, THEME.ink, 600, legendId);
-    }
+    this.rect({ x: 60, y, width: this.width - 120, height }, THEME.paper, ZONE.stroke, style.RADIUS.card, `stroke-width="${STROKE.card}"`);
+    this.text("HOW TO READ THIS DIAGRAM", 82, y + 28, TYPE.kicker.size, THEME.muted, TYPE.kicker.weight, legendId);
     for (const slot of slots) {
-      if (slot.icon) this.image(slot.icon, slot.x, slot.y - 22, 28);
-      else if (slot.color) this.arrow([{ x: slot.x, y: slot.y - 6 }, { x: slot.x + 38, y: slot.y - 6 }], slot.color, slot.dash, "", slot.bidirectional);
-      else this.rect({ x: slot.x, y: slot.y - 20, width: 26, height: 26 }, THEME.background, THEME.border, 6);
-      this.text(slot.text, slot.x + 48, slot.y, 12, THEME.muted, 400, legendId);
+      if (slot.icon) this.image(slot.icon, slot.x + 4, slot.y - 18, 22);
+      else if (slot.card) {
+        const tone = PALETTE[slot.card];
+        this.rect({ x: slot.x, y: slot.y - 17, width: 32, height: 20 }, tone.fill, tone.border, 4,
+          `stroke-width="${STROKE.card}"${slot.dashedCard ? ` stroke-dasharray="${DASH.response}"` : ""}`);
+        this.rect({ x: slot.x, y: slot.y - 14, width: STROKE.accent, height: 14 }, tone.line, "none", 2);
+      } else this.arrow([{ x: slot.x, y: slot.y - 6 }, { x: slot.x + 34, y: slot.y - 6 }], slot.color, slot.dash, "", slot.bidirectional);
+      this.text(slot.text, slot.x + 44, slot.y, TYPE.legend.size, THEME.muted, TYPE.legend.weight, legendId);
     }
     this.add("</g>");
     return y + height + 36;
@@ -157,9 +161,7 @@ class Drawing {
     return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" ` +
       `viewBox="0 0 ${this.width} ${Math.ceil(height)}" role="img" aria-labelledby="title desc">` +
       `<title id="title">${esc(title)}</title><desc id="desc">${esc(description)}</desc>` +
-      `<defs>${defs}<filter id="card-shadow" x="-10%" y="-10%" width="120%" height="130%">` +
-      `<feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#20395D" flood-opacity=".055"/>` +
-      `</filter>${this.typography.fontFace()}</defs>` +
+      `<defs>${defs}${this.typography.fontFace(title + description + this.parts.join(""))}</defs>` +
       `<rect width="${this.width}" height="${Math.ceil(height)}" fill="${THEME.background}"/>` +
       this.parts.join("\n") + "</svg>\n";
   }
@@ -188,11 +190,14 @@ function memberNames(component) {
   return [...new Set([...(component.members || []), ...(component.inventoryNames || [])])];
 }
 
-function prepareCard(component, width, typography, hero = false, compact = false, icon = {}, annotations = []) {
-  const titleSize = hero ? 23 : 19;
-  const iconSize = hero ? 56 : 44;
+function prepareCard(component, width, typography, hero = false, compact = false, icon = {}, annotations = [], options = {}) {
+  const { code = "", zoned = false } = options;
+  const titleType = hero ? TYPE.heroTitle : TYPE.nodeTitle;
+  const titleSize = titleType.size;
+  const titleWeight = titleType.weight;
+  const iconSize = hero ? ICON.hero : ICON.card;
   const titleWidth = width - iconSize - 56;
-  const title = typography.wrap(component.name, titleWidth, titleSize, 600);
+  const title = typography.wrap(component.name, titleWidth, titleSize, titleWeight);
   const titleLeading = hero ? 29 : 25;
   const product = productCaption(component, icon);
   const productLines = typography.wrap(product, titleWidth, 14);
@@ -208,7 +213,7 @@ function prepareCard(component, width, typography, hero = false, compact = false
     name, lines: typography.wrap(name, width - 48, 14),
   }));
   const representedMembers = canonicalMembers.filter(name => represented.has(name));
-  let nextY = 22 + titleHeight + (description.length ? 22 : 4);
+  let nextY = 22 + CARD_HEAD + titleHeight + (description.length ? 22 : 4);
   const descriptionY = nextY;
   nextY += Math.max(0, description.length - 1) * 20;
   const membersY = nextY + (members.length ? 23 : 0);
@@ -218,7 +223,8 @@ function prepareCard(component, width, typography, hero = false, compact = false
     ...(component.productService && ![component.name, product].includes(component.productService) ?
       [{ label: "Service", value: component.productService }] : []),
     ...(runtime ? [{ label: "Runtime", value: runtime }] : []),
-    ...(boundary ? [{ label: "Boundary", value: boundary }] : []),
+    // A painted deployment zone already names the boundary, unless it is also an inventory name.
+    ...(boundary && !(zoned && !canonicalMembers.includes(boundary)) ? [{ label: "Boundary", value: boundary }] : []),
     ...(component.allowedToolScope?.allowedProducts?.length ?
       [{ label: "Allowed product", value: component.allowedToolScope.allowedProducts.join("; ") }] : []),
     ...(component.productionGaps || []).map(gap => ({ label: "Readiness gap",
@@ -236,7 +242,7 @@ function prepareCard(component, width, typography, hero = false, compact = false
   nextY += Math.max(0, metadata.length - 1) * 16 + 20;
   const scopes = annotations.map(annotation => {
     const arrow = annotation.direction === "bidirectional" ? "↔" : "→";
-    const text = `${annotation.id} · ${annotation.from} ${arrow} ${annotation.to} · ${annotation.style} / ${annotation.implementationMode}`;
+    const text = `${annotation.code ? `${annotation.code} · ` : ""}${annotation.id} · ${annotation.from} ${arrow} ${annotation.to} · ${annotation.style} / ${annotation.implementationMode}`;
     const lines = typography.wrap(text, width - 48, 11);
     const labelLines = typography.wrap(annotation.label, width - 48, 13);
     const scope = { ...annotation, y: nextY + 10, lines, labelLines };
@@ -245,10 +251,11 @@ function prepareCard(component, width, typography, hero = false, compact = false
   });
   if (!icon.verified) nextY += 16;
   return {
-    id: component.id, component, width, height: Math.max(hero ? 190 : compact ? 110 : 130, nextY),
-    title, titleSize, titleLeading, titleHeight, productLines, description, members, descriptionY,
+    id: component.id, component, width, height: Math.max(hero ? 200 : compact ? 128 : 148, nextY),
+    title, titleSize, titleWeight, titleLeading, titleHeight, productLines, description, members, descriptionY,
     membersY, representedMembers, canonicalMembers, details, detailsY, scopes,
-    metadataY, metadata, iconSize, hero, icon, x: 0, y: 0,
+    metadataY, metadata, iconSize, hero, icon, code, tag: style.TREATMENT_TAGS[component.implementationStatus] || "",
+    x: 0, y: 0,
   };
 }
 
@@ -277,16 +284,21 @@ function renderCard(drawing, card) {
     `data-production-status="${esc(c.productionStatus || "")}" data-deployment-boundary="${esc(boundaryOf(c))}" ` +
     `data-visual-role="${esc(visualRole(c))}" data-visual-group="${esc(visualGroup(c))}" ` +
     `data-members-count="${card.canonicalMembers.length}" ${boxAttrs(card)}>`);
-  const color = componentColor(c);
-  drawing.rect(card, card.hero ? "#F2F5FF" : THEME.paper, color, 16,
-    `stroke-width="${card.hero ? 2.2 : 1.4}" filter="url(#card-shadow)"`);
-  if (card.hero) drawing.add(`<path d="M ${card.x + 20} ${card.y} H ${card.x + card.width - 20}" stroke="${THEME.blue}" stroke-width="3"/>`);
-  drawing.image(card.icon, card.x + 22, card.y + 22, card.iconSize);
-  membership([c.name], () => drawing.lines(card.title, card.x + card.iconSize + 36, card.y + 42, card.titleSize,
-    THEME.ink, 600, c.id, card.titleLeading, false, "card-title"));
-  membership([productCaption(c, card.icon)], () => drawing.lines(card.productLines, card.x + card.iconSize + 36,
-    card.y + 42 + card.title.length * card.titleLeading, 14, THEME.muted, 400,
+  const tone = PALETTE[style.componentTone(c)];
+  const pending = PENDING_STATUS.has(c.implementationStatus);
+  drawing.rect(card, tone.fill, card.hero ? tone.line : tone.border, style.RADIUS.card,
+    `stroke-width="${card.hero ? STROKE.hero : STROKE.card}"${pending ? ` stroke-dasharray="${DASH.response}"` : ""}`);
+  drawing.rect({ x: card.x, y: card.y + 11, width: STROKE.accent, height: card.height - 22 }, tone.line, "none", 2);
+  drawing.image(card.icon, card.x + 22, card.y + 22 + CARD_HEAD, card.iconSize);
+  // The product name is the first painted text so it keeps the >=14px heading minimum.
+  membership([c.name], () => drawing.lines(card.title, card.x + card.iconSize + 34, card.y + 42 + CARD_HEAD, card.titleSize,
+    THEME.ink, card.titleWeight, c.id, card.titleLeading, false, "card-title"));
+  membership([productCaption(c, card.icon)], () => drawing.lines(card.productLines, card.x + card.iconSize + 34,
+    card.y + 42 + CARD_HEAD + card.title.length * card.titleLeading, 14, THEME.muted, 400,
     c.id, 20, false, "product-title"));
+  if (card.code) drawing.text(card.code, card.x + 22, card.y + 25, TYPE.nodeCode.size, tone.line, TYPE.nodeCode.weight, c.id, false, "component-code");
+  if (card.tag) drawing.text(card.hero ? `PRIMARY AGENT · ${card.tag}` : card.tag, card.x + card.width - 20, card.y + 25,
+    TYPE.nodeCode.size, THEME.muted, TYPE.nodeCode.weight, c.id, false, "treatment", true);
   drawing.lines(card.description, card.x + 24, card.y + card.descriptionY, 14,
     THEME.muted, 400, c.id, 20);
   if (card.members.length) {
@@ -308,7 +320,7 @@ function renderCard(drawing, card) {
   drawing.lines(card.metadata, card.x + 24, card.y + card.metadataY, 11,
     THEME.muted, 400, c.id, 16, false, "metadata");
   for (const scope of card.scopes) {
-    const color = modeColor(scope.implementationMode);
+    const color = scope.color || THEME.gray;
     drawing.add(`<g data-kind="control-annotation" data-id="${esc(scope.id)}" ` +
       `data-from="${esc(scope.from)}" data-to="${esc(scope.to)}" data-style="${esc(scope.style)}" ` +
       `data-direction="${esc(scope.direction || "unidirectional")}" ` +
@@ -355,30 +367,41 @@ function crossingBridges(routes) {
   return bridges;
 }
 
+function relationshipLabel(edge, code) {
+  const mode = style.MODE_WORDS[edge.implementationMode];
+  return `${code} · ${mode ? `${mode} · ` : ""}${edge.label}`;
+}
+
 function architectureCandidate(model, icons, typography, profile, output, python, family) {
   const controlIds = new Set(model.components.filter(isCrossCutting).map(c => c.id));
+  const byId = new Map(model.components.map(c => [c.id, c]));
   const relationships = identified(model.relationships, "relationship").map(({ id, record }) => ({ ...record, id }));
+  const codes = style.relationshipCodes(relationships);
+  const componentCodes = style.componentCodes(model);
   const scopes = new Map([...controlIds].map(id => [id, []]));
   const coverage = relationships.map(edge => {
     const control = controlIds.has(edge.from) ? edge.from : controlIds.has(edge.to) ? edge.to : null;
     const item = { ...edge, representation: control ? "scoped-control-annotation" : "routed", ...(control ? { owner: control } : {}) };
-    if (control) scopes.get(control).push(item);
+    if (control) scopes.get(control).push({ ...item, code: codes.get(edge.id), color: linkColor(edge, byId) });
     return item;
   });
-  const labelMeasures = new Map(model.relationships.map(edge => {
-    const lines = typography.wrap(edge.label, 140, 13);
+  const labelType = TYPE.edgeLabel;
+  const labelMeasures = new Map(model.relationships.map((edge, index) => {
+    const lines = typography.wrap(relationshipLabel(edge, codes.get(relationships[index].id)), 160, labelType.size, labelType.weight);
     return [edge, {
-      lines, labelWidth: Math.max(...lines.map(line => typography.measure(line, 13).width), 70) + 20,
-      labelHeight: lines.length * 19 + 12,
+      lines, labelWidth: Math.max(...lines.map(line => typography.measure(line, labelType.size, labelType.weight).width), 60) + 18,
+      labelHeight: lines.length * 17 + 10,
     }];
   }));
   const composition = composeArchitecture(model, PROFILES[profile],
-    (c, width, hero, compact) => prepareCard(c, width, typography, hero, compact, icons.get(c.id), scopes.get(c.id) || []), 0,
+    (c, width, hero, compact) => prepareCard(c, width, typography, hero, compact, icons.get(c.id), scopes.get(c.id) || [],
+      { code: componentCodes.get(c.id), zoned: family === "boundary" && !isCrossCutting(c) && Boolean(boundaryOf(c)) }), 0,
     edge => ({ width: labelMeasures.get(edge).labelWidth, height: labelMeasures.get(edge).labelHeight }), family);
   const { width, cards } = composition;
   const drawing = new Drawing(width, typography);
-  const top = drawing.header(model, "Solution Architecture", false);
-  for (const item of [...cards, ...composition.regions, ...composition.headings]) item.y += top;
+  const top = drawing.header(model, "Engineering Architecture", false);
+  const zones = composition.zones || [];
+  for (const item of [...cards, ...composition.regions, ...composition.headings, ...zones]) item.y += top;
   const bottom = composition.bottom + top;
   const cardById = new Map(cards.map(card => [card.id, card]));
   const activeEdges = relationships.filter(edge => !controlIds.has(edge.from) && !controlIds.has(edge.to));
@@ -437,8 +460,29 @@ function architectureCandidate(model, icons, typography, profile, output, python
   for (const region of composition.regions) {
     drawing.add(`<g data-kind="semantic-layer" data-id="${region.id}" ${boxAttrs(region)}/>`);
   }
+  // Dashed zones are evidenced deployment boundaries; links leaving a zone cross a trust boundary.
+  const paintedZones = zones.filter(zone => zone.painted);
+  for (const zone of paintedZones) {
+    drawing.add(`<g data-kind="zone" data-id="${esc(zone.id)}" data-name="${esc(zone.name)}" ` +
+      `data-components="${esc(JSON.stringify(zone.cardIds))}" ${boxAttrs(zone)}>`);
+    drawing.rect(zone, ZONE.fill, ZONE.stroke, ZONE.radius, `stroke-width="${STROKE.zone}" stroke-dasharray="${DASH.zone}"`);
+    drawing.add("</g>");
+  }
+  const controlCards = cards.filter(card => card.storyRole === "control");
+  let controlBand = null;
+  if (controlCards.length) {
+    const topEdge = Math.min(...controlCards.map(card => card.y)) - 48;
+    const band = { x: 48, y: topEdge, width: width - 96,
+      height: Math.max(...controlCards.map(card => card.y + card.height)) + 24 - topEdge };
+    controlBand = band;
+    drawing.add(`<g data-kind="control-band" data-id="cross-cutting-controls" ` +
+      `data-components="${esc(JSON.stringify(controlCards.map(card => card.id)))}" ${boxAttrs(band)}>`);
+    drawing.rect(band, PALETTE.slate.fill, PALETTE.slate.border, ZONE.radius, `stroke-width="${STROKE.zone}"`);
+    drawing.add("</g>");
+  }
   for (const [index, heading] of composition.headings.entries()) {
-    drawing.text(heading.text, heading.x, heading.y, 15, THEME.blue, 600, `heading-${index}`, false, "section-title");
+    drawing.text(heading.text, heading.x, heading.y, TYPE.zoneTitle.size, /^\d/.test(heading.text) ? PALETTE.blue.line : ZONE.title,
+      TYPE.zoneTitle.weight, `heading-${index}`, false, "section-title");
   }
   const input = {
     canvasWidth: width, canvasHeight: bottom + 180, routePadding: 12,
@@ -447,11 +491,13 @@ function architectureCandidate(model, icons, typography, profile, output, python
     labelExclusions: [
       { x: 0, y: 0, width, height: top - 8 },
       ...drawing.texts.map(text => ({ x: text.x - 6, y: text.y - 6, width: text.width + 12, height: text.height + 12 })),
+      ...(controlBand ? [controlBand] : []),
       { x: 0, y: bottom, width, height: 180 },
     ],
     routingExclusions: [
       { x: 0, y: 0, width, height: top - 8 },
       { x: 0, y: bottom, width, height: 180 },
+      ...(controlBand ? [controlBand] : []),
       ...drawing.texts.map(text => ({
         x: text.x - 6, y: text.y - 6, width: text.width + 12, height: text.height + 12,
       })),
@@ -476,22 +522,21 @@ function architectureCandidate(model, icons, typography, profile, output, python
     const route = routeById.get(item.id);
     if (!route || route.points.length < 2) throw new Error(`Missing Python layout route: ${item.id}`);
     const { edge } = item;
-    const supporting = [edge.from, edge.to].some(id => cardById.get(id).storyRole === "supporting");
-    const color = supporting && edge.implementationMode === "real" ? THEME.muted : modeColor(edge.implementationMode);
+    const color = linkColor(edge, byId);
     drawing.add(`<g data-kind="connector" data-id="${esc(item.id)}" data-from="${esc(edge.from)}" data-to="${esc(edge.to)}" ` +
-      `data-label="${esc(edge.label)}" data-style="${esc(edge.style)}" ` +
+      `data-label="${esc(edge.label)}" data-code="${esc(codes.get(item.id))}" data-style="${esc(edge.style)}" ` +
+      `data-meaning="${style.linkMeaning(edge, byId)}" ` +
       `data-direction="${esc(edge.direction || "unidirectional")}" ` +
       `data-relationship-type="${esc(edge.relationshipType || "")}" ` +
       `data-implementation-mode="${edge.implementationMode}" data-route="${route.points.map(p => `${p.x},${p.y}`).join(";")}">`);
-    drawing.arrow(route.points, color, edge.style !== "call" || edge.implementationMode !== "real",
-      "", edge.direction === "bidirectional");
+    drawing.arrow(route.points, color, style.linkPattern(edge), "", edge.direction === "bidirectional");
     for (const bridge of bridges.get(route.id) || []) {
       drawing.add(`<g data-kind="connector-bridge" data-x="${number(bridge.x)}" data-y="${number(bridge.y)}">`);
       drawing.add(`<circle cx="${number(bridge.x)}" cy="${number(bridge.y)}" r="6" fill="${THEME.background}"/>`);
       const arc = bridge.vertical ?
         `M ${bridge.x} ${bridge.y - 7} Q ${bridge.x + 10} ${bridge.y} ${bridge.x} ${bridge.y + 7}` :
         `M ${bridge.x - 7} ${bridge.y} Q ${bridge.x} ${bridge.y - 10} ${bridge.x + 7} ${bridge.y}`;
-      drawing.add(`<path d="${arc}" fill="none" stroke="${color}" stroke-width="2"/>`);
+      drawing.add(`<path d="${arc}" fill="none" stroke="${color}" stroke-width="${STROKE.edge}"/>`);
       drawing.add("</g>");
     }
     drawing.add("</g>");
@@ -505,8 +550,8 @@ function architectureCandidate(model, icons, typography, profile, output, python
     };
     const id = `label-${item.id}`;
     drawing.add(`<g data-kind="connector-label" data-id="${id}" data-owner="${item.id}" ${boxAttrs(box)}>`);
-    drawing.rect(box, THEME.background, "none", 6);
-    drawing.lines(item.lines, route.labelX, box.y + 20, 13, color, 400, id, 19, true);
+    drawing.rect(box, THEME.background, "none", style.RADIUS.label);
+    drawing.lines(item.lines, route.labelX, box.y + 18, labelType.size, color, labelType.weight, id, 17, true, "connector-text");
     drawing.add("</g>");
   }
   let summaryY = bottom;
@@ -521,7 +566,7 @@ function architectureCandidate(model, icons, typography, profile, output, python
     controls: [], description: model.allowedTools.join("; "),
   });
   if (boundaries.length) {
-    drawing.text("EVIDENCED BOUNDARY SCOPES", 72, summaryY + 18, 15, THEME.blue, 600, "boundary-heading");
+    drawing.text("EVIDENCED BOUNDARY SCOPES", 72, summaryY + 18, TYPE.zoneTitle.size, ZONE.title, TYPE.zoneTitle.weight, "boundary-heading");
     summaryY += 48;
     for (const boundary of boundaries) {
       const detail = [
@@ -540,17 +585,34 @@ function architectureCandidate(model, icons, typography, profile, output, python
     }
     summaryY += 10;
   }
-  const summary = typography.wrap(model.summary, width - 192, 18, 600);
+  const statement = TYPE.statement;
+  const summary = typography.wrap(model.summary, width - 192, statement.size, statement.weight);
   const summaryHeight = summary.length * 26 + 38;
-  drawing.rect({ x: 60, y: summaryY, width: width - 120, height: summaryHeight }, THEME.ink, "none", 12);
-  drawing.lines(summary, width / 2, summaryY + 34, 18, THEME.paper, 600, "architecture-summary", 26, true);
+  drawing.rect({ x: 60, y: summaryY, width: width - 120, height: summaryHeight }, THEME.ink, "none", style.RADIUS.card);
+  drawing.lines(summary, width / 2, summaryY + 34, statement.size, THEME.paper, statement.weight, "architecture-summary", 26, true);
   const height = drawing.legend(summaryY + summaryHeight + 22, icons, model, true);
   const quality = visualQuality({ model, cards, drawing, layout, width, height: Math.ceil(height), coverage });
+  const svg = drawing.svg(height, `${model.title} - Engineering Architecture`, model.summary);
+  // Deployment boundaries are only legible as zones; unzoned layouts of multi-boundary
+  // designs remain valid but rank below an equally clean zoned layout.
+  const evidencedBoundaries = new Set(cards.filter(card => card.storyRole !== "control")
+    .map(card => boundaryOf(card.component)).filter(Boolean));
+  const zonePenalty = evidencedBoundaries.size >= 2 && !paintedZones.length ? 8 : 0;
+  const conformance = style.styleConformance(svg);
+  const styleGate = { name: "style-conformance", actual: conformance.issues, limit: 0,
+    passed: conformance.validation === "passed",
+    reason: "Every colour, stroke width and font size comes from the shared review style tokens (renderer/style.js)." };
+  const gates = [...quality.gates, styleGate];
+  const issues = [...quality.issues, ...(styleGate.passed ? [] : [`style-conformance: ${conformance.issues.join("; ")}`])];
   return {
-    svg: drawing.svg(height, `${model.title} - Solution Architecture`, model.summary), layout, drawing,
+    svg, layout, drawing,
     width, height: Math.ceil(height),
     quality: {
-      ...quality,
+      ...quality, gates, issues, validation: issues.length ? "failed" : "passed",
+      score: Math.round(Math.max(0, quality.score - zonePenalty - (styleGate.passed ? 0 : 15)) * 10000) / 10000,
+      zones: { evidencedBoundaries: [...evidencedBoundaries], painted: paintedZones.map(zone => ({
+        id: zone.id, name: zone.name, componentIds: zone.cardIds })), penalty: zonePenalty },
+      componentCodes: Object.fromEntries(componentCodes), relationshipCodes: Object.fromEntries(codes),
       bridgeCount: [...bridges.values()].reduce((sum, list) => sum + list.length, 0),
       textMeasurement: "resvg / bundled Inter",
       composition: {
@@ -626,22 +688,28 @@ function sequenceDiagram(model, icons, typography, profile) {
   const width = Math.min(2200, Math.max(PROFILES[profile].width, participants.length * 232 + 120));
   const drawing = new Drawing(width, typography);
   const top = drawing.header(model, "Sequence Diagram");
-  const gap = 28;
-  const headerWidth = Math.min(260, (width - 120 - gap * (participants.length - 1)) / participants.length);
-  const rowWidth = headerWidth * participants.length + gap * (participants.length - 1);
-  const firstX = (width - rowWidth) / 2;
+  const codes = style.componentCodes(model);
+  const relationshipById = new Map(identified(model.relationships, "relationship").map(({ id, record }) => [id, record]));
+  // Evenly spaced lanes leave the left rail free for numbered step markers.
+  const railLeft = 84;
+  const railRight = width - 40;
+  const span = participants.length > 1 ? Math.min(railRight - railLeft - 220, (participants.length - 1) * 400) : 0;
+  const pitch = participants.length > 1 ? span / (participants.length - 1) : 0;
+  const headerWidth = participants.length > 1 ? Math.min(220, pitch - 28) : 220;
+  const firstCenter = (railLeft + railRight) / 2 - span / 2;
   const headers = participants.map((id, index) => {
     const c = byId.get(id);
+    const center = firstCenter + index * pitch;
     return {
-      component: c, id, x: firstX + index * (headerWidth + gap), width: headerWidth,
-      center: firstX + index * (headerWidth + gap) + headerWidth / 2,
-      nameLines: typography.wrap(c.name, headerWidth - 32, 16, 600),
-      productLines: typography.wrap(productCaption(c, icons.get(c.id)), headerWidth - 32, 14),
-      statusLines: typography.wrap(`${c.kind.toUpperCase()} / ${STATUS[c.implementationStatus]}`, headerWidth - 32, 11),
+      component: c, id, x: center - headerWidth / 2, width: headerWidth, center,
+      tone: PALETTE[style.componentTone(c)],
+      nameLines: typography.wrap(c.name, headerWidth - 28, TYPE.laneTitle.size, TYPE.laneTitle.weight),
+      productLines: typography.wrap(productCaption(c, icons.get(c.id)), headerWidth - 28, 12),
+      codeLine: `${codes.get(c.id)} · ${c.kind.toUpperCase()}`,
+      tag: style.TREATMENT_TAGS[c.implementationStatus] || "",
     };
   });
-  const headerHeight = Math.max(...headers.map(h =>
-    110 + h.nameLines.length * 22 + h.productLines.length * 20 + h.statusLines.length * 17));
+  const headerHeight = Math.max(...headers.map(h => 58 + h.nameLines.length * 19 + h.productLines.length * 16));
   const xById = new Map(headers.map(h => [h.id, h.center]));
   const phaseGroups = [];
   model.sequence.forEach((message, index) => {
@@ -670,10 +738,10 @@ function sequenceDiagram(model, icons, typography, profile) {
       const prefix = message.implementationMode === "simulated" && !/simulat/i.test(message.label) ? "Simulated: " : "";
       const fragment = message.fragment || "";
       const condition = message.condition && !fragment.includes(message.condition) ? ` Condition: ${message.condition}` : "";
-      const label = `${entry.order}. ${prefix}${message.label}${condition}`;
-      const lines = typography.wrap(label, labelWidth - 22, 14);
+      const label = `${prefix}${message.label}${condition}`;
+      const lines = typography.wrap(label, labelWidth - 22, TYPE.messageCopy.size, TYPE.messageCopy.weight);
       if (fragment && fragment !== previousFragment) cursor += 38;
-      const labelHeight = lines.length * 20 + 12;
+      const labelHeight = lines.length * 18 + 10;
       let center = self ? fromX + (fromX > width * .75 ? -65 : 65) : (fromX + toX) / 2;
       center = Math.max(82 + labelWidth / 2, Math.min(width - 82 - labelWidth / 2, center));
       const row = {
@@ -698,73 +766,95 @@ function sequenceDiagram(model, icons, typography, profile) {
     row.fragmentBottom = last.y + (last.self ? 44 : 22);
   });
   const lifelineEnd = cursor - 24;
+  const fragmentTone = text => /reject|fail|error|timeout|den(y|ied)|exception|invalid|cancel|abort/i.test(text) ? "red" :
+    /approv|accept|success|valid|confirm|complete|allow/i.test(text) ? "green" : /^(opt|loop|par)\b/i.test(text) ? "slate" : "amber";
+  const bandTones = [...new Set(rows.filter(row => row.fragmentStart).map(row => fragmentTone(row.fragment)))];
   phaseGroups.forEach((phase, index) => {
+    phase.title = `${String(index + 1).padStart(2, "0")}  ${phase.name.toUpperCase()}`;
     phase.headingWidth = Math.min(width - 120,
-      typography.measure(`${String(index + 1).padStart(2, "0")}  ${phase.name}`, 15, 600).width + 48);
+      typography.measure(phase.title, TYPE.zoneTitle.size, TYPE.zoneTitle.weight).width + 48);
     const box = { x: 60, y: phase.y, width: phase.compact ? phase.headingWidth : width - 120,
       height: phase.compact ? 42 : phase.height };
-    phase.fill = index % 2 ? "#F0F3FA" : "#EEF5F8";
     drawing.add(`<g data-kind="phase" data-id="${phase.id}" data-message-count="${phase.messages.length}" ` +
       `data-treatment="${phase.compact ? "compact-label" : "multi-message-band"}" ${boxAttrs(box)}>`);
-    drawing.rect(box, phase.fill, phase.compact ? "none" : THEME.border, 10, 'stroke-width=".7"');
+    drawing.rect(box, ZONE.fill, ZONE.stroke, phase.compact ? 21 : ZONE.radius,
+      `stroke-width="${STROKE.zone}"${phase.compact ? "" : ` stroke-dasharray="${DASH.zone}"`}`);
     drawing.add("</g>");
   });
   for (const header of headers) {
     const c = header.component;
     const box = { x: header.x, y: top, width: header.width, height: headerHeight };
-    const accent = c.kind === "agent" ? THEME.blue : c.kind === "human" ? THEME.green : THEME.border;
     drawing.add(`<g id="lifeline-${esc(c.id)}" data-kind="lifeline" data-component-id="${esc(c.id)}" ${boxAttrs(box)}>`);
-    drawing.rect(box, THEME.paper, accent, 15, 'stroke-width="1.4"');
-    drawing.image(icons.get(c.id), header.center - 24, top + 18, 48);
-    drawing.lines(header.nameLines, header.center, top + 92, 16, THEME.ink, 600, c.id, 22, true, "participant-title");
-    drawing.lines(header.productLines, header.center, top + 96 + header.nameLines.length * 22,
-      14, THEME.muted, 400, c.id, 20, true, "product-title");
-    drawing.lines(header.statusLines, header.center,
-      top + 106 + header.nameLines.length * 22 + header.productLines.length * 20,
-      11, THEME.muted, 400, c.id, 17, true);
+    drawing.rect(box, header.tone.fill, header.tone.border, style.RADIUS.card, `stroke-width="${STROKE.card}"`);
+    drawing.rect({ x: box.x + 12, y: box.y, width: box.width - 24, height: STROKE.accent }, header.tone.line, "none", 2);
+    // Participant name is painted first so it carries the >=14px participant heading minimum.
+    drawing.lines(header.nameLines, header.center, top + 58, TYPE.laneTitle.size, THEME.ink, TYPE.laneTitle.weight,
+      c.id, 19, true, "participant-title");
+    drawing.lines(header.productLines, header.center, top + 58 + header.nameLines.length * 19,
+      12, THEME.muted, 400, c.id, 16, true, "product-caption");
+    drawing.image(icons.get(c.id), box.x + 12, top + 14, 20);
+    drawing.text(header.codeLine, box.x + 38, top + 29, TYPE.nodeCode.size, header.tone.line, TYPE.nodeCode.weight, c.id, false, "component-code");
+    if (header.tag && typography.measure(header.codeLine, TYPE.nodeCode.size, TYPE.nodeCode.weight).width +
+        typography.measure(header.tag, TYPE.nodeCode.size, TYPE.nodeCode.weight).width + 62 < header.width) {
+      drawing.text(header.tag, box.x + box.width - 12, top + 29, TYPE.nodeCode.size, THEME.muted, TYPE.nodeCode.weight,
+        c.id, false, "treatment", true);
+    }
     drawing.add(`<line data-kind="lifeline-line" x1="${number(header.center)}" x2="${number(header.center)}" ` +
-      `y1="${top + headerHeight}" y2="${lifelineEnd}" stroke="#9CAFC8" stroke-width="1.4" stroke-dasharray="5 7"/>`);
+      `y1="${top + headerHeight}" y2="${lifelineEnd}" stroke="${PALETTE.slate.border}" stroke-width="${STROKE.card}" ` +
+      `stroke-dasharray="${DASH.lifeline}"/>`);
     drawing.add("</g>");
   }
-  phaseGroups.forEach((phase, index) => {
-    drawing.rect({ x: 61, y: phase.y + 1, width: phase.compact ? phase.headingWidth - 2 : width - 122,
-      height: phase.compact ? 40 : 44 }, phase.fill, "none", 10);
-    drawing.text(`${String(index + 1).padStart(2, "0")}  ${phase.name}`, 82, phase.y + 30,
-      15, THEME.ink, 600, phase.id, false, "phase-title");
+  phaseGroups.forEach(phase => {
+    drawing.text(phase.title, 82, phase.y + 27, TYPE.zoneTitle.size, ZONE.title, TYPE.zoneTitle.weight, phase.id, false, "phase-title");
   });
+  const sequenceLinks = [];
   for (const row of rows) {
-    const color = modeColor(row.message.implementationMode, row.message.type);
+    const relationship = relationshipById.get(row.message.relationshipId) ||
+      model.relationships.find(edge => edge.from === row.message.from && edge.to === row.message.to && edge.style === "call") ||
+      (row.message.type === "response" ? model.relationships.find(edge => edge.from === row.message.to && edge.to === row.message.from) : null);
+    const link = { ...row.message, relationshipType: relationship?.relationshipType,
+      style: row.message.type === "response" ? "response" : "call" };
+    const color = linkColor(link, byId);
+    sequenceLinks.push(link);
     const loop = row.fromX > width * .75 ? -72 : 72;
     const points = row.self ? [
       { x: row.fromX, y: row.y }, { x: row.fromX + loop, y: row.y },
       { x: row.fromX + loop, y: row.y + 26 }, { x: row.fromX, y: row.y + 26 },
     ] : [{ x: row.fromX, y: row.y }, { x: row.toX, y: row.y }];
     if (row.fragmentStart) {
+      const tone = PALETTE[fragmentTone(row.fragment)];
       const box = { x: 74, y: row.labelY - 36, width: width - 148, height: row.fragmentBottom - row.labelY + 36 };
-      drawing.add(`<g data-kind="fragment" data-id="fragment-${row.number}" ${boxAttrs(box)}>`);
-      drawing.rect(box, "none", THEME.amber, 8, 'stroke-dasharray="6 5" stroke-width="1"');
-      drawing.rect({
-        x: 84, y: row.labelY - 31, width: typography.measure(row.fragment, 12, 600).width + 16, height: 25,
-      }, THEME.paper, "none", 6);
-      drawing.text(row.fragment, 90, row.labelY - 13, 12, THEME.amber, 600, `fragment-${row.number}`);
+      drawing.add(`<g data-kind="fragment" data-id="fragment-${row.number}" data-tone="${fragmentTone(row.fragment)}" ${boxAttrs(box)}>`);
+      drawing.rect(box, "none", tone.border, 8, `stroke-width="${STROKE.zone}" stroke-dasharray="${DASH.response}"`);
+      drawing.rect({ x: box.x, y: box.y, width: box.width, height: 28 }, tone.fill, "none", 8);
+      drawing.rect({ x: box.x, y: box.y + 4, width: STROKE.accent, height: 20 }, tone.line, "none", 2);
+      drawing.text(row.fragment.toUpperCase(), 92, row.labelY - 17, TYPE.bandTitle.size, tone.line, TYPE.bandTitle.weight,
+        `fragment-${row.number}`, false, "fragment-title");
       drawing.add("</g>");
     }
     drawing.add(`<g data-kind="message" data-from="${esc(row.message.from)}" data-to="${esc(row.message.to)}" ` +
       `data-id="${esc(row.id)}" data-order="${esc(row.order)}" data-occurrence="${row.number}" data-type="${esc(row.message.type)}" ` +
       `data-relationship-id="${esc(row.message.relationshipId || "")}" data-label="${esc(row.message.label)}" ` +
+      `data-meaning="${style.linkMeaning(link, byId)}" ` +
       `data-condition="${esc(row.message.condition || "")}" data-action-control="${esc(JSON.stringify(row.message.actionControl || null))}" ` +
       `data-implementation-mode="${row.message.implementationMode}" ` +
       `data-route="${points.map(p => `${number(p.x)},${number(p.y)}`).join(";")}">`);
-    drawing.rect({ x: row.toX - 4, y: row.y - 7, width: 8, height: row.self ? 40 : 26 }, color, "none", 3);
-    drawing.arrow(points, color, row.message.type === "response" || row.message.implementationMode !== "real");
+    drawing.rect({ x: row.toX - 3, y: row.y - 7, width: 6, height: row.self ? 40 : 26 }, color, "none", 2);
+    drawing.arrow(points, color, style.linkPattern(link));
     const box = { x: row.center - row.labelWidth / 2, y: row.labelY, width: row.labelWidth, height: row.labelHeight };
     const labelId = `message-label-${row.number}`;
     drawing.add(`<g data-kind="message-label" data-id="${labelId}" ${boxAttrs(box)}>`);
-    drawing.rect(box, THEME.paper, "none", 7);
-    drawing.lines(row.lines, row.center, row.labelY + 21, 14, THEME.ink, 400, labelId, 20, true);
+    drawing.rect(box, THEME.paper, "none", style.RADIUS.label);
+    drawing.lines(row.lines, row.center, row.labelY + 19, TYPE.messageCopy.size, color, TYPE.messageCopy.weight, labelId, 18, true);
+    drawing.add("</g>");
+    // Numbered rail: every step is findable from the left edge and in the narrative.
+    drawing.add(`<g data-kind="step-marker" data-order="${esc(row.order)}">`);
+    drawing.add(`<circle cx="34" cy="${number(row.y)}" r="13" fill="${color}"/>`);
+    drawing.text(String(row.order), 34, row.y + 4, TYPE.stepNumber.size, THEME.paper, TYPE.stepNumber.weight,
+      `step-${row.number}`, true, "step-number");
     drawing.add("</g></g>");
   }
-  const height = drawing.legend(cursor + 8, icons, model);
+  const height = drawing.legend(cursor + 8, icons, model, false, bandTones, sequenceLinks);
   const issues = [];
   for (const [index, text] of drawing.texts.entries()) {
     if (text.x < 4 || text.y < 4 || text.x + text.width > width - 4 || text.y + text.height > height - 4)
@@ -775,9 +865,13 @@ function sequenceDiagram(model, icons, typography, profile) {
         issues.push(`Sequence text overlaps: ${text.text} / ${other.text}`);
     }
   }
-  return { svg: drawing.svg(height, `${model.title} - Sequence Diagram`,
-    "Ordered, evidence-grounded interactions with explicit implementation modes and human handoffs."), drawing,
+  const svg = drawing.svg(height, `${model.title} - Sequence Diagram`,
+    "Ordered, evidence-grounded interactions with explicit implementation modes and human handoffs.");
+  const conformance = style.styleConformance(svg);
+  issues.push(...conformance.issues.map(issue => `Sequence style: ${issue}`));
+  return { svg, drawing,
     width, height: Math.ceil(height), quality: { validation: issues.length ? "failed" : "passed", issues,
+      styleConformance: conformance.validation,
       participantIds: participants,
       phaseCount: phaseGroups.length, compactPhaseCount: phaseGroups.filter(p => p.compact).length,
       fullWidthSingleMessagePanels: 0, messageCoverage: sequenceRecords.map(({ id, order, record }) => ({
@@ -790,7 +884,7 @@ function sequenceDiagram(model, icons, typography, profile) {
 
 function validateEditableSources(model, modelPath, output, python = process.env.LISA_PYTHON || "python") {
   const names = ["source-report.json", `Design_${model.scenarioSlug}.drawio`,
-    `SA_${model.scenarioSlug}.mmd`, `SD_${model.scenarioSlug}.mmd`];
+    `BA_${model.scenarioSlug}.mmd`, `SA_${model.scenarioSlug}.mmd`, `SD_${model.scenarioSlug}.mmd`];
   if (!names.some(name => fs.existsSync(path.join(output, name)))) return { validation: "not-present", sources: false };
   // Reuse the read-only source gate; never regenerate or repair upstream source files here.
   const helper = path.join(__dirname, "..", "scripts", "source_artifacts.py");
@@ -838,24 +932,33 @@ function main(argv) {
   const typography = new Typography();
   const sa = architecture(model, icons, typography, args.profile, output, args.python);
   const sd = sequenceDiagram(model, icons, typography, args.profile);
+  const ba = businessArchitecture(model, typography);
   sa.quality.sequence = sd.quality;
+  sa.quality.business = ba.quality;
   if (sd.quality.validation !== "passed") {
     sa.quality.validation = "failed";
     fs.writeFileSync(path.join(output, `sequence-quality-${args.profile}.json`), JSON.stringify(sd.quality, null, 2));
     throw new Error(`Sequence visual quality failed: ${sd.quality.issues.join("; ")}`);
   }
+  if (ba.quality.validation !== "passed") {
+    sa.quality.validation = "failed";
+    throw new Error(`Business architecture visual quality failed: ${ba.quality.issues.join("; ")}`);
+  }
+  const baPath = path.join(output, `BA_${model.scenarioSlug}.svg`);
   const saPath = path.join(output, `SA_${model.scenarioSlug}.svg`);
   const sdPath = path.join(output, `SD_${model.scenarioSlug}.svg`);
   const previewPath = path.join(output, "preview.html");
+  fs.writeFileSync(baPath, ba.svg);
   fs.writeFileSync(saPath, sa.svg);
   fs.writeFileSync(sdPath, sd.svg);
   fs.writeFileSync(previewPath, createPreview(model, {
+    business: { width: ba.width, height: ba.height },
     architecture: { width: sa.width, height: sa.height }, sequence: { width: sd.width, height: sd.height },
-    sources: sourceGate.sources,
+    sources: sourceGate.sources, references: sources,
   }));
   const manifest = {
-    scenarioSlug: model.scenarioSlug, layoutProfile: args.profile, presentation: "professional-light",
-    layoutEngine: sa.layout.engine, solutionArchitecture: saPath, sequenceDiagram: sdPath,
+    scenarioSlug: model.scenarioSlug, layoutProfile: args.profile, presentation: "architecture-review",
+    layoutEngine: sa.layout.engine, businessArchitecture: baPath, solutionArchitecture: saPath, sequenceDiagram: sdPath,
     htmlPreview: "preview.html",
     editableSources: sourceGate,
     icons: model.components.map(c => ({
@@ -864,12 +967,22 @@ function main(argv) {
     })),
     referenceSources: sources, generatedAt: new Date().toISOString(),
     typography: { font: "Inter", measured: true, minimumSize: 11 },
+    style: {
+      benchmark: "SDM Intelligent Operations Architecture Review",
+      tokens: style.TOKENS,
+      conformance: {
+        business: ba.quality.styleConformance,
+        architecture: sa.quality.gates.find(gate => gate.name === "style-conformance").passed ? "passed" : "failed",
+        sequence: sd.quality.styleConformance,
+      },
+    },
+    componentCodes: sa.quality.componentCodes, relationshipCodes: sa.quality.relationshipCodes,
     layoutQuality: sa.quality,
   };
   fs.writeFileSync(path.join(output, "diagram-manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
   // Candidate diagnostics remain beside the model, even after a passing alternative is selected.
   process.stdout.write(JSON.stringify({
-    SolutionArchitecture: saPath, SequenceDiagram: sdPath, HtmlPreview: previewPath,
+    BusinessArchitecture: baPath, SolutionArchitecture: saPath, SequenceDiagram: sdPath, HtmlPreview: previewPath,
     Manifest: path.join(output, "diagram-manifest.json"),
   }));
 }

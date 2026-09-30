@@ -9,7 +9,9 @@
 - pngjs 7.0.0 - MIT License  
   https://github.com/pngjs/pngjs
 - Inter 4.1 - SIL Open Font License 1.1  
-  https://github.com/rsms/inter
+  https://github.com/rsms/inter  
+  `renderer/fonts/InterVariable-latin.ttf` is a Latin subset of `InterVariable.ttf`
+  (same license; provenance in `InterVariable-latin.json`).
 
 ## Microsoft product artwork
 

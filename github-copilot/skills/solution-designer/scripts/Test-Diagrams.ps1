@@ -392,6 +392,26 @@ function Test-Svg([string]$Path, [string]$ExpectedPrefix) {
             if (Test-Overlap $cardList[$i] $cardList[$j]) { Add-Issue "Cards '$($cardList[$i].Id)' and '$($cardList[$j].Id)' overlap in $Path" }
         }
     }
+    # Painted deployment zones must enclose exactly their evidenced members and never overlap.
+    $zones = New-Object System.Collections.Generic.List[object]
+    foreach ($zoneElement in @($xml.SelectNodes("//*[@data-kind='zone']"))) {
+        try {
+            $zone = Get-Box $zoneElement
+            $members = @($zoneElement.GetAttribute('data-components') | ConvertFrom-Json)
+            if ($members.Count -eq 0) { throw 'Zone has no members.' }
+            foreach ($member in $members) {
+                if (-not $cards.ContainsKey($member)) { Add-Issue "Zone '$($zone.Id)' references unknown component '$member' in $Path"; continue }
+                if (-not (Test-Contained $cards[$member] $zone 8)) { Add-Issue "Component '$member' is outside zone '$($zone.Id)' in $Path" }
+            }
+            foreach ($card in $cardList) {
+                if ($card.Id -notin $members -and (Test-Overlap $card $zone)) { Add-Issue "Component '$($card.Id)' intrudes into zone '$($zone.Id)' in $Path" }
+            }
+            foreach ($other in $zones) {
+                if (Test-Overlap $zone $other) { Add-Issue "Zones '$($zone.Id)' and '$($other.Id)' overlap in $Path" }
+            }
+            $zones.Add($zone)
+        } catch { Add-Issue "Invalid zone geometry in $Path`: $($_.Exception.Message)" }
+    }
 
     $routes = New-Object System.Collections.Generic.List[object]
     $routeById = @{}
@@ -669,7 +689,7 @@ if (Test-Path -LiteralPath $manifestPath) {
         } else {
             $quality = $manifest.layoutQuality
             foreach ($name in @('crossings', 'shared-lanes', 'opposite-lanes', 'route-detour', 'content-density',
-                'fit-width-readability', 'agent-emphasis', 'geometry-bounds-overlap', 'relationship-coverage')) {
+                'fit-width-readability', 'agent-emphasis', 'geometry-bounds-overlap', 'relationship-coverage', 'style-conformance')) {
                 if (@($quality.gates | Where-Object name -eq $name).Count -ne 1) {
                     Add-Issue "Manifest is missing or duplicates the '$name' visual gate."
                 }

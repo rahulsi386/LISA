@@ -3,7 +3,7 @@
   "title": "Solution Designer rendered inspection",
   "type": "object",
   "additionalProperties": false,
-  "required": ["run_id", "inspected_at", "status", "solution_architecture_png_sha256", "sequence_png_sha256", "checks", "issues", "summary"],
+  "required": ["run_id", "inspected_at", "status", "business_architecture_png_sha256", "solution_architecture_png_sha256", "sequence_png_sha256", "checks", "issues", "summary"],
   "allOf": [{
     "if": {"properties": {"status": {"const": "passed"}}, "required": ["status"]},
     "then": {"required": ["revision", "browser_evidence"]}
@@ -22,12 +22,21 @@
         "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
       }
     },
+    "business_architecture_png_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "solution_architecture_png_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "sequence_png_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "checks": {
       "type": "object", "additionalProperties": false,
-      "required": ["spelling", "clipping", "icon_correctness", "connector_visibility", "primary_agent_hierarchy", "empty_space", "label_collisions", "sequence_phase_grouping", "truncation", "overall_composition", "html_preview"],
+      "required": ["spelling", "clipping", "icon_correctness", "connector_visibility", "primary_agent_hierarchy", "empty_space", "label_collisions", "sequence_phase_grouping", "truncation", "overall_composition", "business_view", "reference_style", "html_preview"],
       "properties": {
+        "reference_style": {
+          "type": "boolean",
+          "description": "All three views follow the SDM Architecture Review visual system: tinted responsibility cards with accent bars and C-codes, evidenced deployment boundaries shown as dashed zones when the design spans two or more, meaning-coloured links with R-codes (evidence, request/response, governed action, identity/access, control/audit), a numbered sequence rail with toned branch bands, and a legend that explains every colour and line pattern used. A reviewer can trace flow, integrations, dependencies and authN/authZ without reading the reference tables."
+        },
+        "business_view": {
+          "type": "boolean",
+          "description": "The business architecture reads as a leadership story: who starts the work, every classified capability group with its PoC treatment, retained human decisions, the outcome, supporting information/platform and cross-cutting controls. No invented component, flow or success claim."
+        },
         "spelling": {"type": "boolean"},
         "clipping": {"type": "boolean"},
         "icon_correctness": {"type": "boolean"},
@@ -52,7 +61,7 @@
         },
         "html_preview": {
           "type": "boolean",
-          "description": "Local preview displays matching PNGs and four working SVG/PNG links, and supports fit-width/actual-size viewing without external assets or a server."
+          "description": "The local architecture review displays matching PNGs for the business, engineering and sequence views with six working SVG/PNG links, switches between business and engineering views, and supports fit-width/actual-size viewing without scripts, external assets or a server."
         }
       }
     },
@@ -85,8 +94,9 @@
         },
         "screenshots": {
           "type": "object", "additionalProperties": false,
-          "required": ["architecture", "sequence", "preview"],
+          "required": ["business", "architecture", "sequence", "preview"],
           "properties": {
+            "business": {"$ref": "#/$defs/screenshot"},
             "architecture": {"$ref": "#/$defs/screenshot"},
             "sequence": {"$ref": "#/$defs/screenshot"},
             "preview": {"$ref": "#/$defs/screenshot"}
@@ -94,14 +104,15 @@
         },
         "diagrams": {
           "type": "object", "additionalProperties": false,
-          "required": ["architecture", "sequence"],
+          "required": ["business", "architecture", "sequence"],
           "properties": {
+            "business": {"$ref": "#/$defs/browserDiagram"},
             "architecture": {"$ref": "#/$defs/browserDiagram"},
             "sequence": {"$ref": "#/$defs/browserDiagram"}
           }
         },
         "links": {
-          "type": "array", "minItems": 4, "maxItems": 4,
+          "type": "array", "minItems": 6, "maxItems": 6,
           "items": {
             "type": "object", "additionalProperties": false,
             "required": ["href", "sha256", "opened", "decoded"],

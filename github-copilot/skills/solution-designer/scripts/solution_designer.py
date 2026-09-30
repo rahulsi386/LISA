@@ -29,8 +29,8 @@ from validate_artifact_contracts import canonical_stage_root, validate_contract
 from lisa_path_resolver import LisaConfigError, latest_file, resolve_lisa_config
 
 
-VERSION = "4.1.1"
-CACHE_VERSION = "5"
+VERSION = "5.0.0"
+CACHE_VERSION = "6"
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 RESOURCES = SKILL_ROOT / "resources"
 ARTIFACT_CONTRACT = validate_contract(SKILL_ROOT)
@@ -46,8 +46,15 @@ GENERATION_TIMEOUT_SECONDS = 3600
 LAYOUT_PROFILES = ("Balanced", "Spacious", "Wide")
 DEFAULT_MAX_REPAIR_ATTEMPTS = 2
 INSPECTION_CLOCK_SKEW_SECONDS = 30
+# Review keys, file prefixes and inspection hash fields for the three published diagrams.
+DIAGRAM_KINDS = (
+    ("business", "BA", "business_architecture_png"),
+    ("architecture", "SA", "solution_architecture_png"),
+    ("sequence", "SD", "sequence_png"),
+)
 EVIDENCE_ARTIFACT_NAMES = (
     "browser-evidence.json",
+    "inspection-business.png",
     "inspection-architecture.png",
     "inspection-sequence.png",
     "inspection-preview.png",
@@ -346,6 +353,7 @@ def _validate_model_semantics(model: dict[str, Any]) -> None:
         )
     if "architecture-diagrams" not in model["referenceKeys"]:
         raise DesignerError("Design model must include architecture-diagrams guidance")
+    _validate_business_architecture(model)
 
 
 def _validate_action_controls(model: dict[str, Any]) -> None:
@@ -424,6 +432,206 @@ def _validate_action_controls(model: dict[str, Any]) -> None:
 def _slug(value: str) -> str:
     normalized = re.sub(r"[^A-Za-z0-9]+", "_", value).strip("_")
     return normalized[:70] or "Agentic_Solution"
+
+
+BUSINESS_GROUPS = (
+    ("knowledge-retrieval", "FIND-EXPLAIN", "Find and explain", "violet"),
+    ("adaptive-reasoning", "REASON-RECOMMEND", "Reason and recommend", "blue"),
+    ("custom-agent-software", "ORCHESTRATE", "Orchestrate specialist work", "blue"),
+    ("delegated-personal-work", "ON-BEHALF", "Work on the user's behalf", "teal"),
+    ("deterministic-execution", "EXECUTE", "Execute governed steps", "teal"),
+    ("conventional-software", "PROCESS", "Run business processes", "slate"),
+)
+TREATMENT_TAGS = {
+    "block": "BLOCKED", "defer": "DEFERRED", "manual-handoff": "MANUAL",
+    "simulate": "SIMULATED", "static-sample-data": "SAMPLE DATA",
+    "build": "BUILD", "configure": "CONFIGURE", "existing": "EXISTING",
+}
+TREATMENT_ORDER = ("block", "defer", "manual-handoff", "simulate", "static-sample-data", "build", "configure", "existing")
+BUSINESS_ZONE_ID = "BIZ-CAPABILITIES"
+
+
+def _names(model: dict[str, Any], kinds: set[str]) -> tuple[list[str], list[str]]:
+    selected = [item for item in model["components"] if item["kind"] in kinds]
+    return [item["name"] for item in selected], [item["id"] for item in selected]
+
+
+def _decision_context(classification: dict[str, Any]) -> dict[str, Any]:
+    assessment = classification.get("platform_assessment") or {}
+    justification = str(classification.get("justification") or "").strip()
+    summary = str(assessment.get("decision_summary") or justification.split("\n\n")[0]).strip()
+    context: dict[str, Any] = {
+        "agenticPlatform": classification["agentic_platform"],
+        "harness": classification.get("harness"),
+        "codeTier": classification["code_tier"],
+        "summary": summary or f"{classification['agentic_platform']} is the selected platform.",
+    }
+    suitability = classification.get("agentic_suitability")
+    if isinstance(suitability, dict) and suitability.get("recommendation"):
+        context["suitability"] = {
+            "recommendation": suitability["recommendation"],
+            "summary": str(suitability.get("summary", "")),
+            "deterministicAlternative": str(suitability.get("deterministic_alternative", "")),
+        }
+    comparison = classification.get("platform_comparison")
+    if isinstance(comparison, list) and comparison:
+        context["comparison"] = [
+            {
+                "platform": item["platform"], "fit": item["fit"], "selected": bool(item["selected"]),
+                "pros": list(item.get("pros", [])), "cons": list(item.get("cons", [])),
+                "rationale": str(item.get("decision_rationale", "")),
+            }
+            for item in comparison
+        ]
+    return context
+
+
+def _business_architecture(model: dict[str, Any]) -> dict[str, Any]:
+    """Derive the leadership view deterministically from classified capabilities and components."""
+    cards: list[dict[str, Any]] = []
+    capabilities = model.get("capabilityAssessments") or []
+    actors, actor_ids = _names(model, {"actor"})
+    channels, channel_ids = _names(model, {"channel"})
+    triggers, trigger_ids = _names(model, {"flow"})
+    entry_lines = actors + channels or triggers or ["Scheduled or event trigger"]
+    cards.append({
+        "id": "BIZ-ENTRY", "role": "entry", "code": "PEOPLE & CHANNELS" if actors + channels else "TRIGGERS",
+        "title": "Who starts the work", "tone": "slate", "lines": entry_lines,
+        "componentIds": actor_ids + channel_ids if actors + channels else trigger_ids, "capabilityIds": [],
+    })
+    by_type: dict[str, list[dict[str, Any]]] = {}
+    for capability in capabilities:
+        by_type.setdefault(capability.get("work_type", "conventional-software"), []).append(capability)
+    def capability_name(item: dict[str, Any]) -> str:
+        return str(item.get("name") or item["id"])
+
+    for work_type, suffix, title, tone in BUSINESS_GROUPS:
+        members = by_type.get(work_type, [])
+        if not members:
+            continue
+        treatments = {item["poc_treatment"] for item in members}
+        worst = next(value for value in TREATMENT_ORDER if value in treatments)
+        tag = TREATMENT_TAGS[worst] + (" +" if len(treatments) > 1 else "")
+        component_ids = list(dict.fromkeys(
+            identifier for item in members for identifier in item.get("component_ids", [])
+            if any(component["id"] == identifier for component in model["components"])
+        ))
+        cards.append({
+            "id": f"BIZ-{suffix}", "role": "capability", "code": " / ".join(item["id"] for item in members),
+            "title": title, "tag": tag, "tone": "red" if worst == "block" else tone,
+            "lines": [capability_name(item) for item in members],
+            "componentIds": component_ids, "capabilityIds": [item["id"] for item in members],
+        })
+    if not capabilities:
+        names, identifiers = _names(model, {"agent", "tool", "flow"})
+        cards.append({
+            "id": "BIZ-WORK", "role": "capability", "code": "SOLUTION CAPABILITIES",
+            "title": "What the solution does", "tone": "blue", "lines": names or [model["title"]],
+            "componentIds": identifiers, "capabilityIds": [],
+        })
+    approvals = [item for item in capabilities if (item.get("build_contract") or {}).get("approval_required")]
+    humans, human_ids = _names(model, {"human"})
+    if approvals or humans:
+        cards.append({
+            "id": "BIZ-DECISION", "role": "decision", "code": "HUMAN DECISION",
+            "title": "Approve before acting", "tone": "amber",
+            "lines": humans + [f"Approval before: {capability_name(item)}" for item in approvals],
+            "componentIds": human_ids, "capabilityIds": [item["id"] for item in approvals],
+        })
+    priorities = {key: sum(item.get("business_priority") == key for item in capabilities) for key in ("must", "should", "could")}
+    objective = str((model.get("pocScope") or {}).get("objective") or model["summary"]).strip()
+    coverage = model["coverage"]
+    outcome_lines = [objective]
+    if capabilities:
+        outcome_lines.append(
+            f"{priorities['must']} must, {priorities['should']} should, {priorities['could']} could capabilities"
+        )
+    outcome_lines.append(
+        f"Native build {coverage['nativeBuildPercent']}% / PoC demonstration {coverage['pocDemonstrationPercent']}%"
+    )
+    cards.append({
+        "id": "BIZ-OUTCOME", "role": "outcome", "code": "BUSINESS OUTCOME", "title": "What the business gets",
+        "tone": "green", "lines": outcome_lines, "componentIds": [],
+        "capabilityIds": [item["id"] for item in capabilities if item.get("business_priority") == "must"],
+    })
+    knowledge, knowledge_ids = _names(model, {"knowledge", "data", "tool", "integration", "external"})
+    if knowledge:
+        cards.append({
+            "id": "BIZ-KNOWLEDGE", "role": "foundation", "code": "KNOWLEDGE & SYSTEMS",
+            "title": "Information and systems it uses", "tone": "violet", "lines": knowledge,
+            "componentIds": knowledge_ids, "capabilityIds": [],
+        })
+    decision = model.get("decision") or {}
+    platform_names, platform_ids = _names(model, {"agent"})
+    platform = decision.get("agenticPlatform")
+    platform_lines = ([platform] if platform else []) + [name for name in platform_names if name != platform]
+    if platform_lines:
+        cards.append({
+            "id": "BIZ-PLATFORM", "role": "foundation", "code": "PLATFORM",
+            "title": "Where it runs", "tone": "blue", "lines": platform_lines,
+            "componentIds": platform_ids, "capabilityIds": [],
+        })
+    controls, control_ids = _names(model, {"security", "monitoring", "alm"})
+    if controls:
+        cards.append({
+            "id": "BIZ-CONTROLS", "role": "control", "code": "EVERY STAGE",
+            "title": "Identity, protection, governance and operations", "tone": "slate", "lines": controls,
+            "componentIds": control_ids, "capabilityIds": [],
+        })
+    has_decision = any(card["role"] == "decision" for card in cards)
+    flows = [{"from": "BIZ-ENTRY", "to": BUSINESS_ZONE_ID, "label": "Request or trigger", "tone": "blue"}]
+    if has_decision:
+        flows += [
+            {"from": BUSINESS_ZONE_ID, "to": "BIZ-DECISION", "label": "Proposed action", "tone": "amber", "dashed": True},
+            {"from": "BIZ-DECISION", "to": "BIZ-OUTCOME", "label": "Approved outcome", "tone": "green"},
+        ]
+    else:
+        flows.append({"from": BUSINESS_ZONE_ID, "to": "BIZ-OUTCOME", "label": "Delivered outcome", "tone": "green"})
+    if knowledge:
+        flows.append({"from": "BIZ-KNOWLEDGE", "to": BUSINESS_ZONE_ID, "label": "Information and actions", "tone": "teal"})
+    if platform_lines:
+        flows.append({"from": "BIZ-PLATFORM", "to": BUSINESS_ZONE_ID, "label": "Runs the work", "tone": "blue"})
+    suitability = decision.get("suitability") or {}
+    statement = {
+        "agentic": "An agent handles the ambiguous work; controls and approvals keep it accountable.",
+        "hybrid": "An agent handles judgment; deterministic automation handles fixed rules.",
+        "deterministic": "Fixed rules solve this need without an agent.",
+    }.get(suitability.get("recommendation"), "Grounded answers first. Governed actions only with accountable approval.")
+    return {
+        "headline": f"{model['title']} / business operating model",
+        "statement": statement,
+        "cards": cards,
+        "flows": flows,
+    }
+
+
+def _validate_business_architecture(model: dict[str, Any]) -> None:
+    business = model["businessArchitecture"]
+    card_ids = [card["id"] for card in business["cards"]]
+    if len(card_ids) != len(set(card_ids)):
+        raise DesignerError("Business architecture card IDs must be unique")
+    roles = [card["role"] for card in business["cards"]]
+    if roles.count("entry") != 1 or roles.count("outcome") != 1 or not roles.count("capability"):
+        raise DesignerError("Business architecture needs one entry, at least one capability, and one outcome")
+    if roles.count("decision") > 1 or roles.count("foundation") > 2 or roles.count("control") > 1:
+        raise DesignerError("Business architecture supports one decision, two foundations, and one control band")
+    known_components = {item["id"] for item in model["components"]}
+    known_capabilities = {item["id"] for item in model.get("capabilityAssessments", [])}
+    for card in business["cards"]:
+        if not set(card["componentIds"]) <= known_components:
+            raise DesignerError(f"Business card {card['id']} references unknown components")
+        if not set(card["capabilityIds"]) <= known_capabilities:
+            raise DesignerError(f"Business card {card['id']} references unknown capabilities")
+    endpoints = set(card_ids) | {BUSINESS_ZONE_ID}
+    control_ids = {card["id"] for card in business["cards"] if card["role"] == "control"}
+    for flow in business["flows"]:
+        if flow["from"] not in endpoints or flow["to"] not in endpoints or flow["from"] == flow["to"]:
+            raise DesignerError("Business flow references an unknown or identical endpoint")
+        if {flow["from"], flow["to"]} & control_ids:
+            raise DesignerError("The business control band applies to every stage and takes no flows")
+    mapped = {identifier for card in business["cards"] if card["role"] == "capability" for identifier in card["capabilityIds"]}
+    if mapped != known_capabilities:
+        raise DesignerError("Every classified capability must appear in exactly the business capability cards")
 
 
 def _component_id(value: str, existing: set[str]) -> str:
@@ -918,7 +1126,6 @@ def _build_design_model_from_topology(
          "pocTreatment": value["poc_treatment"], "buildContract": copy.deepcopy(value["build_contract"])}
         for value in capabilities if value.get("build_contract")
     ]
-    _validate_model_semantics(model)
     return model
 
 
@@ -937,10 +1144,21 @@ def _build_design_model(
         raise DesignerError(
             "Classification JSON is missing fields: " + ", ".join(missing)
         )
-    if classification.get("solution_topology"):
-        return _build_design_model_from_topology(
-            classification_path, classification
-        )
+    builder = (
+        _build_design_model_from_topology
+        if classification.get("solution_topology")
+        else _build_legacy_design_model
+    )
+    model = builder(classification_path, classification)
+    model["decision"] = _decision_context(classification)
+    model["businessArchitecture"] = _business_architecture(model)
+    _validate_model_semantics(model)
+    return model
+
+
+def _build_legacy_design_model(
+    classification_path: Path, classification: dict[str, Any]
+) -> dict[str, Any]:
     source_hash = _sha256_file(classification_path)
     components_value = classification["components"]
     agent_items = components_value.get("agents", [])
@@ -1446,7 +1664,6 @@ def _build_design_model(
              "pocTreatment": value["poc_treatment"], "buildContract": copy.deepcopy(value["build_contract"])}
             for value in delivery["capabilities"] if value.get("build_contract")
         ]
-    _validate_model_semantics(model)
     return model
 
 
@@ -1539,8 +1756,8 @@ def _safe_artifact_name(name: str) -> bool:
 
 def _validate_source_artifacts(root: Path) -> None:
     model = _json_load(root / "design-model.json")
-    for name in (f"Design_{model['scenarioSlug']}.drawio", f"SA_{model['scenarioSlug']}.mmd",
-                 f"SD_{model['scenarioSlug']}.mmd", "source-report.json"):
+    for name in (f"Design_{model['scenarioSlug']}.drawio", f"BA_{model['scenarioSlug']}.mmd",
+                 f"SA_{model['scenarioSlug']}.mmd", f"SD_{model['scenarioSlug']}.mmd", "source-report.json"):
         path = _safe_path(root / name, root)
         if not path.is_file() or not path.stat().st_size:
             raise DesignerError(f"Editable source artifact missing: {name}")
@@ -1605,8 +1822,10 @@ def _cache_valid(
         _candidate_ranking(cache_dir, _json_load(cache_dir / "generation-report.json"))
         slug = model["scenarioSlug"]
         if (
-            value["solution_architecture_png_sha256"] != _sha256_file(cache_dir / f"SA_{slug}.png")
-            or value["sequence_png_sha256"] != _sha256_file(cache_dir / f"SD_{slug}.png")
+            any(
+                value[f"{field}_sha256"] != _sha256_file(cache_dir / f"{prefix}_{slug}.png")
+                for _, prefix, field in DIAGRAM_KINDS
+            )
             or _json_load(cache_dir / "generation-report.json").get("structuralValidation") != "passed"
         ):
             return False
@@ -1622,14 +1841,13 @@ def _inspection_template(run_id: str, revision: int = 0) -> dict[str, Any]:
         "revision": revision,
         "inspected_at": "",
         "status": "failed",
-        "solution_architecture_png_sha256": "0" * 64,
-        "sequence_png_sha256": "0" * 64,
+        **{f"{field}_sha256": "0" * 64 for _, _, field in DIAGRAM_KINDS},
         "checks": {
             name: False
             for name in _json_load(INSPECTION_SCHEMA)["properties"]["checks"]["required"]
         },
         "issues": ["Inspection not completed."],
-        "summary": "Inspect both rendered PNGs and the HTML preview before finalization.",
+        "summary": "Inspect all three rendered PNGs and the architecture review before finalization.",
     }
 
 
@@ -1934,8 +2152,7 @@ def _load_run(path: Path, expected_status: set[str]) -> dict[str, Any]:
         if run.get("selected_layout_profile") not in profiles:
             raise DesignerError("Active layout profile is missing from run history")
         for key, name in {
-            "solution_architecture_png": f"SA_{slug}.png",
-            "sequence_png": f"SD_{slug}.png",
+            **{field: f"{prefix}_{slug}.png" for _, prefix, field in DIAGRAM_KINDS},
             "html_preview": "preview.html",
             "generation_report_path": "run-report.json",
         }.items():
@@ -2106,11 +2323,10 @@ def _seal_candidate(
         "generated_at": generated_at, "model_sha256": run["model_sha256"],
     }
     _atomic_write_json(stage_design / "run-report.json", report)
-    sa_png = stage_design / f"SA_{slug}.png"
-    sd_png = stage_design / f"SD_{slug}.png"
+    pngs = {field: stage_design / f"{prefix}_{slug}.png" for _, prefix, field in DIAGRAM_KINDS}
     template = _inspection_template(run["run_id"], run.get("revision", 0))
-    template["solution_architecture_png_sha256"] = _sha256_file(sa_png)
-    template["sequence_png_sha256"] = _sha256_file(sd_png)
+    for field, png in pngs.items():
+        template[f"{field}_sha256"] = _sha256_file(png)
     staged_names = _artifact_names(stage_design, slug) + [
         "run-report.json"
     ]
@@ -2126,8 +2342,7 @@ def _seal_candidate(
             "scenario_slug": slug,
             "stage_design": str(stage_design),
             "model_path": str(stage_design / "design-model.json"),
-            "solution_architecture_png": str(sa_png),
-            "sequence_png": str(sd_png),
+            **{field: str(png) for field, png in pngs.items()},
             "html_preview": str(stage_design / "preview.html"),
             "generation_report_path": str(stage_design / "run-report.json"),
             "staged_artifacts": staged_hashes,
@@ -2145,8 +2360,7 @@ def _seal_candidate(
         json.dumps(
             {
                 "status": "awaiting_inspection",
-                "solution_architecture_png": str(sa_png),
-                "sequence_png": str(sd_png),
+                **{field: str(png) for field, png in pngs.items()},
                 "html_preview": str(stage_design / "preview.html"),
                 "inspection_template": run["inspection_template_path"],
                 "revision": run.get("revision", 0),
@@ -2209,8 +2423,8 @@ def _validate_inspection(run: dict[str, Any], inspection: dict[str, Any]) -> Non
     if inspected_at > _local_time(_run_local_time(run)) + timedelta(seconds=INSPECTION_CLOCK_SKEW_SECONDS):
         raise DesignerError("Inspection timestamp is in the future")
     for key, path_key, label in (
-        ("solution_architecture_png_sha256", "solution_architecture_png", "Solution Architecture"),
-        ("sequence_png_sha256", "sequence_png", "Sequence"),
+        (f"{field}_sha256", field, field.replace("_png", "").replace("_", " ").title())
+        for _, _, field in DIAGRAM_KINDS
     ):
         if _sha256_file(Path(run[path_key])) != inspection[key]:
             raise DesignerError(f"{label} PNG changed after inspection")
@@ -2309,10 +2523,10 @@ def _validate_browser_evidence(
         raise DesignerError("Browser evidence timestamp is in the future")
     model = _json_load(root / "design-model.json")
     slug = model["scenarioSlug"]
-    diagram_names = {f"{prefix}_{slug}.{extension}" for prefix in ("SA", "SD") for extension in ("svg", "png")}
+    diagram_names = {f"{prefix}_{slug}.{extension}" for _, prefix, _ in DIAGRAM_KINDS for extension in ("svg", "png")}
     expected_names = diagram_names | {"preview.html", "design-model.json"}
     if set(evidence["artifact_sha256"]) != expected_names:
-        raise DesignerError("Browser evidence must bind the model, preview and all four diagram assets")
+        raise DesignerError("Browser evidence must bind the model, preview and all six diagram assets")
     for name, expected in evidence["artifact_sha256"].items():
         path = _safe_path(root / name, root)
         if not path.is_file() or _sha256_file(path) != expected:
@@ -2321,11 +2535,11 @@ def _validate_browser_evidence(
         raise DesignerError("Browser evidence model hash disagrees")
     links = evidence["links"]
     if {link["href"] for link in links} != diagram_names:
-        raise DesignerError("Browser evidence must confirm four distinct sibling diagram links")
+        raise DesignerError("Browser evidence must confirm six distinct sibling diagram links")
     for link in links:
         if not _safe_artifact_name(link["href"]) or link["sha256"] != evidence["artifact_sha256"][link["href"]]:
             raise DesignerError("Browser link confirmation has an invalid sibling path or hash")
-    for key, prefix in (("architecture", "SA"), ("sequence", "SD")):
+    for key, prefix, _ in DIAGRAM_KINDS:
         image = evidence["diagrams"][key]
         filename = f"{prefix}_{slug}.png"
         if image["src"] != filename:
@@ -2337,9 +2551,10 @@ def _validate_browser_evidence(
             raise DesignerError("Browser actual-size toggle did not display native dimensions")
         if image["display_width"] > natural[0] + 1 or abs(image["display_width"] / image["display_height"] - natural[0] / natural[1]) > 0.01:
             raise DesignerError("Browser display dimensions stretch or distort the diagram")
+    prefixes = {key: prefix for key, prefix, _ in DIAGRAM_KINDS}
     for key, screenshot in evidence["screenshots"].items():
         name = f"inspection-{key}.png"
-        asset = "preview.html" if key == "preview" else f"{'SA' if key == 'architecture' else 'SD'}_{slug}.png"
+        asset = "preview.html" if key == "preview" else f"{prefixes[key]}_{slug}.png"
         if screenshot["path"] != name or screenshot["viewed_asset"] != asset:
             raise DesignerError("Browser screenshot must reference a fixed sibling evidence file and viewed asset")
         path = _safe_path(root / name, root)
@@ -2446,8 +2661,10 @@ def _repair(run_path: Path, inspection_path: Path, profile: str | None = None) -
 def _artifact_names(stage_design: Path, slug: str) -> list[str]:
     return [
         "design-model.json",
+        f"BA_{slug}.svg",
         f"SA_{slug}.svg",
         f"SD_{slug}.svg",
+        f"BA_{slug}.png",
         f"SA_{slug}.png",
         f"SD_{slug}.png",
         "preview.html",
@@ -2456,6 +2673,7 @@ def _artifact_names(stage_design: Path, slug: str) -> list[str]:
         "render-report.json",
         "candidate-report.json",
         f"Design_{slug}.drawio",
+        f"BA_{slug}.mmd",
         f"SA_{slug}.mmd",
         f"SD_{slug}.mmd",
         "source-report.json",
@@ -2554,15 +2772,18 @@ def _final_result(
     total_ms = round((time.time() - float(run["started_epoch"])) * 1000)
     timings = generation.get("timingsMs", {})
     return {
+        "business_architecture_diagram": str(artifact_root / f"BA_{slug}.svg"),
         "solution_architecture_diagram": str(artifact_root / f"SA_{slug}.svg"),
         "sequence_diagram": str(artifact_root / f"SD_{slug}.svg"),
         "html_preview": str(artifact_root / "preview.html"),
         "renders": {
+            "business_architecture_png": str(artifact_root / f"BA_{slug}.png"),
             "solution_architecture_png": str(artifact_root / f"SA_{slug}.png"),
             "sequence_png": str(artifact_root / f"SD_{slug}.png"),
         },
         "editable_sources": {
             "drawio": str(artifact_root / f"Design_{slug}.drawio"),
+            "business_mermaid": str(artifact_root / f"BA_{slug}.mmd"),
             "architecture_mermaid": str(artifact_root / f"SA_{slug}.mmd"),
             "sequence_mermaid": str(artifact_root / f"SD_{slug}.mmd"),
             "report": str(artifact_root / "source-report.json"),
@@ -2773,17 +2994,9 @@ def _write_current_pointer(
             raise DesignerError(f"Current design path escapes basePath: {path}") from exc
 
     pointer_result = copy.deepcopy(result)
-    pointer_result["solution_architecture_diagram"] = relative(
-        result["solution_architecture_diagram"]
-    )
-    pointer_result["sequence_diagram"] = relative(result["sequence_diagram"])
-    pointer_result["html_preview"] = relative(result["html_preview"])
-    pointer_result["renders"]["solution_architecture_png"] = relative(
-        result["renders"]["solution_architecture_png"]
-    )
-    pointer_result["renders"]["sequence_png"] = relative(
-        result["renders"]["sequence_png"]
-    )
+    for key in ("business_architecture_diagram", "solution_architecture_diagram", "sequence_diagram", "html_preview"):
+        pointer_result[key] = relative(result[key])
+    pointer_result["renders"] = {key: relative(value) for key, value in result["renders"].items()}
     pointer_result["editable_sources"] = {
         key: relative(value) for key, value in result["editable_sources"].items()
     }

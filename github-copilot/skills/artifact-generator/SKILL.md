@@ -11,9 +11,8 @@ Produce a customer-ready artifact set from completed LISA lifecycle stages:
 
 1. `artifacts\solution-document.md` — a concise, customer-shareable solution document that synthesizes the decisions and outcomes worth the customer's time.
 2. `artifacts\lisa-execution-tree.html` — a self-contained execution tree showing every LISA stage, its status, run ID, duration, source Markdown, and core artifacts.
-3. `artifacts\solution-architecture.png` — a customer-named copy of the current validated architecture render when available.
-4. `artifacts\solution-sequence.png` — a customer-named copy of the current validated sequence render when available.
-5. `artifacts\artifact-generation-manifest.json` — the terminal hash inventory for the complete generated set.
+3. `artifacts\solution-business-architecture.png`, `solution-architecture.png` and `solution-sequence.png` — customer-named copies of the current validated business, engineering and sequence renders when available.
+4. `artifacts\artifact-generation-manifest.json` — the terminal hash inventory for the complete generated set.
 
 The generator is read-only with respect to upstream stage folders. It never changes requirement, classification, design, build, evaluation, or optimization evidence.
 

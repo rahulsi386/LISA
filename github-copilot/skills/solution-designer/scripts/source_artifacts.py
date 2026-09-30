@@ -18,11 +18,39 @@ from pathlib import Path
 from typing import Any
 
 
-PAGES = ("Solution Architecture", "Sequence Diagram")
+PAGES = ("Business Architecture", "Engineering Architecture", "Sequence Diagram")
 MODES = {
     "real": "#2563eb", "simulated": "#0891b2", "manual": "#b45309",
     "deferred": "#64748b", "blocked": "#dc2626",
 }
+TONES = {
+    "teal": "#087f82", "blue": "#285fc7", "amber": "#9a5d08", "slate": "#65778d",
+    "violet": "#7250ac", "green": "#237646", "red": "#a63d37",
+}
+# Mirrors renderer/style.js so the editable source matches the review diagrams.
+FILLS = {
+    "teal": ("#eef9f7", "#80bfbb"), "blue": ("#eff4fe", "#9cb6eb"), "amber": ("#fff7e8", "#d8b671"),
+    "slate": ("#f4f7fa", "#b7c5d4"), "violet": ("#f6f2fb", "#bca8d5"), "green": ("#edf8f0", "#93bf9e"),
+    "red": ("#fff2f0", "#d7a39f"),
+}
+KIND_TONES = {
+    "actor": "slate", "channel": "slate", "agent": "blue", "knowledge": "violet", "data": "violet",
+    "tool": "teal", "flow": "teal", "integration": "teal", "external": "teal", "human": "amber",
+    "security": "slate", "monitoring": "slate", "alm": "slate",
+}
+TYPE_MEANING = {
+    "retrieves": "evidence", "reads": "evidence", "writes": "action", "triggers": "action", "approves": "action",
+    "authenticates": "identity", "authorizes": "identity", "protects": "identity",
+    "governs": "control", "monitors": "control", "deploys": "control",
+    "communicates": "query", "responds": "query", "publishes-to": "query", "hosts": "query", "integrates": "query",
+}
+TARGET_MEANING = {
+    "knowledge": "evidence", "data": "evidence", "tool": "action", "flow": "action", "integration": "action",
+    "external": "action", "human": "action", "security": "identity", "monitoring": "control", "alm": "control",
+}
+MEANING_TONES = {"evidence": "teal", "query": "blue", "action": "amber", "identity": "violet",
+                 "control": "slate", "blocked": "red"}
+BUSINESS_ZONE_ID = "BIZ-CAPABILITIES"
 PLAIN = "html=0;whiteSpace=wrap;fontFamily=Arial;fontSize=14;"
 NODE_STYLE = PLAIN + "rounded=1;fillColor=#ffffff;strokeColor=#94a3b8;align=left;spacing=12;"
 TEXT_STYLE = PLAIN + "text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;"
@@ -69,6 +97,13 @@ def interaction_label(item: dict) -> str:
         label = "Simulated: " + label
     # Occurrence identity is explicit even for identical legacy multiedges.
     return f"{label}\nSource ID: {item['id']}\nOrder: {item['order']}\n" + fields_label(record, {"label"})
+
+
+def business_card_label(card: dict) -> str:
+    parts = [card["title"], card["code"], *card["lines"]]
+    if card.get("tag"):
+        parts.append(f"PoC treatment: {card['tag']}")
+    return "\n".join(parts)
 
 
 def identified(records: list[dict], prefix: str) -> list[dict]:
@@ -140,6 +175,20 @@ class Design:
             require(used <= set(self.participant_ids), "Message endpoint missing from explicit participants")
         self.context = {key: value for key, value in self.model.items()
                         if key not in {"components", "relationships", "sequence"}}
+        business = self.model.get("businessArchitecture")
+        require(isinstance(business, dict), "Model businessArchitecture must be an object")
+        require(isinstance(business.get("cards"), list) and isinstance(business.get("flows"), list),
+                "Business architecture requires cards and flows")
+        self.business_cards = business["cards"]
+        self.business_flows = business["flows"]
+        card_ids = [card.get("id") for card in self.business_cards]
+        require(len(set(card_ids)) == len(card_ids) and BUSINESS_ZONE_ID not in card_ids, "Duplicate business card IDs")
+        for card in self.business_cards:
+            require(isinstance(card.get("title"), str) and isinstance(card.get("code"), str)
+                    and isinstance(card.get("lines"), list) and card.get("tone") in TONES, "Invalid business card")
+        for flow in self.business_flows:
+            require({flow.get("from"), flow.get("to")} <= set(card_ids) | {BUSINESS_ZONE_ID}, "Unknown business flow endpoint")
+            require(isinstance(flow.get("label"), str) and flow.get("tone") in TONES, "Invalid business flow")
         # XML 1.0 cannot represent control characters or isolated surrogates.
         text = canonical_json(self.model)
         require(not re.search(r"[\ud800-\udfff\ufffe\uffff]", text), "Model contains invalid XML Unicode")
@@ -165,8 +214,8 @@ class Design:
     @property
     def filenames(self) -> dict[str, str]:
         slug = self.model["scenarioSlug"]
-        return {"drawio": f"Design_{slug}.drawio", "architectureMermaid": f"SA_{slug}.mmd",
-                "sequenceMermaid": f"SD_{slug}.mmd"}
+        return {"drawio": f"Design_{slug}.drawio", "businessMermaid": f"BA_{slug}.mmd",
+                "architectureMermaid": f"SA_{slug}.mmd", "sequenceMermaid": f"SD_{slug}.mmd"}
 
 
 def context_label(design: Design) -> str:
@@ -192,20 +241,45 @@ def cell(root: ET.Element, identity: str, label: str, role: str, style: str,
     return element
 
 
-def edge_style(record: dict) -> str:
-    dashed = record["implementationMode"] != "real" or record.get("style", record.get("type")) in {"response", "optional", "tbd"}
+def component_style(record: dict) -> str:
+    tone = "red" if record.get("implementationStatus") == "block" else KIND_TONES.get(record.get("kind"), "slate")
+    fill, border = FILLS[tone]
+    return NODE_STYLE.replace("fillColor=#ffffff;strokeColor=#94a3b8", f"fillColor={fill};strokeColor={border}")
+
+
+def link_tone(record: dict, kinds: dict[str, str]) -> str:
+    if record["implementationMode"] == "blocked":
+        return "red"
+    kind = record.get("relationshipType") or ""
+    response = kind == "responds" or record.get("style") == "response" or record.get("type") == "response"
+    if response and kinds.get(record["from"]) in {"knowledge", "data"}:
+        return MEANING_TONES["evidence"]
+    meaning = TYPE_MEANING.get(kind)
+    if meaning is None and kind == "invokes":
+        meaning = "action" if TARGET_MEANING.get(kinds.get(record["to"])) == "action" else "query"
+    if meaning is None and (record.get("style") == "response" or record.get("type") == "response"):
+        meaning = "query"
+    if meaning is None and record.get("type") == "approval":
+        meaning = "action"
+    return MEANING_TONES[meaning or TARGET_MEANING.get(kinds.get(record["to"]), "query")]
+
+
+def edge_style(record: dict, kinds: dict[str, str]) -> str:
+    pending = record["implementationMode"] in {"simulated", "manual", "deferred"}
+    dashed = pending or record["implementationMode"] != "real" or record.get("style", record.get("type")) in {"response", "optional", "tbd"}
     start_arrow = "startArrow=block;startFill=1;" if record.get("direction") == "bidirectional" else ""
     return (PLAIN + "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;"
             "jettySize=auto;endArrow=block;endFill=1;strokeWidth=2;"
-            f"strokeColor={MODES[record['implementationMode']]};dashed={int(dashed)};"
-            + start_arrow + "labelBackgroundColor=#ffffff;")
+            f"strokeColor={TONES[link_tone(record, kinds)]};dashed={int(dashed)};"
+            + ("dashPattern=2 5;" if pending else "") + start_arrow + "labelBackgroundColor=#ffffff;")
 
 
 def edge(root: ET.Element, identity: str, item: dict, source: str, target: str,
-         role: str, points: list[tuple[float, float]] | None = None) -> None:
+         role: str, kinds: dict[str, str], points: list[tuple[float, float]] | None = None,
+         style_record: dict | None = None) -> None:
     element = ET.SubElement(root, "mxCell", {
         "id": identity, "value": interaction_label(item), "edge": "1", "parent": "1",
-        "source": source, "target": target, "style": edge_style(item["record"]),
+        "source": source, "target": target, "style": edge_style(style_record or item["record"], kinds),
         "lisaRole": role, "lisaId": item["id"], "lisaOrder": str(item["order"]),
         "lisaRecord": canonical_json(item["record"]),
     })
@@ -231,6 +305,8 @@ def drawio_tree(design: Design, model_hash: str) -> ET.Element:
         ET.SubElement(root, "mxCell", {"id": "1", "parent": "0"})
         cell(root, "context", context, "context", TEXT_STYLE, 40, 20, 1200, context_height)
         if page_index == 0:
+            _business_cells(root, design, context_height + 80)
+        elif page_index == 1:
             positions = {}
             y = context_height + 80
             for start in range(0, len(design.components), 4):
@@ -240,9 +316,10 @@ def drawio_tree(design: Design, model_hash: str) -> ET.Element:
                     x = 40 + column * 440
                     identity = "sa-node-" + record["id"]
                     positions[record["id"]] = (x, y, row_height)
-                    cell(root, identity, component_label(record), "component", NODE_STYLE,
+                    cell(root, identity, component_label(record), "component", component_style(record),
                          x, y, 320, row_height, record=record, lisaId=record["id"])
                 y += row_height + 180
+            kinds = {record["id"]: record.get("kind", "") for record in design.components}
             for index, item in enumerate(design.relationships, 1):
                 record = item["record"]
                 x, sy, height = positions[record["from"]]
@@ -252,10 +329,50 @@ def drawio_tree(design: Design, model_hash: str) -> ET.Element:
                 if record["from"] == record["to"]:
                     points = [(x + 320 + lane, sy + 60), (x + 320 + lane, sy + height - 60)]
                 edge(root, f"sa-edge-{index:04d}", item, "sa-node-" + record["from"],
-                     "sa-node-" + record["to"], "relationship", points)
+                     "sa-node-" + record["to"], "relationship", kinds, points)
         else:
             _sequence_cells(root, design, context_height + 80)
     return document
+
+
+def _business_cells(root: ET.Element, design: Design, top: int) -> None:
+    rows = {"entry": 0, "capability": 0, "decision": 0, "outcome": 0, "foundation": 1, "control": 2}
+    capabilities = [card for card in design.business_cards if card["role"] == "capability"]
+    height = max(text_height(business_card_label(card), 300) for card in design.business_cards)
+    zone_x = 440
+    zone_width = 40 + len(capabilities) * 340
+    cell(root, "ba-zone", "What the solution does", "business-zone",
+         NODE_STYLE + "dashed=1;fillColor=#f8fafc;verticalAlign=top;", zone_x, top, zone_width, height + 80,
+         lisaId=BUSINESS_ZONE_ID)
+    columns = {"entry": 40, "decision": zone_x + zone_width + 120}
+    columns["outcome"] = columns["decision"] + (420 if any(card["role"] == "decision" for card in design.business_cards) else 0)
+    foundation_index = 0
+    for card in design.business_cards:
+        role = card["role"]
+        if role == "capability":
+            x = zone_x + 20 + capabilities.index(card) * 340
+        elif role == "foundation":
+            x = zone_x + foundation_index * 360
+            foundation_index += 1
+        elif role == "control":
+            x = 40
+        else:
+            x = columns[role]
+        y = top + 50 + rows[role] * (height + 200)
+        width = columns["outcome"] + 320 - 40 if role == "control" else 320
+        style = NODE_STYLE.replace("strokeColor=#94a3b8", f"strokeColor={TONES[card['tone']]}")
+        cell(root, "ba-card-" + card["id"], business_card_label(card), "business-card", style,
+             x, y, width, height, record=card, lisaId=card["id"])
+    for index, flow in enumerate(design.business_flows, 1):
+        endpoint = lambda value: "ba-zone" if value == BUSINESS_ZONE_ID else "ba-card-" + value
+        element = ET.SubElement(root, "mxCell", {
+            "id": f"ba-flow-{index:04d}", "value": flow["label"], "edge": "1", "parent": "1",
+            "source": endpoint(flow["from"]), "target": endpoint(flow["to"]),
+            "style": (PLAIN + "edgeStyle=orthogonalEdgeStyle;rounded=0;endArrow=block;endFill=1;strokeWidth=2;"
+                      f"strokeColor={TONES[flow['tone']]};dashed={int(bool(flow.get('dashed')))};labelBackgroundColor=#ffffff;"),
+            "lisaRole": "business-flow", "lisaRecord": canonical_json(flow),
+        })
+        ET.SubElement(element, "mxGeometry", {"relative": "1", "as": "geometry"})
 
 
 def _sequence_cells(root: ET.Element, design: Design, top: int) -> None:
@@ -281,7 +398,7 @@ def _sequence_cells(root: ET.Element, design: Design, top: int) -> None:
     for index, record in enumerate(design.participants):
         identity = "sd-participant-" + record["id"]
         cell(root, identity, component_label(record), "participant",
-             NODE_STYLE + f"swimlane;startSize={header_height};horizontal=1;swimlaneFillColor=none;",
+             component_style(record) + f"swimlane;startSize={header_height};horizontal=1;swimlaneFillColor=none;",
              40 + index * 400, top, 300, y + 40, record=record, lisaId=record["id"])
         cell(root, "sd-lifeline-" + record["id"], "", "lifeline",
              PLAIN + "shape=line;direction=south;strokeColor=#94a3b8;dashed=1;",
@@ -290,6 +407,8 @@ def _sequence_cells(root: ET.Element, design: Design, top: int) -> None:
         cell(root, f"sd-{field}-{index:04d}", f"{field.title()}: {value}", field,
              TEXT_STYLE, 40, band_y, width, height, record=value, lisaOrder=str(index))
     participant_index = {identity: index for index, identity in enumerate(design.participant_ids)}
+    kinds = {record["id"]: record.get("kind", "") for record in design.components}
+    relationships = {item["id"]: item["record"] for item in design.relationships}
     anchor_style = PLAIN + "ellipse;fillColor=none;strokeColor=none;opacity=0;"
     for item, row in schedule:
         record = item["record"]
@@ -304,7 +423,13 @@ def _sequence_cells(root: ET.Element, design: Design, top: int) -> None:
             x = 40 + index * 400 + 150
             loop_x = x + (80 if index < len(design.participants) - 1 else -80)
             points = [(loop_x, top + row + 1), (loop_x, top + row + 25)]
-        edge(root, identity, item, identity + "-from", identity + "-to", "message", points)
+        relationship = relationships.get(record.get("relationshipId")) or next(
+            (edge_record for edge_record in relationships.values() if edge_record["from"] == record["from"]
+             and edge_record["to"] == record["to"] and edge_record.get("style") == "call"), None) or (next(
+            (edge_record for edge_record in relationships.values() if edge_record["from"] == record["to"]
+             and edge_record["to"] == record["from"]), None) if record["type"] == "response" else None)
+        styled = {**record, "relationshipType": (relationship or {}).get("relationshipType")}
+        edge(root, identity, item, identity + "-from", identity + "-to", "message", kinds, points, styled)
 
 
 def write_drawio(path: Path, design: Design, model_hash: str) -> None:
@@ -322,7 +447,7 @@ def validate_drawio(path: Path, design: Design, model_hash: str) -> Design:
         raise SourceValidationError(f"Invalid Draw.io XML: {error}") from error
     expected = drawio_tree(design, model_hash)
     require(actual.tag == "mxfile" and actual.attrib == expected.attrib, "Draw.io model provenance differs")
-    require([page.get("name") for page in actual] == list(PAGES), "Draw.io must have exactly the two canonical pages")
+    require([page.get("name") for page in actual] == list(PAGES), "Draw.io must have exactly the three canonical pages")
     extracted: dict[str, list] = {"component": [], "relationship": [], "message": []}
     for actual_page, expected_page in zip(actual, expected):
         require(actual_page.tag == "diagram" and actual_page.attrib == expected_page.attrib, "Invalid Draw.io page")
@@ -402,6 +527,24 @@ def mermaid_header(kind: str, design: Design, model_hash: str, drawio_hash: str)
             "%% context: " + canonical_json(design.context)]
 
 
+def business_mermaid(design: Design, model_hash: str, drawio_hash: str) -> str:
+    lines = mermaid_header("flowchart LR", design, model_hash, drawio_hash)
+    aliases = {BUSINESS_ZONE_ID: "n0001"}
+    capabilities = [card["id"] for card in design.business_cards if card["role"] == "capability"]
+    lines.append(f'    n0001["{mermaid_escape("What the solution does" + chr(10) + ", ".join(capabilities))}"]')
+    for index, card in enumerate(design.business_cards, 2):
+        aliases[card["id"]] = f"n{index:04d}"
+        lines.append(f'    {aliases[card["id"]]}["{mermaid_escape(business_card_label(card))}"]')
+    for flow in design.business_flows:
+        lines.append(f'    {aliases[flow["from"]]} -->|"{mermaid_escape(flow["label"])}"| {aliases[flow["to"]]}')
+    for index, flow in enumerate(design.business_flows):
+        style = f"stroke:{TONES[flow['tone']]},stroke-width:2px"
+        if flow.get("dashed"):
+            style += ",stroke-dasharray:5 4"
+        lines.append(f"    linkStyle {index} {style}")
+    return "\n".join(lines) + "\n"
+
+
 def architecture_mermaid(design: Design, model_hash: str, drawio_hash: str) -> str:
     lines = mermaid_header("flowchart LR", design, model_hash, drawio_hash)
     aliases = {record["id"]: f"n{index:04d}" for index, record in enumerate(design.components, 1)}
@@ -411,10 +554,11 @@ def architecture_mermaid(design: Design, model_hash: str, drawio_hash: str) -> s
         record = item["record"]
         arrow = "<-->" if record.get("direction") == "bidirectional" else "-->"
         lines.append(f'    {aliases[record["from"]]} {arrow}|"{mermaid_escape(interaction_label(item))}"| {aliases[record["to"]]}')
+    kinds = {record["id"]: record.get("kind", "") for record in design.components}
     for index, item in enumerate(design.relationships):
         record = item["record"]
         dashed = record["implementationMode"] != "real" or record["style"] in {"response", "optional", "tbd"}
-        style = f"stroke:{MODES[record['implementationMode']]},stroke-width:2px"
+        style = f"stroke:{TONES[link_tone(record, kinds)]},stroke-width:2px"
         if dashed:
             style += ",stroke-dasharray:5 4"
         lines.append(f"    linkStyle {index} {style}")
@@ -561,6 +705,8 @@ def source_report(design: Design, model_path: Path, output: Path) -> dict:
     files = {key: {"path": name, "sha256": sha256(output / name), "bytes": (output / name).stat().st_size}
              for key, name in design.filenames.items()}
     coverage = {
+        "businessCardIds": [card["id"] for card in design.business_cards],
+        "businessFlows": [{key: flow[key] for key in ("from", "to", "label")} for flow in design.business_flows],
         "componentIds": design.component_ids, "participantIds": design.participant_ids,
         "relationships": [{**{key: item[key] for key in ("id", "order")},
                            **{key: item["record"][key] for key in ("from", "to", "implementationMode")},
@@ -577,7 +723,7 @@ def source_report(design: Design, model_path: Path, output: Path) -> dict:
             {"name": "drawio", "order": 1, "validation": "passed", "inputSha256": sha256(model_path),
              "outputs": [files["drawio"]["path"]], "pages": list(PAGES)},
             {"name": "mermaid", "order": 2, "validation": "passed", "inputSha256": files["drawio"]["sha256"],
-             "outputs": [files["architectureMermaid"]["path"], files["sequenceMermaid"]["path"]]},
+             "outputs": [files["businessMermaid"]["path"], files["architectureMermaid"]["path"], files["sequenceMermaid"]["path"]]},
         ],
         "model": {"path": model_path.name, "sha256": sha256(model_path)},
         "sources": files,
@@ -592,6 +738,7 @@ def load_design(model_path: Path) -> Design:
 
 def _mermaid_sources(design: Design, model_hash: str, drawio_hash: str) -> dict[str, tuple[str, str]]:
     return {
+        "businessMermaid": (business_mermaid(design, model_hash, drawio_hash), "flowchart LR"),
         "architectureMermaid": (architecture_mermaid(design, model_hash, drawio_hash), "flowchart LR"),
         "sequenceMermaid": (sequence_mermaid(design, model_hash, drawio_hash), "sequenceDiagram"),
     }

@@ -357,7 +357,7 @@ class RepairWorkflowTests(unittest.TestCase):
         self.assertEqual(Path(published["html_preview"]).read_bytes(), Path(repaired["html_preview"]).read_bytes())
         artifacts = Path(repaired["design_root"]) / "artifacts"
         self.assertEqual(
-            {f"{kind}_{repaired['scenario_slug']}.{ext}" for kind in ("SA", "SD") for ext in ("svg", "png")},
+            {f"{kind}_{repaired['scenario_slug']}.{ext}" for kind in ("BA", "SA", "SD") for ext in ("svg", "png")},
             {item.name for item in artifacts.iterdir() if item.suffix in {".svg", ".png"} and not item.name.startswith("inspection-")},
         )
 
@@ -639,8 +639,8 @@ class RepairWorkflowTests(unittest.TestCase):
         cached = designer._json_load(cache / "inspection-report.json")
         self.assertEqual(original, cached)
         self.assertIn(f"v{designer.CACHE_VERSION}", cache.parts)
-        self.assertEqual("5", designer.CACHE_VERSION)
-        self.assertEqual({"drawio", "architecture_mermaid", "sequence_mermaid", "report"}, set(result["editable_sources"]))
+        self.assertEqual("6", designer.CACHE_VERSION)
+        self.assertEqual({"drawio", "business_mermaid", "architecture_mermaid", "sequence_mermaid", "report"}, set(result["editable_sources"]))
         for name in (*designer.EVIDENCE_ARTIFACT_NAMES, f"Design_{run['scenario_slug']}.drawio", "source-report.json", "candidate-report.json"):
             self.assertIn(name, run["expected_cache_artifacts"])
         screenshot = cache / "inspection-architecture.png"

@@ -1,8 +1,42 @@
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { Resvg } = require("@resvg/resvg-js");
 
 const fontPath = path.join(__dirname, "fonts", "InterVariable.ttf");
+const subsetFontPath = path.join(__dirname, "fonts", "InterVariable-latin.ttf");
+const subsetCoveragePath = path.join(__dirname, "fonts", "InterVariable-latin.json");
+let embeddedSubset;
+
+// Measurement and PNG rendering always use the full font file; only the SVG's embedded copy is subset.
+function loadEmbeddedSubset() {
+  if (embeddedSubset !== undefined) return embeddedSubset;
+  embeddedSubset = null;
+  try {
+    const coverage = JSON.parse(fs.readFileSync(subsetCoveragePath, "utf8"));
+    const bytes = fs.readFileSync(subsetFontPath);
+    if (Array.isArray(coverage.ranges) &&
+        crypto.createHash("sha256").update(bytes).digest("hex") === coverage.sha256) {
+      embeddedSubset = { base64: bytes.toString("base64"), ranges: coverage.ranges };
+    }
+  } catch {
+    embeddedSubset = null;
+  }
+  return embeddedSubset;
+}
+
+function subsetCovers(subset, markup) {
+  const checked = new Set();
+  for (const character of markup) {
+    const codePoint = character.codePointAt(0);
+    // Control characters are XML whitespace here, never rendered glyphs.
+    if (codePoint < 0x20 || checked.has(codePoint)) continue;
+    if (!subset.ranges.some(([start, end]) => codePoint >= start && codePoint <= end)) return false;
+    checked.add(codePoint);
+  }
+  return true;
+}
+
 const fontOptions = {
   fontFiles: [fontPath], loadSystemFonts: false, defaultFontFamily: "Inter",
   defaultFontSize: 14, sansSerifFamily: "Inter",
@@ -59,9 +93,12 @@ class Typography {
     return lines;
   }
 
-  fontFace() {
+  fontFace(markup) {
+    const subset = typeof markup === "string" ? loadEmbeddedSubset() : null;
+    const data = subset && subsetCovers(subset, markup) ?
+      subset.base64 : fs.readFileSync(fontPath).toString("base64");
     return `<style>@font-face{font-family:Inter;src:url(data:font/ttf;base64,` +
-      `${fs.readFileSync(fontPath).toString("base64")}) format("truetype");font-weight:100 900;}</style>`;
+      `${data}) format("truetype");font-weight:100 900;}</style>`;
   }
 }
 
