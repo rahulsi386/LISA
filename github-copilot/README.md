@@ -214,11 +214,17 @@ Copilot Studio, Microsoft 365, or SharePoint.
 
 ### Complete cloud workflow
 
-- Modern Power Platform CLI (`pac`).
+- The **latest** Power Platform CLI (`pac`). Agent Builder updates it with
+  `dotnet tool update --global Microsoft.PowerApps.CLI.Tool` and blocks a Copilot Studio build on an
+  older version, because every Copilot Studio operation starts with PAC.
+- Microsoft 365 Agents Toolkit CLI 1.1.12 or newer (`npm install -g @microsoft/m365agentstoolkit-cli`)
+  when the build creates Cowork plugins or installs a Microsoft 365 channel package.
 - A valid Microsoft tenant with the required Copilot Studio or Microsoft 365 licensing, capacity,
   environments, and test surfaces.
 - An identity authorized to create, publish, test, export, and package the intended agent resources.
-- Browser access to the same tenant through Microsoft Edge.
+- Browser access to the same tenant through Microsoft Edge. Agent Builder uses the browser only for
+  operations with no programmatic route; Artifact Publisher and Agent Evaluator use it as their test
+  and upload surface.
 - SharePoint write access to the configured **Agent Library** and **Agent Artifact** libraries.
 - Azure CLI and suitable Azure RBAC permissions only when Azure MCP operations are needed.
 
@@ -353,7 +359,7 @@ C:\Projects\MySolution\lisa-config.json using the approved current screenshots.
 | `requirement-analyzer` | Converts source requirements into traceable findings. | Python extraction and validation, model-guided evidence review, schemas, hashes, and cache controls. | Valid config, Python dependencies, a non-empty `requirements/` folder, and manual review of visual or incomplete extraction targets. | Validated Markdown analysis, structured evidence ledger, and analysis manifest. |
 | `complexity-classifier` | Designs the solution, measures buildable coverage, and assigns complexity. | Microsoft-platform research, model-guided architecture, deterministic topology validation, scoring, and a review gate. | Validated requirement analysis and access to current approved platform references or the packaged offline reference set. | Classification JSON/Markdown, canonical topology, platform and harness decision, and accepted or revised delivery scope. |
 | `solution-designer` | Creates business architecture, engineering architecture and sequence diagrams from the approved classification. | Editable Draw.io, Mermaid, Python/NetworkX routing, Node/resvg rendering, geometry checks, an offline Architecture Review page, and browser inspection. | Accepted classification, Python and renderer dependencies, and Edge/Playwright for final visual inspection. | Three validated editable and presentation-ready diagrams, an Architecture Review page, and `current-design.json`. |
-| `agent-builder` | Builds the approved agent solution and reconciles every planned component. | Host-guided PAC and browser work, persisted-state verification, package handling, handoff contracts, and manifest validation. | Accepted classification/design, supported tenant and harness, PAC/browser authentication, licenses, capacity, and create/publish permissions. | Built agent evidence, instructions, live-state and handoff files, one solution package when applicable, and a complete or blocked manifest. |
+| `agent-builder` | Builds the approved agent solution and reconciles every planned component. | Programmatic-first construction (latest PAC CLI workspace for Copilot Studio; generated plugin packages and `atk` for Cowork), browser automation only as a recorded last resort, persisted-state verification, package handling, an automation ledger, handoff contracts, and manifest validation. | Accepted classification/design, supported tenant and harness, latest PAC CLI (plus `atk` for Cowork), PAC/browser authentication, licenses, capacity, and create/publish permissions. | Built agent evidence, instructions, live-state and handoff files, one solution package or Cowork plugin package when applicable, and a complete or blocked manifest. |
 | `agent-evaluator` | Tests the built agent on its supported harness and records evidence. | Source-grounded test generation, Playwright execution, observation capture, deterministic scoring, and lifecycle validation. | Complete build handoff, evaluation material, a deployed supported test surface, and matching browser/tenant identity. | Evaluation dataset, per-test observations and evidence, scores, PASS/FAIL decision, and evaluation manifest. |
 | `agent-optimizer` | Audits and improves instructions while preserving rollback safety. | Instruction audit, evaluator-delegated retests, snapshots, bounded change rounds, rollback controls, and LISA-decided GEPA evolution. | Valid evaluation, authoring access to the same test agent, and evaluator availability; GEPA additionally needs its pinned package, budget, and shadow-isolation approvals. | Accepted improvement, verified no-change, blocked result, or rollback, with measured impact and an optimization manifest. |
 | `artifact-generator` | Builds the final delivery documentation from lifecycle evidence. | Deterministic lifecycle input resolution, document generation, interactive execution-tree generation, and artifact validation. | Valid terminal artifacts from the required completed lifecycle stages. | Final solution document, interactive LISA execution tree, supporting files, and generation manifest. |

@@ -14,6 +14,28 @@ User-visible changes are recorded here. Unreleased entries are not a published r
 
 ### Changed
 
+- **Breaking:** Agent Builder is now programmatic first. The new
+  `resources/automation-precedence.md` defines the rules, and every build path follows them:
+  - Every Copilot Studio operation starts with the latest PAC CLI:
+    - `init --environment` bootstrap, including `--authoring-mode cli-copilot`;
+    - `clone`, `push`, `pull`, `publish`, `status`;
+    - `pac solution`, `pac connector`, and `pac copilot-studio download-agent-channel-manifest`.
+  - Knowledge files, flows, connection references, topics, tools, triggers, skills, workflows, and
+    connected agents are pushed from the sync workspace instead of being added in the browser.
+  - The browser is a per-operation last resort. Each use needs a recorded PAC attempt, a
+    justification, and `pac copilot pull` reconciliation.
+  - Cowork skills and plugins are generated as Microsoft 365 app packages (`manifest.json` v1.28)
+    and packaged and installed with `atk`. Preferences, sharing, and admin-center distribution
+    may use the browser directly.
+  - `agent-build-handoff.json` now requires `automationToolchain` and `automationLedger`.
+    It also accepts `artifacts.coworkPackages`.
+  - The validator rejects:
+    - a PAC CLI older than the recorded latest version;
+    - browser or programmatic Copilot Studio steps with no PAC attempt;
+    - fallbacks with no justification;
+    - built components with no ledger entry;
+    - Cowork packages whose hash doesn't match.
+  - Both builder CLI entry points now run the builder-local checks.
 - **Breaking:** Solution Designer 5.0 publishes three diagrams:
   - `BA_<slug>`: business architecture. This is a leadership operating model derived from the classified capabilities, their PoC treatments, human decisions, information, platform and controls.
   - `SA_<slug>`: engineering architecture.

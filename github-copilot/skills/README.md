@@ -461,7 +461,9 @@ Source: [`agent-builder/SKILL.md`](agent-builder/SKILL.md)
 
 ### What this skill is
 
-Agent Builder is primarily an **agent-directed remote construction playbook** for Microsoft Copilot Studio, Microsoft 365 Copilot Chat, Microsoft Cowork, and Teams. Packaged code does not create the agent; it validates the build artifacts, classification reconciliation, hashes, package state, and lifecycle manifest after the hosting agent performs PAC/UI/browser work.
+Agent Builder is primarily an **agent-directed remote construction playbook** for Microsoft Copilot Studio, Microsoft 365 Copilot Chat, Microsoft Cowork, and Teams. Packaged code does not create the agent; it validates the build artifacts, classification reconciliation, automation precedence, hashes, package state, and lifecycle manifest after the hosting agent performs the construction.
+
+Construction is **programmatic first** ([`resources/automation-precedence.md`](agent-builder/resources/automation-precedence.md)). Every Copilot Studio operation starts with the latest PAC CLI sync workspace (`pac copilot init/clone/push/pull/publish/status`, `pac solution`, `pac connector`, `pac copilot-studio download-agent-channel-manifest`), then another documented programmatic route. Browser automation is used only for an operation with a recorded PAC attempt, followed by `pac copilot pull` reconciliation. Cowork skills and plugins are generated as Microsoft 365 app packages and installed with the Microsoft 365 Agents Toolkit CLI (`atk`). Cowork operations without a programmatic route (preferences, sharing, admin-center distribution) may use the browser directly.
 
 ### What it does
 
@@ -469,10 +471,10 @@ It validates rather than redesigns the approved platform, Copilot Studio harness
 
 Supported build paths are:
 
-- **Standard harness:** PAC CLI/classic authoring plus browser fallback for unsupported components.
-- **GitHub Copilot harness:** `cli-copilot` or new agent UI, including skills, workflows, memory, knowledge, tools, and connected agents.
-- **Copilot chat harness:** Microsoft 365 Copilot agent page and internal publication.
-- **Microsoft Cowork:** configuration/evidence mode with no Copilot Studio harness and no fabricated ZIP.
+- **Standard harness:** `pac copilot init --environment` workspace; topics, knowledge (including uploaded files), flows, connection references, tools, and triggers pushed with PAC; browser only for recorded exceptions such as a description field the workspace doesn't expose, or non-Microsoft 365 channels.
+- **GitHub Copilot harness:** `pac copilot init --authoring-mode cli-copilot`; skills, workflows, knowledge, tools, and connected agents authored in the workspace; the Build UI only after a recorded rejected push.
+- **Copilot chat harness:** PAC probe and clone; UI creation only because no PAC command creates this agent type; M365 channel package via PAC.
+- **Microsoft Cowork:** generated plugin packages (`manifest.json` v1.28, `agentSkills`, `agentConnectors`), `atk package`/`atk install`; no Copilot Studio harness and no Power Platform solution ZIP.
 
 ### Inputs consumed and outputs provided
 
@@ -495,14 +497,14 @@ python "<plugin-skills-root>\resolve_skill_inputs.py" --skill agent-builder --co
 | Output | Purpose |
 |---|---|
 | `build-manifest.json` | Full lifecycle hash inventory and terminal marker. |
-| `agent-build-handoff.json` | Agent identity, platform/harness, target, instructions, artifacts, planned/actual coverage, dispositions, risks, and evaluator handoff. |
+| `agent-build-handoff.json` | Agent identity, platform/harness, target, instructions, artifacts, planned/actual coverage, dispositions, automation toolchain and ledger, risks, and evaluator handoff. |
 | `agent-build-report.md` | Human-readable construction/verification report. |
 | `agent-instructions.md` | Exact persisted primary-agent instruction text. |
 | `agent-live-state.json` | Remote read-back state, component/capability inventory, hashes, status, and package metadata. |
 | `agent-solution-manifest.json` | Scenario solution, primary/child agents, relationships, projects, deployment order, component inventory, and package. |
-| `packages/` | Exactly one deployable ZIP for Copilot Studio/mixed mode; empty for Cowork/assessment-only mode. |
+| `packages/` | Exactly one deployable Power Platform solution ZIP for Copilot Studio/mixed mode; empty for Cowork/assessment-only mode. |
 | `evidence/` | Descriptive construction/live-state evidence. |
-| `project/<schemaName>/` | Optional PAC/source workspace. |
+| `project/<schemaName>/` | Optional PAC workspace, or Cowork plugin source and its `atk` package (recorded in `artifacts.coworkPackages`). |
 
 Run IDs match `BLD-YYYYMMDD-HHMMSS-XXXXXXXX`; statuses are `complete` and `blocked`.
 
@@ -510,9 +512,9 @@ Run IDs match `BLD-YYYYMMDD-HHMMSS-XXXXXXXX`; statuses are `complete` and `block
 
 1. Resolve canonical inputs and build a ledger covering every classified capability and topology component.
 2. Select/confirm the agentic platform first, then a Copilot Studio harness where applicable. Normalize legacy Cowork classification to `agenticPlatform: Microsoft Cowork`, `harness: null`, and record the mismatch.
-3. Before every remote operation, verify the authenticated user, tenant, environment URL, and environment ID (`pac auth list`, `pac env list`, `pac env who`, `pac org who`, or equivalent Cowork browser checks). Checkpoint operation intent before writing and receipt only after read-back.
+3. Pass the toolchain gate (latest PAC CLI; `atk` when needed). Then, before every remote operation, verify the authenticated user, tenant, environment URL, and environment ID (`pac auth list`, `pac env list`, `pac env who`, `pac org who`, or equivalent Cowork browser checks). Checkpoint operation intent before writing and receipt only after read-back.
 4. Specify exact functional names, ≤50-word descriptions, instructions, knowledge, tools, flows, connected agents, security/governance/ALM, SLOs, capacity, resilience, observability, disposition, and evaluator handoff.
-5. Perform the harness-specific construction in [`agent-builder/SKILL.md`](agent-builder/SKILL.md). Build/configure only Builder-owned components. Represent approved simulations and manual/deferred/blocked items honestly.
+5. Perform the harness-specific construction in [`agent-builder/SKILL.md`](agent-builder/SKILL.md), following the automation ladder and recording each remote write in `automationLedger`. Build/configure only Builder-owned components. Represent approved simulations and manual/deferred/blocked items honestly.
 6. Persist, publish, pull/download, and verify every live component. For Copilot Studio/mixed builds, package all packageable scenario components into exactly one governed solution ZIP. Do not run behavioral test prompts here.
 7. Write all required fixed artifacts, `packages/`, `evidence/`, and optional project data.
 8. Generate the lifecycle manifest **last**:
@@ -527,17 +529,17 @@ Run IDs match `BLD-YYYYMMDD-HHMMSS-XXXXXXXX`; statuses are `complete` and `block
 
 | File | Responsibility |
 |---|---|
-| [`scripts/generate_manifest.py`](agent-builder/scripts/generate_manifest.py) | Intended Builder wrapper for classification reconciliation and shared atomic manifest publication. |
-| [`scripts/validate_artifacts.py`](agent-builder/scripts/validate_artifacts.py) | Classification/topology disposition coverage, planned coverage and count reconciliation, plus shared lifecycle validation. |
-| [`resources/agent-build-handoff.schema.json`](agent-builder/resources/agent-build-handoff.schema.json) | Handoff and build-mode/platform/harness/package contract. |
+| [`scripts/generate_manifest.py`](agent-builder/scripts/generate_manifest.py) | Builder publisher: classification reconciliation and automation-precedence checks, then shared atomic manifest publication (library and CLI). |
+| [`scripts/validate_artifacts.py`](agent-builder/scripts/validate_artifacts.py) | Classification/topology disposition coverage, planned coverage and count reconciliation, automation ledger and PAC-version enforcement, Cowork package hashes, plus shared lifecycle validation (library and CLI). |
+| [`resources/automation-precedence.md`](agent-builder/resources/automation-precedence.md) | Programmatic-first ladder, toolchain gate, Copilot Studio and Cowork component-to-method matrices, and ledger rules. |
+| [`resources/agent-build-handoff.schema.json`](agent-builder/resources/agent-build-handoff.schema.json) | Handoff, build-mode/platform/harness/package, automation toolchain, and automation ledger contract. |
 | [`resources/agent-live-state.schema.json`](agent-builder/resources/agent-live-state.schema.json) | Verified remote state contract. |
 | [`resources/agent-solution-manifest.schema.json`](agent-builder/resources/agent-solution-manifest.schema.json) | Single/multi-agent solution composition contract. |
 | [`resources/lifecycle-artifact-manifest.schema.json`](agent-builder/resources/lifecycle-artifact-manifest.schema.json) | Recursive terminal inventory contract. |
 | [`resources/artifact-contract.json`](agent-builder/resources/artifact-contract.json) | Build root, filenames, directories, patterns, statuses, and forbidden secret files. |
 | [`lifecycle_artifacts.py`](lifecycle_artifacts.py) | Hash/size inventory, atomic publication, and build-specific instruction/package consistency. |
 
-> [!WARNING]
-> The public Python functions in the Builder wrappers perform classification reconciliation, but the current `__main__` blocks call the shared CLI directly. Consequently, documented command-line execution can bypass checks that imported `publish()`/`validate()` functions and tests exercise. Route CLI entry points through the local functions before relying on those checks as command-line enforced.
+Both Builder script entry points route through the Builder-local `publish()`/`validate()` functions, so the documented commands enforce the same checks as the library functions and tests.
 
 ### Orchestrator stage and failure behavior
 
@@ -546,13 +548,13 @@ This is stage **4 — build**, followed by mandatory human **Accept / Revise / C
 ### Extending it without regression
 
 - Prefer deterministic construction/reconciliation automation over adding prose-only guarantees.
-- Route both script entry points through Builder-local publish/validate functions.
+- When PAC adds a command that covers an operation previously marked as a browser exception, update [`resources/automation-precedence.md`](agent-builder/resources/automation-precedence.md) and the affected build path in the same change.
 - Add schema fields and compare identity/component values consistently across handoff, live state, solution manifest, and package.
 - Preserve one-package, exact-environment, no-secret, immutable evidence, and no-behavioral-evaluation boundaries.
 - Validate publisher compatibility at Build time: canonical UUID agent ID, SharePoint-safe functional name, description constraints, and deployable package policy.
 - Resolve Cowork contracts across Classifier, Evaluator, Optimizer, and Publisher before claiming end-to-end Cowork delivery.
 - Extend shared lifecycle validation and fixtures together.
-- Run [`tests/test_artifacts.py`](agent-builder/tests/test_artifacts.py), covering Copilot Studio/Cowork fixtures, harness/package constraints, tampering, extras, path safety, stage names, component dispositions, and coverage drift. Add CLI-level tests because current tests call imported functions.
+- Run [`tests/test_artifacts.py`](agent-builder/tests/test_artifacts.py), covering Copilot Studio/Cowork fixtures, harness/package constraints, tampering, extras, path safety, stage names, component dispositions, coverage drift, automation-ledger/PAC-version/Cowork-package enforcement, and both CLI entry points.
 
 ## 5. Agent Evaluator
 

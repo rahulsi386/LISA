@@ -28,6 +28,8 @@
     "implementedControls",
     "recommendations",
     "knownBuildRisks",
+    "automationToolchain",
+    "automationLedger",
     "artifacts"
   ],
   "properties": {
@@ -289,6 +291,66 @@
       }
     },
     "knownBuildRisks": {"type": "array", "items": {"type": "string"}},
+    "automationToolchain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pacVersion", "pacLatestVersion", "pacLatestSource", "atkVersion", "verifiedAt"],
+      "properties": {
+        "pacVersion": {"type": ["string", "null"], "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+"},
+        "pacLatestVersion": {"type": ["string", "null"], "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+"},
+        "pacLatestSource": {"type": ["string", "null"], "minLength": 1},
+        "atkVersion": {"type": ["string", "null"], "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+"},
+        "verifiedAt": {"type": "string", "format": "date-time"}
+      }
+    },
+    "automationLedger": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "componentId",
+          "operation",
+          "platform",
+          "method",
+          "tool",
+          "evidence",
+          "programmaticAttempts",
+          "fallbackJustification",
+          "reconciliation"
+        ],
+        "properties": {
+          "componentId": {"type": "string", "minLength": 1},
+          "operation": {"type": "string", "minLength": 1},
+          "platform": {"enum": ["Microsoft Copilot Studio", "Microsoft Cowork"]},
+          "method": {"enum": ["pac-cli", "programmatic", "browser", "manual"]},
+          "tool": {"type": "string", "minLength": 1},
+          "evidence": {"type": "string", "minLength": 1},
+          "programmaticAttempts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["method", "tool", "outcome", "evidence"],
+              "properties": {
+                "method": {"enum": ["pac-cli", "programmatic"]},
+                "tool": {"type": "string", "minLength": 1},
+                "outcome": {"enum": ["unsupported", "rejected", "failed"]},
+                "evidence": {"type": "string", "minLength": 1}
+              }
+            }
+          },
+          "fallbackJustification": {"type": ["string", "null"], "minLength": 1},
+          "reconciliation": {"type": ["string", "null"], "minLength": 1}
+        },
+        "allOf": [
+          {
+            "if": {"properties": {"platform": {"const": "Microsoft Cowork"}}},
+            "then": {"properties": {"method": {"not": {"const": "pac-cli"}}}}
+          }
+        ]
+      }
+    },
     "artifacts": {
       "type": "object",
       "additionalProperties": false,
@@ -306,6 +368,19 @@
                 "type": "string",
                 "pattern": "^packages/[a-z0-9]+(?:-[a-z0-9]+)*\\.zip$"
               },
+              "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+              "bytes": {"type": "integer", "minimum": 0}
+            }
+          }
+        },
+        "coworkPackages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["relativePath", "sha256", "bytes"],
+            "properties": {
+              "relativePath": {"type": "string", "pattern": "^project/[A-Za-z0-9_.-]+/(?:[A-Za-z0-9_.-]+/)*[a-z0-9]+(?:-[a-z0-9]+)*\\.zip$"},
               "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
               "bytes": {"type": "integer", "minimum": 0}
             }

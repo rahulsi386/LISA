@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -191,6 +192,26 @@ class ArtifactContractTests(unittest.TestCase):
                 "implementedControls": [],
                 "recommendations": [],
                 "knownBuildRisks": [],
+                "automationToolchain": {
+                    "pacVersion": "2.12.2",
+                    "pacLatestVersion": "2.12.2",
+                    "pacLatestSource": "dotnet tool update --global Microsoft.PowerApps.CLI.Tool",
+                    "atkVersion": None,
+                    "verifiedAt": "2026-08-18T11:55:00Z",
+                },
+                "automationLedger": [
+                    {
+                        "componentId": "fixture-agent",
+                        "operation": "create-agent",
+                        "platform": "Microsoft Copilot Studio",
+                        "method": "pac-cli",
+                        "tool": "pac copilot init --environment",
+                        "evidence": "Agent fixture-agent-id created and cloned.",
+                        "programmaticAttempts": [],
+                        "fallbackJustification": None,
+                        "reconciliation": None,
+                    }
+                ],
                 "artifacts": {
                     "packages": [package_record],
                     "projectRelativePath": None,
@@ -267,6 +288,22 @@ class ArtifactContractTests(unittest.TestCase):
             agent["agenticPlatform"] = "Microsoft Cowork"
             agent["harness"] = None
         handoff["artifacts"]["packages"] = []
+        handoff["automationToolchain"].update(
+            {"pacVersion": None, "pacLatestVersion": None, "pacLatestSource": None}
+        )
+        handoff["automationLedger"] = [
+            {
+                "componentId": "fixture-agent",
+                "operation": "set-custom-instructions",
+                "platform": "Microsoft Cowork",
+                "method": "browser",
+                "tool": "Cowork Customize > Preferences",
+                "evidence": "evidence/cowork-preferences.png",
+                "programmaticAttempts": [],
+                "fallbackJustification": "Cowork preferences have no documented programmatic route.",
+                "reconciliation": None,
+            }
+        ]
         write_json(handoff_path, handoff)
 
         live_path = self.root / "agent-live-state.json"
@@ -714,6 +751,169 @@ class ArtifactContractTests(unittest.TestCase):
         self.add_foundry_component("built", contract=True)
         with self.assertRaisesRegex(ArtifactError, "cannot be built"):
             self.publish_fixture()
+
+    def update_handoff(self, change) -> None:
+        handoff_path = self.root / "agent-build-handoff.json"
+        handoff = load_object(handoff_path)
+        change(handoff)
+        write_json(handoff_path, handoff)
+
+    def browser_entry(self, **overrides) -> dict:
+        entry = {
+            "componentId": "fixture-agent",
+            "operation": "set-agent-description",
+            "platform": "Microsoft Copilot Studio",
+            "method": "browser",
+            "tool": "Copilot Studio agent Details page",
+            "evidence": "evidence/agent-description.png",
+            "programmaticAttempts": [
+                {
+                    "method": "pac-cli",
+                    "tool": "pac copilot pull",
+                    "outcome": "unsupported",
+                    "evidence": "Pulled agent.mcs.yml exposes no description field.",
+                }
+            ],
+            "fallbackJustification": "No PAC or documented API field persists the description.",
+            "reconciliation": "pac copilot pull confirmed the persisted description.",
+        }
+        entry.update(overrides)
+        return entry
+
+    def test_browser_step_after_pac_attempt_is_accepted(self) -> None:
+        self.update_handoff(lambda h: h["automationLedger"].append(self.browser_entry()))
+        self.publish_fixture()
+        self.assertEqual(validate(self.root)["status"], "passed")
+
+    def test_browser_step_without_pac_attempt_is_rejected(self) -> None:
+        self.update_handoff(
+            lambda h: h["automationLedger"].append(self.browser_entry(programmaticAttempts=[]))
+        )
+        with self.assertRaisesRegex(ArtifactError, "without a recorded PAC CLI attempt"):
+            self.publish_fixture()
+
+    def test_programmatic_step_without_pac_attempt_is_rejected(self) -> None:
+        entry = self.browser_entry(
+            method="programmatic", tool="Dataverse Web API", programmaticAttempts=[],
+            fallbackJustification=None, reconciliation=None,
+        )
+        self.update_handoff(lambda h: h["automationLedger"].append(entry))
+        with self.assertRaisesRegex(ArtifactError, "without a recorded PAC CLI attempt"):
+            self.publish_fixture()
+
+    def test_browser_step_without_reconciliation_is_rejected(self) -> None:
+        self.update_handoff(
+            lambda h: h["automationLedger"].append(self.browser_entry(reconciliation=None))
+        )
+        with self.assertRaisesRegex(ArtifactError, "reconciliation"):
+            self.publish_fixture()
+
+    def test_browser_step_without_justification_is_rejected(self) -> None:
+        self.update_handoff(
+            lambda h: h["automationLedger"].append(self.browser_entry(fallbackJustification=" "))
+        )
+        with self.assertRaisesRegex(ArtifactError, "fallbackJustification"):
+            self.publish_fixture()
+
+    def test_outdated_pac_is_rejected(self) -> None:
+        self.update_handoff(lambda h: h["automationToolchain"].update({"pacVersion": "2.9.10"}))
+        with self.assertRaisesRegex(ArtifactError, "older than the latest"):
+            self.publish_fixture()
+
+    def test_newer_minor_pac_version_is_compared_numerically(self) -> None:
+        self.update_handoff(
+            lambda h: h["automationToolchain"].update(
+                {"pacVersion": "2.12.10", "pacLatestVersion": "2.12.9"}
+            )
+        )
+        self.publish_fixture()
+        self.assertEqual(validate(self.root)["status"], "passed")
+
+    def test_built_component_without_ledger_entry_is_rejected(self) -> None:
+        self.update_handoff(lambda h: h.update({"automationLedger": []}))
+        with self.assertRaisesRegex(ArtifactError, "without automationLedger entries"):
+            self.publish_fixture()
+
+    def test_missing_automation_records_are_rejected(self) -> None:
+        self.update_handoff(lambda h: h.pop("automationLedger"))
+        with self.assertRaises(ArtifactError):
+            self.publish_fixture()
+
+    def test_cowork_browser_fallback_needs_justification(self) -> None:
+        self.convert_build_to_cowork()
+        self.update_handoff(
+            lambda h: h["automationLedger"][0].update({"fallbackJustification": None})
+        )
+        with self.assertRaisesRegex(ArtifactError, "fallbackJustification"):
+            self.publish_fixture()
+
+    def add_cowork_package(self, *, atk_version: str | None, tamper: bool = False) -> None:
+        self.convert_build_to_cowork()
+        package = self.root / "project" / "claims-intake-plugin" / "appPackage" / "build" / "claims-intake-plugin.zip"
+        package.parent.mkdir(parents=True)
+        package.write_bytes(b"fixture cowork plugin")
+        record = {
+            "relativePath": package.relative_to(self.root).as_posix(),
+            "sha256": "0" * 64 if tamper else digest(package),
+            "bytes": package.stat().st_size,
+        }
+
+        def change(handoff: dict) -> None:
+            handoff["automationToolchain"]["atkVersion"] = atk_version
+            handoff["artifacts"]["coworkPackages"] = [record]
+            handoff["automationLedger"].append({
+                "componentId": "fixture-agent",
+                "operation": "install-plugin-personal",
+                "platform": "Microsoft Cowork",
+                "method": "programmatic",
+                "tool": "atk install --scope Personal",
+                "evidence": "TitleId and AppId recorded.",
+                "programmaticAttempts": [],
+                "fallbackJustification": None,
+                "reconciliation": None,
+            })
+
+        self.update_handoff(change)
+
+    def test_cowork_plugin_package_is_accepted(self) -> None:
+        self.add_cowork_package(atk_version="1.1.12")
+        self.publish_fixture()
+        self.assertEqual(validate(self.root)["status"], "passed")
+
+    def test_atk_step_requires_toolchain_version(self) -> None:
+        self.add_cowork_package(atk_version=None)
+        with self.assertRaisesRegex(ArtifactError, "atkVersion"):
+            self.publish_fixture()
+
+    def test_cowork_package_hash_mismatch_is_rejected(self) -> None:
+        self.add_cowork_package(atk_version="1.1.12", tamper=True)
+        with self.assertRaisesRegex(ArtifactError, "Cowork package hash"):
+            self.publish_fixture()
+
+    def run_cli(self, script: str, *arguments: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(SKILL_ROOT / "scripts" / script), "--root", str(self.root), *arguments],
+            capture_output=True, text=True, timeout=120,
+        )
+
+    def test_cli_entry_points_enforce_automation_precedence(self) -> None:
+        self.update_handoff(
+            lambda h: h["automationLedger"].append(self.browser_entry(programmaticAttempts=[]))
+        )
+        publish_args = ("--status", "complete", "--summary", "CLI fixture.")
+        rejected = self.run_cli("generate_manifest.py", *publish_args)
+        self.assertEqual(2, rejected.returncode, rejected.stdout + rejected.stderr)
+        self.assertIn("PAC CLI attempt", rejected.stderr)
+
+        self.update_handoff(lambda h: h["automationLedger"].pop())
+        published = self.run_cli("generate_manifest.py", *publish_args)
+        self.assertEqual(0, published.returncode, published.stdout + published.stderr)
+        validated = self.run_cli("validate_artifacts.py")
+        self.assertEqual(0, validated.returncode, validated.stdout + validated.stderr)
+
+        self.update_handoff(lambda h: h["automationToolchain"].update({"pacVersion": "1.0.0"}))
+        stale = self.run_cli("validate_artifacts.py")
+        self.assertEqual(2, stale.returncode, stale.stdout + stale.stderr)
 
 
 if __name__ == "__main__":

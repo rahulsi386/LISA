@@ -1,11 +1,11 @@
 ---
 name: "agent-builder"
-description: "Builds the approved PoC/MVP portion of a classified solution with Copilot Studio, Microsoft 365 Copilot Chat, Cowork, and Teams; reconciles every planned component as built, configured, simulated, manual, deferred, blocked, or failed."
+description: "Builds the approved PoC/MVP portion of a classified solution with Copilot Studio, Microsoft 365 Copilot Chat, Cowork, and Teams, programmatically first (latest PAC CLI, then atk) with browser automation last; reconciles every planned component."
 ---
 
 # Agent Builder — Agentic Platform and Harness-Aware Playbook
 
-Use this skill to implement the approved PoC/MVP portion of the complete solution using only Microsoft Copilot Studio, Microsoft 365 Copilot Chat, Microsoft Cowork, and Microsoft Teams. **Validate, but do not independently redesign, the classifier's agentic platform, Copilot Studio harness, and component dispositions.** Use PAC CLI/classic authoring for Standard, the new agent UI for GitHub Copilot, the Microsoft 365 Copilot agent page for Copilot chat, or a verified reproducible Cowork configuration path. Behavioral evaluation belongs exclusively to `agent-evaluator`; changes based on evaluation outcomes belong exclusively to `agent-optimizer`.
+Use this skill to implement the approved PoC/MVP portion of the complete solution using only Microsoft Copilot Studio, Microsoft 365 Copilot Chat, Microsoft Cowork, and Microsoft Teams. **Validate, but do not independently redesign, the classifier's agentic platform, Copilot Studio harness, and component dispositions.** Build every component programmatically first per `resources\automation-precedence.md`: the latest PAC CLI sync workspace for every Copilot Studio harness, generated plugin packages and `atk` for Cowork, and browser automation only as a recorded last resort. Behavioral evaluation belongs exclusively to `agent-evaluator`; changes based on evaluation outcomes belong exclusively to `agent-optimizer`.
 
 Never build Microsoft Foundry, Microsoft Agent Framework, custom-code, or other out-of-bound components. Reconcile them as simulated, manual, deferred, or blocked exactly as approved by the classification. Do not silently substitute an agentic platform, connector, service, data store, or Copilot Studio harness.
 
@@ -30,8 +30,8 @@ Microsoft Cowork has no Copilot Studio harness. Record it as `agenticPlatform: M
 
 ### Build path registry
 
-Read **only** the path file(s) for the validated platform/harness. A mixed build reads each
-applicable path; never load the others.
+Read **only** the path file(s) for the validated platform/harness, always together with
+`resources\automation-precedence.md`. A mixed build reads each applicable path; never load the others.
 
 | Path | Platform / harness | Instructions | Status |
 |---|---|---|---|
@@ -120,13 +120,13 @@ pac env who
 pac org who
 ```
 
-   Record the authenticated user, environment display name, URL, and environment ID. The authenticated environment must match the configured target exactly. For Cowork-only builds, verify the browser identity, tenant ID, Cowork availability, and required configuration surfaces instead of treating a Power Platform environment as the Cowork target. On any mismatch, missing authentication, or expired authentication, stop before remote write.
+   Record the authenticated user, environment display name, URL, and environment ID. The authenticated environment must match the configured target exactly. First pass the toolchain gate in `resources\automation-precedence.md` Section 2 (latest PAC; `atk` when needed). For Cowork-only builds, verify the browser identity, tenant ID, Cowork availability, and required configuration surfaces instead of treating a Power Platform environment as the Cowork target. On any mismatch, missing authentication, or expired authentication, stop before remote write.
 3. **Every agent name must be functional and requirement-specific.** Name the capability or business responsibility, such as `Claims Appeal Agent`, `Patient Intake Agent`, or `Policy Comparison Agent`. Never include `custName`, a company/customer/tenant/department/brand name, a project codename, or a generic label such as `AI Agent`, `Copilot`, or `Assistant` in an agent display name. Apply this rule to the primary agent and every connected/child agent. The publisher prefix may remain technical and environment-specific.
 4. **The agent description must be a meaningful, discoverable routing description of 50 words or fewer.** Draft it, count the words, trim to ≤50, and persist it remotely; a description that only exists in a design doc, YAML, or notes does not count. Pattern: `[Agent] helps [users/agents] perform [task] using [approved knowledge/tools]. It can [2–3 capabilities]. Use it when [routing condition]. Do not use it for [exclusion/escalation].`
 5. **Instructions must be model-agnostic, grounded, right-sized, and aligned** with the actual configured knowledge, tools, flows, connected agents, authentication, response format, and safety boundaries. After every change, re-align description + instructions.
 6. **Disable general web browsing and code interpreter unless explicitly required.**
-7. **For a Copilot Studio build, package every built component into exactly one governed Power Platform solution and one deployable ZIP beneath `<basePath>\output\build\packages`.** A Cowork-only or assessment-only run has no package and must provide configuration evidence. A mixed run has one package for all packageable components and records Cowork configuration separately.
-8. **Any component the primary build tool cannot create must be completed via the fallback path — never silently dropped** (see the selected path's fallback).
+7. **For a Copilot Studio build, package every built component into exactly one governed Power Platform solution and one deployable ZIP beneath `<basePath>\output\build\packages`.** A Cowork-only or assessment-only run has no solution ZIP; Cowork plugin ZIPs stay under `project\` and in `artifacts.coworkPackages`. A mixed run has one solution package and records Cowork packages separately.
+8. **Follow the automation ladder in `resources\automation-precedence.md`.** Copilot Studio starts every operation with the latest PAC CLI, then another documented programmatic route; browser automation is allowed only for that one operation after a recorded failed/unsupported PAC attempt, followed by `pac copilot pull` reconciliation. Cowork uses its programmatic route where one exists and may otherwise use the browser directly. Record every remote write in `automationLedger`; never silently drop a component.
 9. **Re-verify the live agent** (expected vs present) before claiming completion (Section 6).
 10. **Right-size the instructions** after full development: reference only components actually built; remove redundancy, contradictions, verbose platform-default restatement, and speculative edge cases. If you tighten them, re-align, re-publish, re-verify.
 11. **Use a governed Power Platform solution and custom publisher/prefix.** PAC-authored agents enter the solution from the start. For new-UI harnesses, use a solution context up front when supported; otherwise record the UI limitation and add the live agent plus required components to the governed solution before the first non-development deployment or package. Use environment variables and connection references for environment-specific values; never embed URLs, IDs, credentials, or secrets in instructions, flows, or source.
@@ -362,7 +362,7 @@ Sections 4 and 5 to every component it creates, then return here for Sections 6�
 
 ## 6. Verify all components before completion (all platforms)
 
-Re-verify the **live** agent, not just local files or the visible draft. Sources: `pac copilot pull` + compiled `.mcs/botdefinition.json`; the exported solution; the new UI Download YAML; the Dataverse bot `configuration`; `/content/botcomponents`.
+Re-verify the **live** agent, not just local files or the visible draft. Sources: `pac copilot pull`/`clone` + compiled `.mcs/botdefinition.json`; `pac copilot status`; the exported solution; the Dataverse bot `configuration`; `/content/botcomponents`; `atk`-installed Cowork packages.
 
 Build an expected-vs-present checklist covering:
 
@@ -479,6 +479,8 @@ Write all required files from the Build artifact contract. Keep secrets/tokens o
     }
   ],
   "knownBuildRisks": [],
+  "automationToolchain": {},
+  "automationLedger": [],
   "artifacts": {
     "packages": [
       {
@@ -487,6 +489,7 @@ Write all required files from the Build artifact contract. Keep secrets/tokens o
         "bytes": 0
       }
     ],
+    "coworkPackages": [],
     "projectRelativePath": "project/<schemaName>",
     "solutionManifestRelativePath": "agent-solution-manifest.json",
     "liveStateRelativePath": "agent-live-state.json",
@@ -506,8 +509,8 @@ Do not mark complete until every item holds:
 - Every agent name, schema name, ≤50-word description, and instruction set passes Sections 2 and 5 and is persisted, versioned, hashed, and re-verified; capability defaults (web browsing, code interpreter, memory) were reviewed.
 - Section 4 decisions exist for all five pillars; SLO/capacity/cost targets are in the evaluator handoff and were not scored; every external dependency has timeout, retry/backoff, idempotency, fallback, escalation, monitoring, and owner.
 - Required identity, DLP, secret, audit, security-scan, and telemetry controls are implemented; other applicable controls are explicit recommendations.
-- The selected path completed: Published/Active verified, fallbacks finished or recorded as accepted blockers, and GitHub-harness signature checks passed where applicable.
-- Copilot Studio or mixed: exactly one solution ZIP, proven complete by `agent-solution-manifest.json`. Cowork-only or assessment-only: no ZIP; configuration evidence and portability gaps recorded.
+- The selected path completed: Published/Active verified; the toolchain gate passed; every browser or manual step has an `automationLedger` entry with its PAC attempt (Copilot Studio), justification, and reconciliation; GitHub-harness signature checks passed where applicable.
+- Copilot Studio or mixed: exactly one solution ZIP, proven complete by `agent-solution-manifest.json`. Cowork-only or assessment-only: no solution ZIP; Cowork plugin packages, configuration evidence, and portability gaps recorded.
 - Every classifier topology component has exactly one disposition; simulations meet Section 1.2; planned versus actual coverage and variances are recorded; every Foundry component carries its integration contract.
 - Section 6 expected-versus-present counts match.
 - Every Build contract artifact exists under `<basePath>\output\build` and the packaged publisher returned `passed`.

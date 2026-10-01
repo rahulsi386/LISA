@@ -1,7 +1,9 @@
 # Build path B — GitHub Copilot harness
 
 Read this file only when the validated platform is Microsoft Copilot Studio and the harness is
-`GitHub Copilot`. The shared gates in `SKILL.md` Sections 1–8 still apply.
+`GitHub Copilot`. The shared gates in `SKILL.md` Sections 1–8 and
+`resources\automation-precedence.md` still apply. Every component below is authored in the PAC
+sync workspace first; the Build UI is a recorded, per-operation exception only.
 
 Use this path for every currently supported GitHub Copilot-harness composition. Component types are composable, not mutually exclusive: build an instructions-only agent, or any required combination of knowledge, tools, workflows, skills, memory, file capabilities, and connected agents. Build exactly the non-empty component set defined by the validated classification and design; never force unnecessary components and never omit a required component because another component is present.
 
@@ -28,7 +30,7 @@ For a multi-agent solution:
 
 ## B1. Verify PAC support and create with `cli-copilot`
 
-Prefer the PAC `cli-copilot` path because it creates a governed, sync-ready workspace that can be pulled, diffed, packaged, and deployed. Before the first remote write:
+The PAC `cli-copilot` path is mandatory because it creates a governed, sync-ready workspace that can be pulled, diffed, packaged, and deployed. After the toolchain gate updates PAC to the latest version, and before the first remote write:
 
 ```powershell
 pac copilot init help
@@ -67,15 +69,19 @@ pac copilot init `
   --environment "<verified environment URL>"
 ```
 
-Record the agent ID and schema name returned by PAC. Immediately inspect the live-synced `settings.mcs.yml`; stop if `authoringModel`, recognizer, or template does not match the GitHub-harness signature. Replace the bootstrap instruction with the Section 5 contract, then use `pac copilot push` and `pac copilot pull` to verify persistence. Use the new Build UI only for component types PAC cannot author.
+Record the agent ID and schema name returned by PAC. Immediately inspect the live-synced `settings.mcs.yml`; stop if `authoringModel`, recognizer, or template does not match the GitHub-harness signature. Replace the bootstrap instruction with the Section 5 contract, then use `pac copilot push` and `pac copilot pull` to verify persistence.
 
-When PAC lacks `cli-copilot`, use `https://copilotstudio.preview.microsoft.com/environments/<environment-id>/agents/new`, verify browser identity and environment, create the GitHub-harness agent, and then clone/pull it into the governed project directory before adding components.
+If the bootstrap is rejected, record the attempt. Then scaffold locally (no `--environment`), run `pac copilot pack`, then `pac solution import`, then `pac copilot clone` into an empty folder, and re-check the signature.
+
+Only when the **updated** PAC still lacks `cli-copilot` (a recorded `unsupported` attempt), create the agent at `https://copilotstudio.preview.microsoft.com/environments/<environment-id>/agents/new` after verifying browser identity and environment. Then immediately `pac copilot clone` it into the governed project directory, record `reconciliation`, and add every component through the workspace.
 
 ## B2. Implement every required component type
 
+Author each definition in the workspace from the scaffold, a pulled reference agent, or an extracted template; never invent YAML. After each change, `pac copilot push`, then `pac copilot pull` and diff. A push the service rejects is a recorded `rejected` attempt. Only then may that single operation use the Build UI, followed by `pac copilot pull` reconciliation (see `automation-precedence.md` Section 3).
+
 ### Knowledge
 
-- Add each exact validated source through Build → Knowledge.
+- Add each exact validated source as a knowledge definition under `capabilities\knowledge\`, and place uploaded files under `knowledge\files\`; `pac copilot push` uploads them.
 - Public website URLs must satisfy the current picker depth rules; never broaden to general web search to work around a rejected URL.
 - For SharePoint, OneDrive, and Dataverse, verify tenant/site/table scope, runtime identity, source permissions, indexing/readiness, Dataverse Search and Quick Find configuration where applicable.
 - For uploaded files, wait for upload and indexing to complete.
@@ -85,30 +91,31 @@ When PAC lacks `cli-copilot`, use `https://copilotstudio.preview.microsoft.com/e
 ### Skills
 
 - Create a focused `SKILL.md` with YAML frontmatter (`name`, `description`), one responsibility, typed tool expectations, explicit failure behavior, and no duplicated parent instructions.
-- Upload the file or a ZIP whose root contains `SKILL.md`.
-- Verify the saved workspace contains `behaviors\<name>*.mcs.yml` with `kind: InlineAgentSkill`.
+- Author `behaviors\<name>.mcs.yml` with `kind: InlineAgentSkill`, modeled on a pulled reference skill, and push. Only if the push is rejected, upload the file or a ZIP whose root contains `SKILL.md` in the UI, then pull.
+- Verify the pulled workspace contains `behaviors\<name>*.mcs.yml` with `kind: InlineAgentSkill`.
 
 ### Workflow tools
 
-1. Create a modern GitHub-harness Workflow from the Workflows surface.
+1. Author the modern GitHub-harness Workflow as `workflows\<name>-<id>\workflow.json` plus metadata, modeled on a pulled reference workflow, and push it. Use the Workflows surface only after a recorded rejected push.
 2. Use `When an agent calls the workflow`; do not substitute a Standard agent flow.
 3. Add narrow typed inputs with descriptions and required fields.
 4. Use only the necessary workflow nodes: functions, variables, branching, loops, connectors, human review, agents, or AI actions. An Agent node is optional, not mandatory.
 5. Configure deterministic action ordering and explicit error paths.
 6. Configure `Respond to the agent` with non-empty typed success, partial, and error outputs. Wire outputs to actual upstream action values.
 7. Never return placeholder, timestamp-invented, or success-shaped receipt IDs. If the downstream integration is not implemented, return an explicit blocked/not-integrated result.
-8. Save and publish the workflow, then add it to the owning agent through Build → Tools → Workflows.
+8. Push, publish the agent, and add the `WorkflowTool` definition to the owning agent's `capabilities\tools\` in the workspace.
 9. Pull the agent and verify both `capabilities\tools\*.mcs.yml` with `kind: WorkflowTool` and `workflows\<name>-<id>\workflow.json`.
 
 ### Other tools
 
-- Add connector, MCP, REST API, computer-use, prompt, or other supported tools only when the design selects that creation method.
+- Add connector, MCP, REST API, computer-use, prompt, or other supported tools only when the design selects that creation method. Author them as `capabilities\tools\*.mcs.yml` (and `pac connector create --solution-unique-name` for custom connectors), then push.
+- Bind connection references and environment variables through the workspace or `pac solution create-settings` + `--settings-file`. Only end-user OAuth consent is `manual`.
 - Do not substitute a generic connector or MCP server when the required tool is a workflow.
 - Verify exact inputs, outputs, authentication, connection references, permissions, timeouts, retry/idempotency, side effects, and error behavior.
 
 ### Connected agents
 
-- Publish each child, refresh the parent agent picker, then connect it using an exact, distinct routing description.
+- Publish each child with `pac copilot publish`, then add a `ConnectedAgentTool` definition with an exact, distinct routing description to the parent workspace and push. Use the parent agent picker only after a recorded rejected push.
 - Verify the parent workspace contains one `ConnectedAgentTool` definition per child under `capabilities\tools`.
 - Keep child knowledge and tools focused on its domain. Avoid duplicate knowledge across children unless the architecture explicitly requires overlap.
 
@@ -119,9 +126,9 @@ When PAC lacks `cli-copilot`, use `https://copilotstudio.preview.microsoft.com/e
 
 ## B3. Persist descriptions and instructions
 
-Persist a functional ≤50-word description wherever the UI exposes it. Connected-agent routing always requires a description. If the preview UI does not expose a primary description, use a supported API/classic path when available; otherwise record the limitation as a blocker. After every component change, re-align instructions with exact live component names without restating platform-default knowledge behavior.
+Persist instructions and the functional ≤50-word description through the workspace (`agent.mcs.yml`) and push. Connected-agent routing always requires a description. If the pulled workspace exposes no primary description field, use a documented Dataverse/Power Platform API field when available. Otherwise use the UI as a recorded exception, or record the limitation as a blocker. After every component change, re-align instructions with exact live component names without restating platform-default knowledge behavior.
 
-When a rich-text instruction edit is required, use real keyboard insertion rather than Playwright `fill()`, then Save, reload, and verify the Dataverse instruction segment:
+Only when a pushed instruction edit is rejected (a recorded attempt) may the UI editor be used. Use real keyboard insertion rather than Playwright `fill()`, then Save, reload, `pac copilot pull`, and verify the Dataverse instruction segment:
 
 ```javascript
 const editor = page.getByRole('textbox', { name: 'Agent instructions' });
@@ -132,7 +139,7 @@ await page.keyboard.insertText(instructions);
 
 ## B4. Publish, pull, verify, and package one scenario solution
 
-Publish every leaf agent first and the parent last. Pull and verify each source workspace independently:
+Publish every leaf agent first and the parent last with `pac copilot publish`, and confirm provisioning with `pac copilot status`. Pull and verify each source workspace independently:
 
 ```powershell
 pac copilot list --environment "<verified environment URL>"
