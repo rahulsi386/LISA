@@ -436,3 +436,10 @@ npm --prefix .\skills\solution-designer\renderer test
 Run per-stage Python test discovery separately because different skill folders can contain modules
 with the same name. Contributors updating the Agency copy must preserve its Python/NetworkX diagram
 router and GEPA pilot adaptations rather than overwriting them with the Scout copies in `m-skills`.
+
+## Architecture ontology
+
+See the [source-backed architecture and domain ontology](ontology/README.md) for the Copilot/Agency
+skill lifecycle, artifact relationships, runtime boundaries, integrations, and review findings.
+The companion [JSON-LD graph](ontology/lisa-ontology.jsonld) provides classes, properties,
+architecture entities, and repository source references for machine-readable use.
