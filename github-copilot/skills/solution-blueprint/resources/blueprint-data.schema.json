@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rahulsi386/LISA/skills/solution-blueprint/resources/blueprint-data.schema.json",
+  "title": "Solution Blueprint data",
+  "description": "Structured data embedded in a generated Solution Blueprint HTML file as <script type=\"application/json\" id=\"blueprint-data\">. It is the source of truth for status, route analysis, decisions, open issues and change history.",
+  "type": "object",
+  "required": ["name", "status", "lastUpdated", "mode", "sourceArtifacts", "executiveSummary", "requirements", "complexity", "gates", "routes", "recommendedRoute", "openIssues", "technicalDecisions", "evals", "changeLog"],
+  "properties": {
+    "name": {"type": "string", "minLength": 1},
+    "slug": {"type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"},
+    "status": {"enum": ["Draft", "In review", "Approved", "Blocked", "Archived"]},
+    "lastUpdated": {"$ref": "#/$defs/isoDate"},
+    "mode": {"enum": ["standalone", "lisa"]},
+    "sourceArtifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^([a-fA-F0-9]{64})?$"},
+          "role": {"enum": ["requirements", "classification", "ledger", "design", "diagram", "notes"]}
+        }
+      }
+    },
+    "confidence": {
+      "type": "object",
+      "required": ["level"],
+      "properties": {"level": {"enum": ["Low", "Medium", "High"]}, "reason": {"type": "string"}}
+    },
+    "executiveSummary": {"type": "string"},
+    "scenarioOverview": {
+      "type": ["object", "string"],
+      "properties": {"primaryActor": {"type": "string"}, "trigger": {"type": "string"}, "expectedOutcome": {"type": "string"}}
+    },
+    "jtbd": {"type": "array", "items": {"type": ["string", "object"]}},
+    "personas": {"type": "array", "items": {"type": ["string", "object"]}},
+    "assumptions": {"type": "array", "items": {"type": ["string", "object"]}},
+    "questionsToConfirm": {"type": "array", "items": {"type": "string"}},
+    "requirements": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "text", "classification"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "idOrigin": {"enum": ["source", "derived"]},
+          "text": {"type": "string", "minLength": 1},
+          "classification": {"enum": ["Required", "Confirmed", "Current", "Preferred", "Near-term", "Future", "Potential", "Optional", "Explicitly excluded", "Not evidenced"]},
+          "source": {"type": "string"},
+          "systems": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "workType"],
+        "properties": {
+          "name": {"type": "string"},
+          "workType": {"enum": ["Conventional software", "Knowledge retrieval", "Deterministic execution", "Adaptive reasoning", "Delegated personal work", "Custom agent software"]},
+          "aiNeeded": {"type": "boolean"},
+          "requirementIds": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "escalation": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["stage", "escalate"],
+        "properties": {"stage": {"enum": [1, 2, 3]}, "escalate": {"type": "boolean"}}
+      }
+    },
+    "complexity": {
+      "type": "object",
+      "required": ["rating"],
+      "properties": {"rating": {"enum": ["Low", "Medium", "High"]}, "drivers": {"type": "array", "items": {"type": "string"}}}
+    },
+    "gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["gate", "results"],
+        "properties": {
+          "gate": {"type": "string", "minLength": 1},
+          "results": {"type": "object", "additionalProperties": {"$ref": "#/$defs/gateResult"}},
+          "owner": {"type": "string"},
+          "note": {"type": "string"}
+        }
+      }
+    },
+    "routes": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "items": {
+        "type": "object",
+        "required": ["name", "gate", "scores", "total"],
+        "properties": {
+          "name": {"$ref": "#/$defs/routeName"},
+          "gate": {"$ref": "#/$defs/gateResult"},
+          "scores": {
+            "type": "object",
+            "required": ["fit", "implementationSpeed", "governance", "extensibility", "integrationReadiness", "userExperience", "operationalComplexity"],
+            "properties": {
+              "fit": {"$ref": "#/$defs/score"},
+              "implementationSpeed": {"$ref": "#/$defs/score"},
+              "governance": {"$ref": "#/$defs/score"},
+              "extensibility": {"$ref": "#/$defs/score"},
+              "integrationReadiness": {"$ref": "#/$defs/score"},
+              "userExperience": {"$ref": "#/$defs/score"},
+              "operationalComplexity": {"$ref": "#/$defs/score"}
+            }
+          },
+          "total": {"type": "integer", "minimum": 7, "maximum": 35},
+          "covers": {"type": "array", "items": {"type": "string"}},
+          "cannotCover": {"type": "array", "items": {"type": ["string", "object"]}},
+          "label": {"type": "string"},
+          "rationale": {"type": "string"}
+        }
+      }
+    },
+    "recommendedRoute": {"type": "string", "minLength": 1},
+    "recommendation": {"type": "object"},
+    "buildDemoDependency": {
+      "type": "object",
+      "properties": {
+        "buildable": {"type": "array"},
+        "demonstrable": {"type": "array"},
+        "dependency": {"type": "array"}
+      }
+    },
+    "architecture": {"type": "object"},
+    "sequence": {
+      "type": "array",
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "message"],
+        "properties": {"from": {"type": "string"}, "to": {"type": "string"}, "message": {"type": "string"}}
+      }
+    },
+    "evals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["area", "measure", "target", "status"],
+        "properties": {"area": {"type": "string"}, "measure": {"type": "string"}, "target": {"type": "string"}, "status": {"type": "string"}}
+      }
+    },
+    "risks": {"type": "array", "items": {"type": ["string", "object"]}},
+    "openIssues": {"type": "array", "items": {"type": "string"}},
+    "technicalDecisions": {"type": "array", "items": {"type": "string"}},
+    "roadmap": {"type": "array", "items": {"type": ["string", "object"]}},
+    "changeLog": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["date", "entry"],
+        "properties": {"date": {"$ref": "#/$defs/isoDate"}, "entry": {"type": "string", "minLength": 1}}
+      }
+    }
+  },
+  "$defs": {
+    "isoDate": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+    "score": {"type": "integer", "minimum": 1, "maximum": 5},
+    "gateResult": {"enum": ["Pass", "Fail", "Exception", "TBD"]},
+    "routeName": {"enum": ["DA + skills", "Pro-code DA with MCP", "Pro-code DA without MCP", "Standard harness", "GHCP harness", "Cowork plugins", "Scout"]}
+  }
+}
