@@ -65,17 +65,21 @@ function Invoke-NativeCommand {
     param(
         [Parameter(Mandatory = $true)][string]$FilePath,
         [Parameter()][string[]]$Arguments = @(),
-        [Parameter()][switch]$Quiet
+        [Parameter()][switch]$Quiet,
+        [Parameter()][switch]$CaptureOutput
     )
 
     $output = & $FilePath @Arguments 2>&1
     $exitCode = $LASTEXITCODE
-    if (-not $Quiet -and $null -ne $output) {
+    if (-not $Quiet -and -not $CaptureOutput -and $null -ne $output) {
         $output | ForEach-Object { Write-Host $_ }
     }
     if ($exitCode -ne 0) {
         $rendered = ($output | Out-String).Trim()
         throw "Command failed with exit code $exitCode`: $FilePath $($Arguments -join ' ')`n$rendered"
+    }
+    if ($CaptureOutput) {
+        return ($output | Out-String)
     }
 }
 
@@ -686,6 +690,108 @@ function Get-PluginRegistrationCommands {
     return , $commands.ToArray()
 }
 
+function Get-LisaMarketplaceRegistration {
+    param([Parameter(Mandatory = $true)][string]$TargetPlatform)
+
+    $executable = (Get-HostInfo -TargetPlatform $TargetPlatform).Executable
+    $json = Invoke-NativeCommand -FilePath $executable -Arguments @(
+        'plugin', 'marketplace', 'list', '--json'
+    ) -CaptureOutput
+    try {
+        $document = ConvertFrom-Json -InputObject $json -ErrorAction Stop
+    }
+    catch {
+        throw "Cannot inspect marketplaces with $executable`: $($_.Exception.Message)"
+    }
+    if ($TargetPlatform -eq 'Codex') {
+        if ($null -eq $document -or $null -eq $document.PSObject.Properties['marketplaces'] -or
+            $document.marketplaces -isnot [array]) {
+            throw "Cannot inspect marketplaces with ${executable}: expected a marketplaces array."
+        }
+        $entries = @($document.marketplaces)
+    }
+    else {
+        if (-not $json.TrimStart().StartsWith('[')) {
+            throw "Cannot inspect marketplaces with ${executable}: expected a JSON array."
+        }
+        $entries = @($document)
+    }
+    foreach ($entry in $entries) {
+        if ($null -eq $entry -or $null -eq $entry.PSObject.Properties['name'] -or
+            $entry.name -isnot [string] -or [string]::IsNullOrWhiteSpace($entry.name)) {
+            throw "Cannot inspect marketplaces with ${executable}: an entry has no marketplace name."
+        }
+    }
+    $matches = @($entries | Where-Object { $_.name -ceq $MarketplaceName })
+    if ($matches.Count -eq 0) { return $null }
+    if ($matches.Count -ne 1) {
+        throw "Cannot inspect marketplaces with ${executable}: duplicate '$MarketplaceName' entries."
+    }
+
+    $entry = $matches[0]
+    $localPath = $null
+    switch ($TargetPlatform) {
+        'CopilotCli' {
+            $source = $entry.source
+            if ($source -is [string] -and $source.StartsWith('Local: ')) {
+                $localPath = $source.Substring(7)
+            }
+        }
+        'ClaudeCode' {
+            $source = $entry.source
+            if ($source -ceq 'directory') {
+                $localPath = $entry.path
+                $source = "directory: $localPath"
+            }
+        }
+        'Codex' {
+            if ($null -ne $entry.PSObject.Properties['marketplaceSource'] -and
+                $null -ne $entry.marketplaceSource) {
+                $origin = $entry.marketplaceSource
+                $source = "$($origin.sourceType): $($origin.source)"
+                if ($origin.sourceType -ceq 'local') { $localPath = $origin.source }
+            }
+            else {
+                # Repo-discovered Codex marketplaces have a root but no configured source.
+                $localPath = $entry.root
+                $source = "local: $localPath"
+            }
+        }
+    }
+    if ($source -isnot [string] -or [string]::IsNullOrWhiteSpace($source)) {
+        throw "Cannot inspect marketplace '$MarketplaceName' with ${executable}: source is missing."
+    }
+    return [pscustomobject]@{ Source = $source; LocalPath = $localPath }
+}
+
+function Assert-LisaMarketplaceSource {
+    param(
+        [Parameter()][AllowNull()][object]$Registration,
+        [Parameter(Mandatory = $true)][string]$Executable
+    )
+
+    if ($null -eq $Registration) {
+        throw "Marketplace '$MarketplaceName' was not registered with $Executable; installation cannot be verified."
+    }
+    $expected = [IO.Path]::GetFullPath($DistributionRoot).TrimEnd('\', '/')
+    $actual = $null
+    if ($Registration.LocalPath -is [string] -and
+        $Registration.LocalPath -match '^(?:[A-Za-z]:[\\/]|\\\\[^\\/]+[\\/][^\\/]+)') {
+        $actual = [IO.Path]::GetFullPath($Registration.LocalPath).TrimEnd('\', '/')
+    }
+    if ($null -eq $actual -or
+        -not [string]::Equals($actual, $expected, [StringComparison]::OrdinalIgnoreCase)) {
+        throw @"
+Marketplace '$MarketplaceName' with $Executable does not point to this checkout.
+Registered source: $($Registration.Source)
+Expected local source: $expected
+No plugin was installed or updated. Review '$Executable plugin marketplace list --json',
+then explicitly remove the conflicting registration and rerun this installer.
+Removing a marketplace may uninstall its plugins; it is never done automatically.
+"@
+    }
+}
+
 function Install-LisaPlugin {
     param([Parameter(Mandatory = $true)][string]$TargetPlatform)
 
@@ -694,7 +800,7 @@ function Install-LisaPlugin {
     $commands = Get-PluginRegistrationCommands -TargetPlatform $TargetPlatform
     $rendered = ($commands | ForEach-Object { "  $executable $($_ -join ' ')" }) -join [Environment]::NewLine
     Write-Warning @"
-The installer will register the '$MarketplaceName' marketplace from:
+The installer will register or reuse the '$MarketplaceName' marketplace from:
   $DistributionRoot
 and install the LISA plugin from $PluginRoot into $($hostInfo.Name):
 $rendered
@@ -707,17 +813,14 @@ An existing installation of the same plugin is replaced.
     if (-not $script:InstallerCmdlet.ShouldProcess($PluginRoot, "Register the LISA plugin with $executable")) {
         return $false
     }
-    foreach ($arguments in $commands) {
-        try {
-            Invoke-NativeCommand -FilePath $executable -Arguments $arguments
-        }
-        catch {
-            $isMarketplaceAdd = $arguments[1] -eq 'marketplace' -and $arguments[2] -eq 'add'
-            if (-not $isMarketplaceAdd -or $_.Exception.Message -notmatch '(?i)already') {
-                throw
-            }
-            Write-Warning "Marketplace '$MarketplaceName' is already registered with $executable. If it points to another LISA copy, run '$executable plugin marketplace remove $MarketplaceName' and rerun this installer."
-        }
+    $registration = Get-LisaMarketplaceRegistration -TargetPlatform $TargetPlatform
+    if ($null -eq $registration) {
+        Invoke-NativeCommand -FilePath $executable -Arguments $commands[0]
+        $registration = Get-LisaMarketplaceRegistration -TargetPlatform $TargetPlatform
+    }
+    Assert-LisaMarketplaceSource -Registration $registration -Executable $executable
+    for ($index = 1; $index -lt $commands.Count; $index++) {
+        Invoke-NativeCommand -FilePath $executable -Arguments $commands[$index]
     }
     $script:InstalledPackages.Add("LISA plugin registered with $($hostInfo.Name)")
     return $true

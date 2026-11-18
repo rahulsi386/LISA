@@ -12,6 +12,7 @@ POWERSHELL = shutil.which("pwsh")
 # Dot-sources every installer function plus the host catalog without running the installer.
 INSTALLER_PRELUDE = r"""
 $ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
 $tokens = $null
 $parseErrors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile(
@@ -24,6 +25,26 @@ foreach ($statement in $ast.EndBlock.Statements | Where-Object {
     $_.Extent.Text -match '^\$(script:HostCatalog|MarketplaceName|PluginName)\s*='
 }) { . ([scriptblock]::Create($statement.Extent.Text)) }
 """
+
+PLUGIN_INSTALL_PRELUDE = INSTALLER_PRELUDE + r"""
+$DistributionRoot = 'C:\LISA'
+$PluginRoot = 'C:\LISA\plugin'
+$script:InstalledPackages = [System.Collections.Generic.List[string]]::new()
+$script:InstallerCmdlet = [pscustomobject]@{} | Add-Member -MemberType ScriptMethod -Name ShouldProcess -Value { $true } -PassThru
+function Write-Warning { param($Message) }
+function Confirm-Exact { param($Prompt, $Expected) $true }
+$emptyListings = @{
+    CopilotCli = '[]'
+    ClaudeCode = '[]'
+    Codex = '{"marketplaces":[]}'
+}
+$localListings = @{
+    CopilotCli = '[{"name":"lisa","source":"Local: c:\\lisa\\."}]'
+    ClaudeCode = '[{"name":"lisa","source":"directory","path":"c:\\lisa\\."}]'
+    Codex = '{"marketplaces":[{"name":"lisa","root":"C:\\LISA","marketplaceSource":{"sourceType":"local","source":"c:\\lisa\\."}}]}'
+}
+"""
+
 
 @unittest.skipUnless(POWERSHELL, "PowerShell 7 is required")
 class InstallationTests(unittest.TestCase):
@@ -82,34 +103,151 @@ foreach ($case in @(@{Choice='1'; Target='CopilotCli'}, @{Choice='2'; Target='Cl
 """)
 
     def test_each_host_installs_the_plugin_from_the_repository_marketplace(self):
-        self.run_powershell(INSTALLER_PRELUDE + r"""
-$DistributionRoot = 'C:\LISA'
-$PluginRoot = 'C:\LISA\plugin'
-$script:InstalledPackages = [System.Collections.Generic.List[string]]::new()
-$script:InstallerCmdlet = [pscustomobject]@{} | Add-Member -MemberType ScriptMethod -Name ShouldProcess -Value { $true } -PassThru
-function Write-Warning { param($Message) }
-function Confirm-Exact { param($Prompt, $Expected) $true }
+        self.run_powershell(PLUGIN_INSTALL_PRELUDE + r"""
 function Invoke-NativeCommand {
-    param($FilePath, $Arguments)
+    param($FilePath, $Arguments, [switch]$CaptureOutput)
     $calls.Add("$FilePath $($Arguments -join ' ')")
-    if ($Arguments[1] -eq 'marketplace' -and $Arguments[2] -eq 'add') { throw 'Marketplace "lisa" already registered' }
+    if ($Arguments[1] -eq 'marketplace') {
+        if ($Arguments[2] -eq 'list') {
+            if (-not $CaptureOutput) { throw 'Marketplace JSON must be captured' }
+            if ($script:registered) { return $localListings[$script:target] }
+            return $emptyListings[$script:target]
+        }
+        if ($Arguments[2] -eq 'add') { $script:registered = $true }
+    }
     if ($script:failInstall -and $Arguments[1] -in @('install', 'add')) { throw 'network failure' }
 }
 $expected = @{
-    CopilotCli = 'copilot plugin marketplace add C:\LISA|copilot plugin install lisa@lisa'
-    ClaudeCode = 'claude plugin marketplace add C:\LISA|claude plugin marketplace update lisa|claude plugin install lisa@lisa|claude plugin update lisa@lisa'
-    Codex = 'codex plugin marketplace add C:\LISA|codex plugin add lisa@lisa'
+    CopilotCli = 'copilot plugin install lisa@lisa'
+    ClaudeCode = 'claude plugin marketplace update lisa|claude plugin install lisa@lisa|claude plugin update lisa@lisa'
+    Codex = 'codex plugin add lisa@lisa'
 }
 foreach ($target in $expected.Keys) {
-    $script:failInstall = $false
-    $calls = [System.Collections.Generic.List[string]]::new()
-    if (-not (Install-LisaPlugin -TargetPlatform $target)) { throw "$target registration was not reported" }
-    if (($calls -join '|') -ne $expected[$target]) { throw "Unexpected $target commands: $($calls -join '|')" }
+    $script:target = $target
+    $executable = (Get-HostInfo -TargetPlatform $target).Executable
+    foreach ($alreadyRegistered in @($false, $true)) {
+        $script:registered = $alreadyRegistered
+        $script:failInstall = $false
+        $calls = [System.Collections.Generic.List[string]]::new()
+        if (-not (Install-LisaPlugin -TargetPlatform $target)) { throw "$target registration was not reported" }
+        $prefix = "$executable plugin marketplace list --json|"
+        if (-not $alreadyRegistered) {
+            $prefix += "$executable plugin marketplace add C:\LISA|$executable plugin marketplace list --json|"
+        }
+        if (($calls -join '|') -ne ($prefix + $expected[$target])) {
+            throw "Unexpected $target commands: $($calls -join '|')"
+        }
+    }
     $script:failInstall = $true
     $calls = [System.Collections.Generic.List[string]]::new()
     $rejected = $false
     try { $null = Install-LisaPlugin -TargetPlatform $target } catch { $rejected = $true }
     if (-not $rejected) { throw "$target hid a plugin installation failure" }
+}
+""")
+
+    def test_conflicting_local_and_remote_marketplaces_block_all_plugin_writes(self):
+        self.run_powershell(PLUGIN_INSTALL_PRELUDE + r"""
+function Invoke-NativeCommand {
+    param($FilePath, $Arguments, [switch]$CaptureOutput)
+    $calls.Add("$FilePath $($Arguments -join ' ')")
+    if (($Arguments -join ' ') -ne 'plugin marketplace list --json') { throw 'Unexpected write' }
+    return $script:listing
+}
+$conflicts = @{
+    CopilotCli = @(
+        '[{"name":"lisa","source":"Local: C:\\LISA-old"}]',
+        '[{"name":"lisa","source":"GitHub: rahulsi386/LISA"}]'
+    )
+    ClaudeCode = @(
+        '[{"name":"lisa","source":"directory","path":"C:\\LISA-old"}]',
+        '[{"name":"lisa","source":"github","path":"C:\\LISA"}]'
+    )
+    Codex = @(
+        '{"marketplaces":[{"name":"lisa","root":"C:\\LISA-old","marketplaceSource":{"sourceType":"local","source":"C:\\LISA-old"}}]}',
+        '{"marketplaces":[{"name":"lisa","root":"C:\\LISA","marketplaceSource":{"sourceType":"git","source":"https://github.com/rahulsi386/LISA.git"}}]}'
+    )
+}
+foreach ($target in $conflicts.Keys) {
+    foreach ($listing in $conflicts[$target]) {
+        $script:listing = $listing
+        $calls = [System.Collections.Generic.List[string]]::new()
+        $failure = ''
+        try { $null = Install-LisaPlugin -TargetPlatform $target } catch { $failure = $_.Exception.Message }
+        if ($failure -notlike '*Registered source:*Expected local source: C:\LISA*') {
+            throw "Missing source conflict diagnostic for ${target}: $failure"
+        }
+        if ($calls.Count -ne 1 -or $script:InstalledPackages.Count -ne 0) { throw 'Conflict caused a write or success record' }
+    }
+}
+""")
+
+    def test_unreadable_marketplace_lists_stop_before_registration(self):
+        self.run_powershell(PLUGIN_INSTALL_PRELUDE + r"""
+function Invoke-NativeCommand {
+    param($FilePath, $Arguments, [switch]$CaptureOutput)
+    $calls.Add("$FilePath $($Arguments -join ' ')")
+    if ($script:listing -eq 'command failure') { throw 'marketplace inspection failed' }
+    return $script:listing
+}
+foreach ($target in $localListings.Keys) {
+    foreach ($listing in @('command failure', 'not JSON', '{}', 'null', '[null]')) {
+        $script:listing = $listing
+        $calls = [System.Collections.Generic.List[string]]::new()
+        $rejected = $false
+        try { $null = Install-LisaPlugin -TargetPlatform $target } catch { $rejected = $true }
+        if (-not $rejected -or $calls.Count -ne 1 -or $script:InstalledPackages.Count -ne 0) {
+            throw "Inspection failure was not closed for $target / $listing"
+        }
+    }
+}
+""")
+
+    def test_new_registration_is_verified_and_add_errors_are_not_ignored(self):
+        self.run_powershell(PLUGIN_INSTALL_PRELUDE + r"""
+function Invoke-NativeCommand {
+    param($FilePath, $Arguments, [switch]$CaptureOutput)
+    $calls.Add("$FilePath $($Arguments -join ' ')")
+    if ($Arguments[2] -eq 'list') {
+        $script:reads++
+        if ($script:reads -eq 1) { return $emptyListings[$script:target] }
+        return $script:afterAdd
+    }
+    if ($script:addFails) { throw 'Marketplace already registered during inspection' }
+}
+foreach ($target in $emptyListings.Keys) {
+    $script:target = $target
+    foreach ($mode in @('missing', 'conflicting', 'add-failure')) {
+        $calls = [System.Collections.Generic.List[string]]::new()
+        $script:reads = 0
+        $script:addFails = $mode -eq 'add-failure'
+        $script:afterAdd = $emptyListings[$target]
+        if ($mode -eq 'conflicting') {
+            $script:afterAdd = $localListings[$target].Replace('lisa\\.', 'lisa-other')
+        }
+        $rejected = $false
+        try { $null = Install-LisaPlugin -TargetPlatform $target } catch { $rejected = $true }
+        $expectedCount = if ($script:addFails) { 2 } else { 3 }
+        if (-not $rejected -or $calls.Count -ne $expectedCount -or $script:InstalledPackages.Count -ne 0) {
+            throw "Unverified registration was accepted for $target"
+        }
+    }
+}
+""")
+
+    def test_codex_repo_discovered_marketplace_uses_its_root(self):
+        self.run_powershell(PLUGIN_INSTALL_PRELUDE + r"""
+function Invoke-NativeCommand {
+    param($FilePath, $Arguments, [switch]$CaptureOutput)
+    $calls.Add("$FilePath $($Arguments -join ' ')")
+    if ($Arguments[1] -eq 'marketplace') {
+        return '{"marketplaces":[{"name":"lisa","root":"c:\\lisa\\."}]}'
+    }
+}
+$calls = [System.Collections.Generic.List[string]]::new()
+if (-not (Install-LisaPlugin -TargetPlatform Codex)) { throw 'Repo marketplace was not reused' }
+if (($calls -join '|') -ne 'codex plugin marketplace list --json|codex plugin add lisa@lisa') {
+    throw "Unexpected repo marketplace commands: $($calls -join '|')"
 }
 """)
 

@@ -62,6 +62,8 @@ User-visible changes are recorded here. Unreleased entries are not a published r
 
 ### Fixed
 
+- The installer verifies marketplace sources before installing plugins, reuses matching local
+  registrations, and stops on conflicting or unreadable registrations without removing them.
 - Plugin artifact test fixtures now include a validated analysis handoff and the standalone video contract.
 - Offline classifier tests use a test-only reference clock instead of expiring with the wall clock;
   fresh and expired reference behavior is covered explicitly.

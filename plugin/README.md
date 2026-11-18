@@ -162,6 +162,12 @@ Use `-Platform CopilotCli`, `-Platform ClaudeCode`, or `-Platform Codex` to sele
 the plugin without setting up a project. Existing projects and configuration are never cleared or
 overwritten. The installer creates missing folders and copies the common config only when absent.
 
+The installer reuses an existing `lisa` marketplace only when its local source matches this
+checkout. If it points elsewhere, or its source cannot be inspected, installation stops before
+installing or updating the plugin. Review the host's `plugin marketplace list --json` output
+before explicitly removing a conflicting registration and rerunning the installer. Marketplace
+removal can uninstall associated plugins; the installer never removes registrations automatically.
+
 For a standalone plugin install without the repository root, the packaged checker remains available
 to restore Python/renderer dependencies. It shares the common installer's runtime checks; it does
 not install the host, Python, Node.js, or PAC. From the installed plugin directory:
