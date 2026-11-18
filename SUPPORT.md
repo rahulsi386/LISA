@@ -4,12 +4,12 @@ LISA is a community-maintained project with best-effort support through
 [GitHub Issues](https://github.com/rahulsi386/LISA/issues). It is not a Microsoft-supported product
 and provides no SLA or production-readiness guarantee.
 
-Before opening an issue, check the [plugin guide](github-copilot/README.md), its troubleshooting
-section, and existing issues. For Scout, start with the [Scout guide](scout/README.md).
+Before opening an issue, check the [plugin guide](plugin/README.md), its troubleshooting
+section, and existing issues.
 
 For a reproducible bug, include:
 
-- The LISA commit/version, host and engine, OS, Python, Node.js, PowerShell, and PAC versions.
+- The LISA commit/version, host (Copilot CLI, Claude Code, or Codex) and its version, OS, Python, Node.js, PowerShell, and PAC versions.
 - The skill/stage, expected result, actual result, and minimal reproduction using synthetic data.
 - The exact failing command and a short redacted error excerpt.
 - Whether local tests pass and whether the issue requires an authenticated cloud service.

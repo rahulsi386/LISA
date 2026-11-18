@@ -6,19 +6,19 @@ LISA is maintained by [Rahul Prashant Singh (@rahulsi386)](https://github.com/ra
 The maintainer reviews contributions, resolves scope and compatibility questions, and approves
 releases. [CODEOWNERS](.github/CODEOWNERS) requests owner review for repository changes.
 
-This is a community-maintained project, not a Microsoft-supported product. Agency metadata
-identifies a distribution target; it is not certification or an endorsement. Certification
+This is a community-maintained project, not a Microsoft-supported product. Host plugin manifests
+identify supported hosts; they are not certification or an endorsement. Certification
 remains `draft`. Passing local tests or CI does not establish production readiness.
 
-Repository governance applies to both `github-copilot/` and `scout/`. It does not replace the
-runtime human approvals, tenant permissions, or publication and cleanup checks described in the
-[plugin guide](github-copilot/README.md).
+Repository governance applies to the whole repository, including `plugin/` and the host
+marketplaces. It does not replace the runtime human approvals, tenant permissions, or publication
+and cleanup checks described in the [plugin guide](plugin/README.md).
 
 ## Contribution decisions
 
-- Use a pull request and describe the behavior, risks, tests, and affected distributions.
+- Use a pull request and describe the behavior, risks, tests, and affected hosts.
 - Obtain maintainer approval for scope changes, dependencies, security-sensitive changes, and releases.
-- Preserve Scout-specific and plugin-specific behavior; do not blindly copy one distribution over the other.
+- Keep the plugin host-agnostic; host-specific behavior belongs in host manifests or the installer.
 - Never weaken validation or skip a failing test merely to obtain a passing check.
 - Record user-visible changes and compatibility implications in [CHANGELOG.md](CHANGELOG.md).
 - Discuss disagreements on the pull request; the maintainer records the final rationale there.
@@ -34,7 +34,7 @@ Configure a ruleset for `main` that:
 
 - Requires pull requests, at least one non-author approval, and code-owner review.
 - Dismisses stale approvals after new commits and requires resolved review conversations.
-- Requires the `Plugin Checks`, `Scout Checks`, and `GEPA Checks` status checks after their first run.
+- Requires the `Plugin Checks` and `GEPA Checks` status checks after their first run.
 - Requires the branch to be up to date and blocks force pushes and branch deletion.
 - Restricts bypass access; document any emergency bypass and follow-up validation in the pull request.
 
@@ -45,11 +45,11 @@ maintainer-authored pull requests; the sole code owner cannot approve their own 
 ## CI boundary
 
 The Windows CI workflow runs the plugin's local suites and renderer/publisher checks, a separate
-synthetic GEPA engine check, and Scout's shared checkpoint, metadata, and evidence-contract tests.
+synthetic GEPA engine check.
 It uses read-only repository permissions and does not receive tenant credentials or deploy agents.
 
 CI does not validate live Copilot Studio behavior, SharePoint publication, cloud permissions,
-Scout Desktop end-to-end operation, or final video rendering. Changes affecting those surfaces
+end-to-end host operation, or final video rendering. Changes affecting those surfaces
 need separately authorized manual testing, with redacted evidence linked from the pull request.
 
 ## Releases and compatibility

@@ -1,0 +1,27 @@
+{
+  "name": "lisa",
+  "version": "1.0.0",
+  "description": "LISA Copilot Agent Delivery lifecycle for Microsoft agent solutions, plus explicitly invoked standalone video-generator marketing videos.",
+  "author": {
+    "name": "LISA maintainers"
+  },
+  "license": "MIT",
+  "keywords": [
+    "lisa",
+    "copilot-studio",
+    "agent-delivery",
+    "evaluation",
+    "microsoft-365"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "LISA",
+    "shortDescription": "Design, build, evaluate and publish Microsoft agent solutions.",
+    "developerName": "LISA maintainers",
+    "category": "Developer Tools",
+    "defaultPrompt": [
+      "Run $cad-orchestrator for the lisa-config.json in this folder."
+    ]
+  }
+}

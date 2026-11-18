@@ -39,21 +39,22 @@ requires fresh remote verification, and cleanup requires the exact phrase `DELET
 
 ## Choose your platform
 
-LISA runs on three hosts. Pick one and follow its guide.
+LISA is a single, host-agnostic plugin in [plugin](plugin). It runs on three hosts:
 
-| Platform | Who it is for | Guide |
+| Platform | Who it is for | Install |
 |---|---|---|
-| **Microsoft Scout Desktop** | Scout users running LISA as local skills | [scout/README.md](scout/README.md) |
-| **GitHub Copilot CLI** | Anyone with an active GitHub Copilot plan | [github-copilot/README.md](github-copilot/README.md) |
-| **Microsoft Agency** | Internal Microsoft only, via its Copilot or Claude engine | [github-copilot/README.md](github-copilot/README.md) |
+| **GitHub Copilot CLI** | Anyone with an active GitHub Copilot plan | `copilot plugin marketplace add rahulsi386/LISA` then `copilot plugin install lisa@lisa` |
+| **Claude Code** | Anyone with a Claude subscription or API access | `claude plugin marketplace add rahulsi386/LISA` then `claude plugin install lisa@lisa` |
+| **OpenAI Codex CLI** | Anyone with a ChatGPT plan or OpenAI API access | `codex plugin marketplace add rahulsi386/LISA` then `codex plugin add lisa@lisa` |
 
-GitHub Copilot CLI and Microsoft Agency share the same plugin distribution in
-[github-copilot](github-copilot). Scout uses the skill set in [scout/m-skills](scout/m-skills).
+The repository root publishes the plugin through a marketplace named `lisa`
+([Copilot CLI and Claude Code](.claude-plugin/marketplace.json), [Codex](.agents/plugins/marketplace.json)).
+See the [plugin guide](plugin/README.md) for local-checkout installs and host-specific details.
 
 ## Quick start
 
-Run the common installer from the repository root. It asks which platform to target, then checks
-and installs only what that platform needs.
+Run the common installer from the repository root. It asks which host to target, installs the host
+and runtime prerequisites when missing, and registers the plugin from this checkout.
 
 ```powershell
 # Read-only assessment; changes nothing.
@@ -63,9 +64,9 @@ powershell.exe -ExecutionPolicy Bypass -File .\Install-LISA-Prerequisites.ps1 -W
 powershell.exe -ExecutionPolicy Bypass -File .\Install-LISA-Prerequisites.ps1
 ```
 
-Skip the prompt with `-Platform Scout`, `-Platform CopilotCli`, or `-Platform Agency`.
+Skip the prompt with `-Platform CopilotCli`, `-Platform ClaudeCode`, or `-Platform Codex`.
 Use `-ProjectPath "C:\Projects\MySolution"` to choose a project location, or `-SkipProjectSetup`
-to install the skills/plugin without creating a project. Existing configuration, inputs, outputs,
+to install the plugin without creating a project. Existing configuration, inputs, outputs,
 and checkpoints are preserved. New projects receive a copy of the common root configuration.
 
 Then:
@@ -74,7 +75,8 @@ Then:
   the root template only if the project does not already have a config.
 2. Put customer source material in `requirements/` and source-grounded tests in `evalData/`.
 3. Authenticate PAC CLI and your browser to the same tenant.
-4. Start your host from the project folder and invoke `/cad-orchestrator`.
+4. Start your host from the project folder and invoke `/lisa:cad-orchestrator` (Copilot CLI and
+   Claude Code) or ask Codex to use the `cad-orchestrator` skill.
 
 ## Repository layout
 
@@ -82,17 +84,17 @@ Then:
 LISA\
 |-- README.md                        Common overview (this file)
 |-- lisa-config.json                 Common project configuration template
-|-- requirements.txt                 Common prerequisite manifest for all platforms
-|-- Install-LISA-Prerequisites.ps1   Common platform-aware installer
-|-- github-copilot\                  Plugin for GitHub Copilot CLI and Microsoft Agency
-|   |-- README.md
-|   |-- plugin.json
-|   `-- skills\
-`-- scout\                           Microsoft Scout Desktop distribution
+|-- requirements.txt                 Common prerequisite manifest
+|-- Install-LISA-Prerequisites.ps1   Common host-aware installer
+|-- .claude-plugin\marketplace.json  Marketplace for GitHub Copilot CLI and Claude Code
+|-- .agents\plugins\marketplace.json Marketplace for OpenAI Codex CLI
+`-- plugin\                          The LISA plugin
     |-- README.md
-    |-- m-skills\
-    |-- m-automations\
-    `-- m-mcp-servers.json
+    |-- plugin.json                  GitHub Copilot CLI manifest
+    |-- .claude-plugin\plugin.json   Claude Code manifest
+    |-- .codex-plugin\plugin.json    OpenAI Codex manifest
+    |-- .mcp.json
+    `-- skills\
 ```
 
 ## Shared configuration
@@ -115,10 +117,9 @@ customer scenario per project run, and never store credentials or tokens in the 
 
 ## Requirements
 
-`requirements.txt` is the common manifest for all platforms. Entries marked `[SCOUT ONLY]` apply to
-Microsoft Scout Desktop, and `[PLUGIN ONLY]` entries apply to GitHub Copilot CLI and Microsoft
-Agency. Shared prerequisites include Windows 11, Python 3.11+, Node.js 20+, PowerShell 7+, Microsoft
-Edge, and — for cloud stages — the modern Power Platform CLI with a matching tenant identity.
+`requirements.txt` is the common manifest for every host. Prerequisites include one host CLI,
+Windows 11, Python 3.11+, Node.js 20+, PowerShell 7+, Microsoft Edge, and — for cloud stages — the
+modern Power Platform CLI with a matching tenant identity.
 
 ```powershell
 python -m pip install --upgrade -r requirements.txt
@@ -139,9 +140,8 @@ Both setup paths use the same runtime checker for Python, PowerShell, Node.js, n
 
 ## Further reading
 
-- [Microsoft Scout Desktop guide](scout/README.md)
-- [GitHub Copilot CLI and Agency plugin guide](github-copilot/README.md)
-- [Skill suite reference](github-copilot/skills/README.md)
+- [Plugin guide](plugin/README.md)
+- [Skill suite reference](plugin/skills/README.md)
 
 ## Governance and support
 

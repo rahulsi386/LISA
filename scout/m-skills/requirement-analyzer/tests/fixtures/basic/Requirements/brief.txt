@@ -1,2 +1,0 @@
-Users need a conversational assistant to answer requirement questions.
-No agent-development platform is identified in this source.

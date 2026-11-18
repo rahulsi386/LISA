@@ -9,10 +9,26 @@ User-visible changes are recorded here. Unreleased entries are not a published r
 - MIT license for original LISA code, with Rahul Prashant Singh as copyright holder.
 - Repository ownership, contribution, security-reporting, support, and release policies.
 - Documented existing code ownership and administrator guidance for protected branches and private reporting.
-- Windows CI and a matching local runner for plugin tests, Scout shared-infrastructure checks,
-  and the synthetic GEPA engine test. CI performs no tenant operations.
+- Windows CI and a matching local runner for plugin tests and the synthetic GEPA engine test. CI performs no tenant operations.
 
 ### Changed
+
+- **Breaking:** LISA is now host-agnostic and supports GitHub Copilot CLI, Claude Code, and OpenAI
+  Codex CLI only. Microsoft Agency and Microsoft Scout Desktop support is removed, including the
+  `scout/` distribution, `agency.json`, and the `-Platform Scout|Agency` installer options.
+  - The plugin folder is renamed from `github-copilot/` to `plugin/`.
+  - The repository root publishes a `lisa` marketplace for Copilot CLI and Claude Code
+    (`.claude-plugin/marketplace.json`) and for Codex (`.agents/plugins/marketplace.json`), and the
+    plugin adds a Codex manifest. Every host installs `lisa@lisa` after registering the marketplace;
+    the root installer accepts `-Platform CopilotCli|ClaudeCode|Codex`.
+  - `cad-orchestrator` resolves `lisa-config.json` from an explicit path, then the current
+    directory, and otherwise asks; it no longer depends on `AGENCY_REPO_DIR`.
+  - `Test-LisaAgencyPrerequisites.ps1` is renamed to `Test-LisaPrerequisites.ps1`.
+  - Artifact schema identifiers move from `https://microsoft-scout.local/schemas/` to
+    `https://lisa.local/schemas/`, and `urn:lisa:agency:` identifiers become `urn:lisa:`.
+  - Azure MCP no longer declares the optional `tools` filter, which Codex rejects.
+
+  Existing installations must be removed and reinstalled from the marketplace.
 
 - **Breaking:** Solution Designer 5.0 publishes three diagrams:
   - `BA_<slug>`: business architecture. This is a leadership operating model derived from the classified capabilities, their PoC treatments, human decisions, information, platform and controls.
@@ -42,9 +58,7 @@ User-visible changes are recorded here. Unreleased entries are not a published r
   - a five-row platform comparison.
 
   Platform selection follows Microsoft Cowork, then Copilot Studio, then Azure AI Foundry, then Microsoft Agent Framework. Cowork must always be assessed. A `Deterministic (no agent)` result ends the lifecycle after classification. Microsoft-internal sources are kept out of customer-facing text. Customer documents now include the suitability section and the comparison table.
-- The plugin distribution now lives in `github-copilot/`. Installation commands, CI, test runners,
-  and documentation use the new folder and GitHub subdirectory source `rahulsi386/LISA:github-copilot`.
-  Existing installations referencing the previous location must be reinstalled from the new source.
+- The plugin distribution moved to a dedicated subdirectory (now `plugin/`, see above).
 
 ### Fixed
 
