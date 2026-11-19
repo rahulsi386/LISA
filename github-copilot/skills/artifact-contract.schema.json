@@ -30,8 +30,7 @@
         "artifact-generator",
         "artifact-publisher",
         "postpublish-cleanup",
-        "cad-orchestrator",
-        "video-generator"
+        "cad-orchestrator"
       ]
     },
     "stage": {
@@ -45,8 +44,7 @@
         "artifacts",
         "publication",
         "cleanup",
-        "orchestration",
-        "video"
+        "orchestration"
       ]
     },
     "rootFolder": {
@@ -60,7 +58,6 @@
         "optimization",
         "artifacts",
         "publication",
-        "video",
         null
       ]
     },

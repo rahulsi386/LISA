@@ -211,8 +211,7 @@ class OntologyTests(unittest.TestCase):
             self.assertEqual(1, len(owners), stage)
             marker = self.nodes[self.nodes[stage]["completionMarker"]]
             self.assertEqual("lisa:ArtifactSpec", marker["@type"])
-        for name in ("cad-orchestrator", "video-generator"):
-            self.assertNotIn("performsStage", self.nodes[f"lisa:skill-{name}"])
+        self.assertNotIn("performsStage", self.nodes["lisa:skill-cad-orchestrator"])
 
     def test_status_vocabularies_match_schemas(self) -> None:
         schema = json.loads(

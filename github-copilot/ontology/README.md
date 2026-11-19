@@ -30,9 +30,8 @@ the packaged JSON Schemas, or an OWL/SHACL constraint system.
 flowchart TB
     CLI["GitHub Copilot CLI"] --> Plugin["LISA plugin distribution"]
     Agency["Agency: Copilot or Claude engine"] --> Plugin
-    Plugin --> Skills["11 skill definitions"]
+    Plugin --> Skills["10 skill definitions"]
     Skills --> Router["cad-orchestrator: agent-directed router"]
-    Skills --> Video["video-generator: explicit standalone invocation"]
     Router --> Stages["9 CAD stage definitions"]
     Stages --> Artifacts["Input and output artifact specifications"]
     Artifacts --> Contracts["Per-skill contracts and JSON Schemas"]
@@ -85,7 +84,6 @@ flowchart TD
     Q -->|Keep| Done["Finish"]
     Q -->|Delete, then exact consent| K["Fingerprint-bound cleanup"]
     K --> Done
-    V["Standalone video generation: no CAD stage or automatic publication"]
 ```
 
 The retest edge denotes reuse of the evaluator skill. In particular, GEPA candidate evaluations
@@ -111,12 +109,9 @@ by the same program.
 | Cleanup, optional | [postpublish-cleanup](../skills/postpublish-cleanup/SKILL.md) | Removal of consented output contents; preserved empty output root | External active-stage checkpoint under `.lisa`, not a file in `output` |
 
 `cad-orchestrator` owns routing, not another stage output folder.
-[video-generator](../skills/video-generator/SKILL.md#L1) is the eleventh skill, explicitly
-invoked and outside CAD. Its contract category is `video`; its production outputs include MP4,
-captions, thumbnails, timing and verification files. It has no CAD completion marker.
 
 **Contract category, workflow stage, and status are not interchangeable.**
-The common contract schema recognizes `orchestration` and `video`, while the
+The common contract schema recognizes `orchestration`, while the
 [checkpoint stage registry](../skills/workflow_checkpoint.py#L23) contains only the nine stages
 above. Publication's contract names `publication-manifest.json`, but the orchestrator commits
 `publication-record.json`. The ontology models those as different artifacts.
@@ -196,7 +191,6 @@ Architecture relations include `hostedBy`, `supportsEngine`, `performsStage`, `s
 `conformsTo`, `requiresGate`, `supportsTarget`, `hasHarness`, `retestsWith`, and `testedBy`.
 `consumes` and `produces` describe possible information flow, not universal requiredness:
 consult the contracts and node descriptions for optional inputs and build-mode-dependent outputs.
-For example, video may use an existing build handoff without making a build prerequisite.
 
 Runtime-domain relations include `hasFinding`, `hasEvidence`, `citesSource`, `addressesFinding`,
 `hasComponent`, `connectsComponent`, `reconcilesComponent`, `hasTestCase`, `observationOf`,
@@ -237,7 +231,6 @@ Project data and runtime state have separate lifetimes:
   output\
     analysis\ classification\ design\ build\
     evaluation\ optimization\ artifacts\ publication\
-    video\                      optional, independent productions
   .lisa\
     current.json                current workflow pointer, with fallback slots
     runs\<workflowRunId>\
@@ -291,7 +284,7 @@ Related infrastructure:
   [packaged prerequisite checker](../scripts/Test-LisaAgencyPrerequisites.ps1): Python 3.11+,
   Node.js 20+/npm/npx, PowerShell 7+, and capability-specific prerequisites.
 - [Root requirements](../../requirements.txt) and [packaged requirements](../requirements.txt):
-  shared base dependencies; GEPA and video dependencies are optional, not part of the base set.
+  shared base dependencies; GEPA dependencies are optional, not part of the base set.
 - [Example configuration](../lisa-config.example.json): common project configuration shape.
   [Parity tests](../tests/test_plugin.py#L155) compare the root and packaged config semantically.
 - [Repository test runner](../../scripts/Test-LisaRepository.ps1#L24) and
@@ -299,8 +292,6 @@ Related infrastructure:
   not certification of live tenant operations.
 
 The designer uses the packaged Python/NetworkX layout and Node/resvg rendering path.
-Video uses a separately initialized production folder, canvas/FFmpeg and an approved narration
-service. Neither output production should write into the installed plugin.
 
 ## 6. Review findings and modeling limits
 

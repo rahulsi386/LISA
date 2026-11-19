@@ -15,8 +15,7 @@ and remote change.
 
 ## What LISA does
 
-LISA packages eleven skills: ten **Copilot Agent Delivery (CAD)** lifecycle skills plus the
-standalone, explicitly invoked `video-generator`.
+LISA packages ten **Copilot Agent Delivery (CAD)** lifecycle skills.
 
 | # | Stage | Skill | Produces |
 |---|---|---|---|

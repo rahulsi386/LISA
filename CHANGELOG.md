@@ -4,6 +4,11 @@ User-visible changes are recorded here. Unreleased entries are not a published r
 
 ## Unreleased
 
+### Removed
+
+- **Breaking:** The plugin no longer installs `video-generator` or provides its slash command.
+  Remove any explicit calls from existing workflows. The CAD lifecycle is unchanged.
+
 ### Added
 
 - MIT license for original LISA code, with Rahul Prashant Singh as copyright holder.
@@ -48,7 +53,7 @@ User-visible changes are recorded here. Unreleased entries are not a published r
 
 ### Fixed
 
-- Plugin artifact test fixtures now include a validated analysis handoff and the standalone video contract.
+- Plugin artifact test fixtures now include a validated analysis handoff.
 - Offline classifier tests use a test-only reference clock instead of expiring with the wall clock;
   fresh and expired reference behavior is covered explicitly.
 

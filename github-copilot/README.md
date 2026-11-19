@@ -1,13 +1,12 @@
 # LISA plugin for GitHub Copilot CLI and Agency
 
-LISA packages eleven skills for designing, building, evaluating, optimizing, and publishing
+LISA packages ten Copilot Agent Delivery (CAD) skills for designing, building, evaluating, optimizing, and publishing
 Microsoft agent solutions. The same plugin can be used in either of these hosts:
 
 - **Agency**, with its GitHub Copilot or Claude engine.
 - **GitHub Copilot CLI directly**, without Agency.
 
-The plugin contains ten Copilot Agent Delivery (CAD) lifecycle skills and the standalone,
-explicitly invoked `video-generator` skill. Use `cad-orchestrator` for the complete lifecycle or
+Use `cad-orchestrator` for the complete lifecycle or
 invoke an individual skill when you need only one stage.
 
 > [!IMPORTANT]
@@ -228,8 +227,6 @@ Copilot Studio, Microsoft 365, or SharePoint.
   shadow target. LISA decides when it runs and derives its own budgets, so there is no GEPA
   setting in `lisa-config.json`. Without the engine installed, LISA records `engine-unavailable`
   and keeps the evidence-guided workflow.
-- Video generation has separate Python and Node dependencies listed in
-  `skills/video-generator/requirements.txt`; the base checker does not install them.
 
 ## Prepare a LISA project
 
@@ -338,13 +335,6 @@ single stage by its slash-command name only when you intentionally want a standa
 example `/requirement-analyzer`. Standalone execution does not automatically provide the complete
 orchestrator sequence.
 
-`video-generator` is independent of CAD and never runs automatically:
-
-```text
-/video-generator Create a developer-focused video for the solution described by
-C:\Projects\MySolution\lisa-config.json using the approved current screenshots.
-```
-
 ## Skills
 
 | Skill name | Description | What constitutes it | Pre-requisite to run | Outcome |
@@ -359,7 +349,6 @@ C:\Projects\MySolution\lisa-config.json using the approved current screenshots.
 | `artifact-generator` | Builds the final delivery documentation from lifecycle evidence. | Deterministic lifecycle input resolution, document generation, interactive execution-tree generation, and artifact validation. | Valid terminal artifacts from the required completed lifecycle stages. | Final solution document, interactive LISA execution tree, supporting files, and generation manifest. |
 | `artifact-publisher` | Publishes the approved package and artifacts to SharePoint. | Manifest categorization, Playwright-hosted SharePoint REST upload, checkpoints, remote reconciliation, and fresh read-back. | Generated artifacts, deployable package where required, authenticated browser session, correct libraries, and SharePoint write permission. | Agent-linked SharePoint folders/files and a verified `publication-record.json`; otherwise an explicit partial or failed result. |
 | `postpublish-cleanup` | Safely removes local generated output after delivery. | Fingerprinted inventory, path containment checks, publication verification, two consent gates, and exact-phrase confirmation. | Verified publication plus explicit approval and the exact phrase `DELETE OUTPUT`. | Contents removed from the configured `output/` directory while the output root and external workflow checkpoint are preserved. |
-| `video-generator` | Creates or revises a developer-focused marketing video for an existing solution. | Explicit host guidance, isolated Node renderer, neural narration, captions, media checks, thumbnail, and watch page. | Existing solution evidence, approved current visuals, optional video dependencies, and explicit authorization for online speech when used. | Editable production project, captions, thumbnail, watch page, and verified 1080p MP4. |
 
 For implementation details, stage-specific commands, artifact contracts, and recovery behavior, see
 the [complete skills reference](skills/README.md).
@@ -375,7 +364,6 @@ the [complete skills reference](skills/README.md).
 - The complete publication route assumes a supported deployed Microsoft agent test surface and,
   where required, a deployable solution package. Cowork-only solutions currently end as a
   documented handoff rather than completing evaluator, optimizer, and publisher stages.
-- `video-generator` is explicit-only and is not part of `cad-orchestrator` or its checkpoint.
 - GEPA instruction optimization is decided by LISA rather than by configuration, and remains a
   bounded pilot for one Standard, GitHub Copilot or Copilot chat harness agent with a verified
   shadow. Microsoft Cowork is excluded because it has no instruction authoring path or evaluator
