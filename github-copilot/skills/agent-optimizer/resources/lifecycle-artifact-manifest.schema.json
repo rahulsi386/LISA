@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:lisa:schemas:lifecycle-artifact-manifest",
+  "$id": "urn:lisa:schemas:agent-optimizer:lifecycle-artifact-manifest",
   "title": "Agent lifecycle artifact manifest",
   "type": "object",
   "additionalProperties": false,

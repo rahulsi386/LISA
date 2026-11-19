@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from pathlib import Path
+
+from referencing import Registry, Resource
 
 SKILLS_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(SKILLS_ROOT))
@@ -11,6 +14,20 @@ from validate_artifact_contracts import canonical_stage_root, validate_all  # no
 
 
 class CommonArtifactContractTests(unittest.TestCase):
+    def test_lifecycle_manifest_schemas_resolve_by_skill_in_one_registry(self) -> None:
+        schemas = {}
+        for skill in ("agent-builder", "agent-evaluator", "agent-optimizer"):
+            path = SKILLS_ROOT / skill / "resources" / "lifecycle-artifact-manifest.schema.json"
+            schemas[skill] = json.loads(path.read_text(encoding="utf-8"))
+
+        registry = Registry().with_resources(
+            (schema["$id"], Resource.from_contents(schema)) for schema in schemas.values()
+        )
+        for skill, schema in schemas.items():
+            with self.subTest(skill=skill):
+                urn = f"urn:lisa:schemas:{skill}:lifecycle-artifact-manifest"
+                self.assertEqual(schema, registry.resolver().lookup(urn).contents)
+
     def test_all_local_skills_use_valid_common_contracts(self) -> None:
         contracts = validate_all()
         self.assertEqual(11, len(contracts))

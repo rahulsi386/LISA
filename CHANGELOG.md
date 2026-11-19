@@ -50,6 +50,8 @@ User-visible changes are recorded here. Unreleased entries are not a published r
   It no longer installs local skill registries. Existing installations are not modified.
 - Plugin schemas now use `urn:lisa:schemas:` identifiers instead of host-specific URLs.
   Update external schema registrations if keyed by `$id`; artifact formats are unchanged.
+  Register each lifecycle manifest as `urn:lisa:schemas:<skill>:lifecycle-artifact-manifest`,
+  where `<skill>` is `agent-builder`, `agent-evaluator`, or `agent-optimizer`.
   For newly generated execution trees, use `?lisaTheme=dark` or `?lisaTheme=light` to override the system theme.
 
 ### Fixed
