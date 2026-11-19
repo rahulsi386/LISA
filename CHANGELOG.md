@@ -9,8 +9,15 @@ User-visible changes are recorded here. Unreleased entries are not a published r
 - MIT license for original LISA code, with Rahul Prashant Singh as copyright holder.
 - Repository ownership, contribution, security-reporting, support, and release policies.
 - Documented existing code ownership and administrator guidance for protected branches and private reporting.
-- Windows CI and a matching local runner for plugin tests, Scout shared-infrastructure checks,
-  and the synthetic GEPA engine test. CI performs no tenant operations.
+- Windows CI and a matching local runner for plugin tests and the synthetic GEPA engine test. CI performs no tenant operations.
+
+### Removed
+
+- **Breaking:** the Microsoft Scout Desktop distribution (`scout/`), its installer path
+  (`-Platform Scout`), the `Scout Checks` CI job, and the `-Suite Scout` runner option. LISA now
+  supports GitHub Copilot CLI and Microsoft Agency through the `github-copilot` plugin. Packaged
+  schema `$id` values moved from `microsoft-scout.local` to `lisa.local`, and the generated
+  execution tree reads its theme override from `?theme=` instead of `?scoutTheme=`.
 
 ### Changed
 

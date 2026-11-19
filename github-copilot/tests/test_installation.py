@@ -47,10 +47,8 @@ $entry = $ast.EndBlock.Statements | Where-Object { $_.Extent.Text.StartsWith('if
 $main = [scriptblock]::Create($ast.Extent.Text.Substring($entry.Extent.StartOffset))
 $DistributionRoot = $PWD.Path
 $PluginRoot = Join-Path $PWD 'github-copilot'
-$ScoutSkillsRoot = Join-Path $PWD 'scout/m-skills'
 $RequirementsPath = Join-Path $PWD 'requirements.txt'
 $userProfile = Join-Path $PWD 'unused-profile'
-$ScoutRoot = Join-Path $userProfile '.scout'
 $ProjectPath = ''
 $WhatIfPreference = $false
 function Write-Section { param($Message) }
@@ -71,40 +69,10 @@ foreach ($case in @(
     $null = & $main
     if (($events -join ',') -ne $case.Expected) { throw "Incorrect setup ordering: $($events -join ',')" }
 }
-foreach ($case in @(@{Choice='1'; Target='Scout'}, @{Choice='2'; Target='CopilotCli'}, @{Choice='3'; Target='Agency'})) {
+foreach ($case in @(@{Choice='1'; Target='CopilotCli'}, @{Choice='2'; Target='Agency'})) {
     $script:choice = $case.Choice
     if ((Select-TargetPlatform) -ne $case.Target) { throw 'Platform prompt returned wrong target' }
 }
-""")
-
-    def test_scout_copy_preserves_installed_registry(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            escaped = temporary.replace("'", "''")
-            self.run_powershell("$fixture = '" + escaped + "'\n" + r"""
-$ErrorActionPreference = 'Stop'
-$tokens = $null
-$parseErrors = $null
-$ast = [System.Management.Automation.Language.Parser]::ParseFile(
-    (Join-Path $PWD 'Install-LISA-Prerequisites.ps1'), [ref]$tokens, [ref]$parseErrors)
-foreach ($definition in $ast.FindAll({ param($node)
-    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Install-LisaSkills'
-}, $false)) { . ([scriptblock]::Create($definition.Extent.Text)) }
-$ScoutRoot = Join-Path $fixture 'scout-profile'
-$source = Join-Path $fixture 'source'
-$destination = Join-Path $ScoutRoot 'm-skills'
-$null = New-Item -ItemType Directory $source,$destination
-Set-Content (Join-Path $source 'skills-metadata.json') '[{"name":"source-must-not-replace-target"}]'
-Set-Content (Join-Path $source 'new-skill.txt') 'new implementation'
-$registry = Join-Path $destination 'skills-metadata.json'
-$unrelated = Join-Path $destination 'unrelated.txt'
-Set-Content $registry '[{"name":"existing","enabled":false}]'
-Set-Content $unrelated 'keep'
-$registryHash = (Get-FileHash $registry).Hash
-$unrelatedHash = (Get-FileHash $unrelated).Hash
-$null = Install-LisaSkills -SourceSkillsPath $source
-if ((Get-FileHash $registry).Hash -ne $registryHash) { throw 'Registry was replaced during skill copy' }
-if ((Get-FileHash $unrelated).Hash -ne $unrelatedHash) { throw 'Unrelated file changed' }
-if (-not (Test-Path (Join-Path $destination 'new-skill.txt'))) { throw 'Skill was not copied' }
 """)
 
     def test_project_setup_preserves_data_and_refuses_unsafe_paths(self):
@@ -163,22 +131,6 @@ if ($IsWindows) {
 }
 """)
 
-    def test_scout_source_does_not_require_generated_registry(self):
-        self.run_powershell(r"""
-$ErrorActionPreference = 'Stop'
-$tokens = $null
-$parseErrors = $null
-$ast = [System.Management.Automation.Language.Parser]::ParseFile(
-    (Join-Path $PWD 'Install-LISA-Prerequisites.ps1'), [ref]$tokens, [ref]$parseErrors)
-foreach ($definition in $ast.FindAll({ param($node)
-    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Resolve-Codebase'
-}, $false)) { . ([scriptblock]::Create($definition.Extent.Text)) }
-function Read-Host { param($Prompt) $PWD.Path }
-$codebase = Resolve-Codebase
-if ($codebase.SkillNames.Count -ne 10) { throw 'Expected ten Scout skill directories' }
-if ($codebase.SkillsPath -ne (Join-Path $PWD 'scout/m-skills')) { throw 'Wrong source skills root' }
-""")
-
     def run_powershell(self, source: str) -> str:
         result = subprocess.run(
             [POWERSHELL, "-NoProfile", "-NonInteractive", "-Command", source],
@@ -231,7 +183,6 @@ $RequirementsPath = Join-Path $PWD 'requirements.txt'
 function Get-VersionFromCommand { param($Command,$Arguments,$Pattern) [pscustomobject]@{ Version=[version]'20.0.0'; Path="mock:$Command" } }
 function Test-PythonLibraries { param($PythonPath) [pscustomobject]@{ Installed=$true; Details='fixture' } }
 function Test-RendererPrerequisite { [pscustomobject]@{ Installed=$true; Details='fixture' } }
-function Get-ScoutExecutable { $null }
 function Test-ModernPac { $true }
 function Get-LisaRuntimePrerequisites { [pscustomobject]@{ Key='Node'; Installed=$false; Details='shared sentinel' } }
 $node = Get-PrerequisiteState | Where-Object { $_.Key -eq 'Node' }

@@ -1291,7 +1291,7 @@ def render_solution_document(
 
 THEME_SCRIPT = """<script>
   (() => {
-    const param = new URLSearchParams(window.location.search).get("scoutTheme");
+    const param = new URLSearchParams(window.location.search).get("theme");
     const theme =
       param || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
     document.documentElement.setAttribute("data-theme", theme);
@@ -1739,7 +1739,7 @@ def validate_outputs(
                 f"Customer solution document contains internal content: {pattern}"
             )
     required_html = [
-        "scoutTheme",
+        'get("theme")',
         "--cp-bg",
         "--cp-accent",
         '"Segoe UI", Aptos, Calibri',

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://microsoft-scout.local/schemas/evaluation-rubric.schema.json",
+  "$id": "https://lisa.local/schemas/evaluation-rubric.schema.json",
   "title": "Agent evaluation rubric",
   "type": "object",
   "additionalProperties": true,

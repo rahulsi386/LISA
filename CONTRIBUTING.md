@@ -8,7 +8,7 @@ Submit only material you have the right to contribute and retain third-party not
 
 1. Start from an up-to-date `main` and create a focused branch.
 2. Discuss substantial workflow, dependency, or compatibility changes in an issue first.
-3. Identify whether the plugin, Scout, shared setup, or multiple distributions are affected.
+3. Identify whether the plugin, shared setup, or both are affected.
 4. Add or update regression tests and documentation alongside behavior changes.
 5. Update the Unreleased section of [CHANGELOG.md](CHANGELOG.md).
 
@@ -27,7 +27,6 @@ python -m venv .venv
 python -m pip install -r github-copilot/requirements.txt
 npm --prefix github-copilot/skills/solution-designer/renderer ci
 pwsh -File scripts/Test-LisaRepository.ps1 -Suite Plugin
-pwsh -File scripts/Test-LisaRepository.ps1 -Suite Scout
 ```
 
 Run the optional GEPA engine check separately, as CI does:
@@ -44,16 +43,13 @@ Do not refresh verification timestamps just to make tests pass.
 
 The supported runtime prerequisites remain documented in the [plugin guide](github-copilot/README.md).
 The CI version choices are tested combinations, not a claim that every supported version is covered.
-Scout checks cover shared infrastructure only; tests requiring its platform-specific diagram engine
-or Desktop host must also be run in the supported Scout environment when those components change.
 
 ## Pull request checklist
 
-- Describe the problem, change, affected distributions, and compatibility implications.
+- Describe the problem, change, affected hosts, and compatibility implications.
 - List exact validation commands and results, including skips and tests not run.
 - Include redacted evidence for authorized live tests when relevant; never upload raw credentials or customer data.
 - Explain any permission, dependency, remote-write, or deletion behavior changes.
-- Preserve host-specific diagram and GEPA implementations when changing shared code.
 - Request code-owner review and resolve comments before merging.
 
 Report vulnerabilities privately using [SECURITY.md](SECURITY.md), not in a public issue or pull request.

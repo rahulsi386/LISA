@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://microsoft-scout.local/schemas/lifecycle-artifact-manifest.schema.json",
+  "$id": "https://lisa.local/schemas/lifecycle-artifact-manifest.schema.json",
   "title": "Agent lifecycle artifact manifest",
   "type": "object",
   "additionalProperties": false,

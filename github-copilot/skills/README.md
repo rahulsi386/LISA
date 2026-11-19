@@ -156,7 +156,7 @@ Current limitations that extensions must not overlook:
 ### Architecture policy and skill registry
 
 - [`Platform-Decision.md`](Platform-Decision.md) is the architecture policy used mainly by Complexity Classifier. It defines permitted local build tools, mandatory gates, work types, honest PoC coverage, action-impact controls, state/evidence rules, and gate-before-score behavior.
-- `sync_skills_metadata.py` is a **Microsoft Scout-only** registry tool and ships in the Scout distribution, not in this plugin. GitHub Copilot CLI and Agency discover skills directly from `plugin.json` and the `skills/` folders, so no registry synchronization step is required here.
+- GitHub Copilot CLI and Agency discover skills directly from `plugin.json` and the `skills/` folders, so no registry synchronization step is required.
 
 ## 1. Requirement Analyzer
 
@@ -670,7 +670,7 @@ replay, held-out comparison and version-bound target promotion. Remote authoring
 test execution and rollback remain host responsibilities. See
 [`agent-optimizer/resources/gepa-execution.md`](agent-optimizer/resources/gepa-execution.md).
 The publisher adds `gepa-run.json` when used, `optimization-outcome.json`, `optimization-impact.md`
-and a generated execution/impact section in the optimizer run report. Scout has not been ported.
+and a generated execution/impact section in the optimizer run report.
 
 ### What it does
 
@@ -1068,14 +1068,14 @@ These are important when operating or extending the suite:
 - **Remote content reconciliation is incomplete:** Publisher can skip same-size changed files where remote hashes are unavailable.
 - **Checkpoint input replay protection is incomplete:** input markers are not populated/verified and stale-valid primary checkpoint selection is possible.
 - **Artifact Generator trusts upstream content:** it does not fully revalidate upstream schemas and hashes.
-- **Skill discovery:** this plugin uses its manifest directly; Scout registry initialization is not needed.
+- **Skill discovery:** this plugin uses its manifest directly; no separate skill registry is needed.
 
 ## Test suites
 
 All tests use Python `unittest` except the Publisher’s JavaScript policy tests, which are launched from Python. The Publisher tests are local/in-memory and do not write to a tenant. From the repository root, after installing prerequisites, the broad Python discovery command is:
 
 ```powershell
-python -m unittest discover -s "m-skills" -p "test*.py"
+pwsh -File scripts/Test-LisaRepository.ps1 -Suite Plugin
 ```
 
 For a change, run the affected skill suite first, then shared contracts/input routing/checkpoints, and finally broad discovery. Solution Designer changes may also require Node dependency restoration from its lockfile and rebuilding the C# executable when maintained layout source changes.

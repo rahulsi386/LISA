@@ -434,8 +434,7 @@ npm --prefix .\skills\solution-designer\renderer test
 ```
 
 Run per-stage Python test discovery separately because different skill folders can contain modules
-with the same name. Contributors updating the Agency copy must preserve its Python/NetworkX diagram
-router and GEPA pilot adaptations rather than overwriting them with the Scout copies in `m-skills`.
+with the same name.
 
 ## Architecture ontology
 

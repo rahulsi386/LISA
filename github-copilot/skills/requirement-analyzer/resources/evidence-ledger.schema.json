@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://microsoft-scout.local/schemas/requirement-analyzer/evidence-ledger.schema.json",
+  "$id": "https://lisa.local/schemas/requirement-analyzer/evidence-ledger.schema.json",
   "title": "Requirement Analyzer Evidence Ledger",
   "type": "object",
   "additionalProperties": false,
