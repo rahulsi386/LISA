@@ -671,7 +671,7 @@ function Confirm-Exact {
 
 function Select-TargetPlatform {
     $options = [ordered]@{
-        '1' = [pscustomobject]@{ Key = 'Scout'; Name = 'Microsoft Scout Desktop' }
+        '1' = [pscustomobject]@{ Key = 'Scout'; Name = 'Microsoft Scout Desktop (deprecated LISA distribution)' }
         '2' = [pscustomobject]@{ Key = 'CopilotCli'; Name = 'GitHub Copilot CLI' }
         '3' = [pscustomobject]@{ Key = 'Agency'; Name = 'Microsoft Agency (internal Microsoft only)' }
     }
@@ -933,6 +933,9 @@ if (-not (Test-Path -LiteralPath $RequirementsPath -PathType Leaf)) {
 Write-Section '1. Select the LISA target platform'
 if ([string]::IsNullOrWhiteSpace($script:TargetPlatform)) {
     $script:TargetPlatform = Select-TargetPlatform
+}
+if ($script:TargetPlatform -eq 'Scout') {
+    Write-Warning 'The scout/ distribution of LISA is deprecated. For new installations, use -Platform CopilotCli or -Platform Agency (internal Microsoft only).'
 }
 $script:SourceSkillsRoot = Resolve-SourceSkillsRoot -TargetPlatform $script:TargetPlatform
 $platformName = Get-PlatformName -TargetPlatform $script:TargetPlatform

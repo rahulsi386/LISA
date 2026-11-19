@@ -33,7 +33,7 @@ foreach ($code in @(7, 0)) {
 }
 """)
 
-    def test_plugin_registration_is_independent_of_project_setup(self):
+    def test_platform_selection_and_plugin_registration(self):
         self.run_powershell(r"""
 $ErrorActionPreference = 'Stop'
 $tokens = $null
@@ -71,9 +71,13 @@ foreach ($case in @(
     $null = & $main
     if (($events -join ',') -ne $case.Expected) { throw "Incorrect setup ordering: $($events -join ',')" }
 }
-foreach ($case in @(@{Choice='1'; Target='Scout'}, @{Choice='2'; Target='CopilotCli'}, @{Choice='3'; Target='Agency'})) {
+$WhatIfPreference = $true
+foreach ($case in @(@{Choice='1'; Target='Scout'}, @{Choice='2'; Target='CopilotCli'}, @{Choice='3'; Target='Agency'}, @{Target='Scout'})) {
     $script:choice = $case.Choice
-    if ((Select-TargetPlatform) -ne $case.Target) { throw 'Platform prompt returned wrong target' }
+    $script:TargetPlatform = if ($script:choice) { '' } else { $case.Target }
+    $warnings = @(& $main 3>&1 | Where-Object { $_ -is [System.Management.Automation.WarningRecord] -and $_.Message -match 'deprecated' })
+    if ($script:TargetPlatform -ne $case.Target) { throw 'Installer selected the wrong target' }
+    if ($warnings.Count -ne [int]($case.Target -eq 'Scout')) { throw "Unexpected deprecation warnings for $($case.Target): $warnings" }
 }
 """)
 

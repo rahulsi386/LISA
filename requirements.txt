@@ -1,9 +1,9 @@
 # LISA common prerequisite manifest
 #
 # One manifest for every LISA target platform:
-#   - Microsoft Scout Desktop
 #   - GitHub Copilot CLI
 #   - Microsoft Agency (internal Microsoft only)
+#   - Microsoft Scout Desktop (deprecated LISA distribution)
 #
 # This file is intentionally pip-compatible: only the uncommented requirement
 # lines are installed by pip. System software, platform hosts, and cloud

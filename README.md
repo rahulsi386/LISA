@@ -39,16 +39,15 @@ requires fresh remote verification, and cleanup requires the exact phrase `DELET
 
 ## Choose your platform
 
-LISA runs on three hosts. Pick one and follow its guide.
+For new installations, use the [LISA plugin](github-copilot/README.md) with GitHub Copilot CLI
+or Microsoft Agency. The `scout/` distribution is deprecated but remains available for existing
+Scout Desktop users.
 
 | Platform | Who it is for | Guide |
 |---|---|---|
-| **Microsoft Scout Desktop** | Scout users running LISA as local skills | [scout/README.md](scout/README.md) |
 | **GitHub Copilot CLI** | Anyone with an active GitHub Copilot plan | [github-copilot/README.md](github-copilot/README.md) |
 | **Microsoft Agency** | Internal Microsoft only, via its Copilot or Claude engine | [github-copilot/README.md](github-copilot/README.md) |
-
-GitHub Copilot CLI and Microsoft Agency share the same plugin distribution in
-[github-copilot](github-copilot). Scout uses the skill set in [scout/m-skills](scout/m-skills).
+| **Microsoft Scout Desktop (deprecated distribution)** | Existing Scout users running LISA as local skills | [scout/README.md](scout/README.md) |
 
 ## Quick start
 
@@ -63,7 +62,8 @@ powershell.exe -ExecutionPolicy Bypass -File .\Install-LISA-Prerequisites.ps1 -W
 powershell.exe -ExecutionPolicy Bypass -File .\Install-LISA-Prerequisites.ps1
 ```
 
-Skip the prompt with `-Platform Scout`, `-Platform CopilotCli`, or `-Platform Agency`.
+Skip the prompt with `-Platform CopilotCli` or `-Platform Agency`. Existing Scout users can still
+select `-Platform Scout`.
 Use `-ProjectPath "C:\Projects\MySolution"` to choose a project location, or `-SkipProjectSetup`
 to install the skills/plugin without creating a project. Existing configuration, inputs, outputs,
 and checkpoints are preserved. New projects receive a copy of the common root configuration.
@@ -88,7 +88,7 @@ LISA\
 |   |-- README.md
 |   |-- plugin.json
 |   `-- skills\
-`-- scout\                           Microsoft Scout Desktop distribution
+`-- scout\                           Deprecated Microsoft Scout Desktop distribution
     |-- README.md
     |-- m-skills\
     |-- m-automations\
@@ -139,9 +139,9 @@ Both setup paths use the same runtime checker for Python, PowerShell, Node.js, n
 
 ## Further reading
 
-- [Microsoft Scout Desktop guide](scout/README.md)
 - [GitHub Copilot CLI and Agency plugin guide](github-copilot/README.md)
 - [Skill suite reference](github-copilot/skills/README.md)
+- [Microsoft Scout Desktop guide (deprecated distribution)](scout/README.md)
 
 ## Governance and support
 

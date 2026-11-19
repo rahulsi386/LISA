@@ -46,6 +46,12 @@ User-visible changes are recorded here. Unreleased entries are not a published r
   and documentation use the new folder and GitHub subdirectory source `rahulsi386/LISA:github-copilot`.
   Existing installations referencing the previous location must be reinstalled from the new source.
 
+### Deprecated
+
+- The `scout/` distribution for Microsoft Scout Desktop is deprecated. Its files and
+  `-Platform Scout` installer option remain available. For new installations, use the
+  [LISA plugin for GitHub Copilot CLI or Microsoft Agency](github-copilot/README.md).
+
 ### Fixed
 
 - Plugin artifact test fixtures now include a validated analysis handoff and the standalone video contract.
