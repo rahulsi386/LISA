@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://microsoft-scout.local/schemas/agent-solution-manifest.schema.json",
+  "$id": "urn:lisa:schemas:agent-solution-manifest",
   "title": "Agent solution manifest",
   "type": "object",
   "additionalProperties": false,

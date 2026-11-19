@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://microsoft-scout.local/schemas/agent-live-state.schema.json",
+  "$id": "urn:lisa:schemas:agent-live-state",
   "title": "Agent live construction state",
   "type": "object",
   "additionalProperties": true,

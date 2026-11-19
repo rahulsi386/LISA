@@ -126,15 +126,15 @@ class AgencyPluginTests(unittest.TestCase):
         base_dependencies = (PLUGIN_ROOT / "requirements.txt").read_text()
         self.assertNotRegex(base_dependencies, r"(?m)^gepa[=<>]")
 
-    def test_scout_runtime_tokens_are_removed(self) -> None:
+    def test_skills_do_not_require_host_specific_runtime_tokens(self) -> None:
         forbidden = (
             "m_get_skill",
             "m_ask_user",
             "<local-skills-root>",
-            "<scout-data-dir>",
         )
         for skill_path in (PLUGIN_ROOT / "skills").glob("*/SKILL.md"):
             text = skill_path.read_text(encoding="utf-8")
+            self.assertNotRegex(text, r"<[\w-]+-data-dir>")
             for token in forbidden:
                 with self.subTest(skill=skill_path.parent.name, token=token):
                     self.assertNotIn(token, text)

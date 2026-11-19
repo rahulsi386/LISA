@@ -839,7 +839,7 @@ def _refresh_reference(
             f"Reference is not an official Microsoft Learn URL: {reference['url']}"
         )
     headers = {
-        "User-Agent": "Microsoft-Scout-Complexity-Classifier/1.0",
+        "User-Agent": "LISA-Complexity-Classifier/1.0",
         "Accept": "text/html",
     }
     if cache_compatible and cached.get("etag"):
