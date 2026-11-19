@@ -377,7 +377,7 @@ the [complete skills reference](skills/README.md).
   documented handoff rather than completing evaluator, optimizer, and publisher stages.
 - `video-generator` is explicit-only and is not part of `cad-orchestrator` or its checkpoint.
 - GEPA instruction optimization is decided by LISA rather than by configuration, and remains a
-  bounded pilot for one Standard, GitHub Copilot or Copilot chat harness agent with a verified
+  bounded pilot for one Standard, Microsoft Copilot Harness or Copilot chat harness agent with a verified
   shadow. Microsoft Cowork is excluded because it has no instruction authoring path or evaluator
   test surface. Local synthetic tests do not prove live Copilot Studio
   effectiveness, and provider or Copilot credit costs may remain unmeasured.

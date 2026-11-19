@@ -14,6 +14,8 @@ User-visible changes are recorded here. Unreleased entries are not a published r
 
 ### Changed
 
+- Documentation and diagnostics now refer to the Copilot Studio runtime as **Microsoft Copilot Harness**. Existing artifacts still use the `GitHub Copilot` harness value; no migration is required.
+
 - **Breaking:** Solution Designer 5.0 publishes three diagrams:
   - `BA_<slug>`: business architecture. This is a leadership operating model derived from the classified capabilities, their PoC treatments, human decisions, information, platform and controls.
   - `SA_<slug>`: engineering architecture.

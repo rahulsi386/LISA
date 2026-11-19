@@ -46,8 +46,7 @@ flowchart TB
 
 Three distinctions prevent misleading interpretations:
 
-1. **Execution host is not delivery target.** GitHub Copilot CLI runs LISA; the GitHub Copilot
-   *harness* is one possible runtime of an agent built in Copilot Studio. Agency's Copilot/Claude
+1. **Execution host is not delivery target.** GitHub Copilot CLI runs LISA; the Microsoft Copilot Harness is one possible runtime of an agent built in Copilot Studio. Agency's Copilot/Claude
    engines are another, separate concept. See [plugin manifest](../plugin.json),
    [Agency metadata](../agency.json), and [builder platform registry](../skills/agent-builder/SKILL.md#L20).
 2. **Skill is not script.** A skill can combine model-authored decisions, deterministic helpers,

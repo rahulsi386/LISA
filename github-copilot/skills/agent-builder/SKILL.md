@@ -5,7 +5,7 @@ description: "Builds the approved PoC/MVP portion of a classified solution with 
 
 # Agent Builder — Agentic Platform and Harness-Aware Playbook
 
-Use this skill to implement the approved PoC/MVP portion of the complete solution using only Microsoft Copilot Studio, Microsoft 365 Copilot Chat, Microsoft Cowork, and Microsoft Teams. **Validate, but do not independently redesign, the classifier's agentic platform, Copilot Studio harness, and component dispositions.** Use PAC CLI/classic authoring for Standard, the new agent UI for GitHub Copilot, the Microsoft 365 Copilot agent page for Copilot chat, or a verified reproducible Cowork configuration path. Behavioral evaluation belongs exclusively to `agent-evaluator`; changes based on evaluation outcomes belong exclusively to `agent-optimizer`.
+Use this skill to implement the approved PoC/MVP portion of the complete solution using only Microsoft Copilot Studio, Microsoft 365 Copilot Chat, Microsoft Cowork, and Microsoft Teams. **Validate, but do not independently redesign, the classifier's agentic platform, Copilot Studio harness, and component dispositions.** Use PAC CLI/classic authoring for Standard, the new agent UI for Microsoft Copilot Harness, the Microsoft 365 Copilot agent page for Copilot chat, or a verified reproducible Cowork configuration path. Behavioral evaluation belongs exclusively to `agent-evaluator`; changes based on evaluation outcomes belong exclusively to `agent-optimizer`.
 
 Never build Microsoft Foundry, Microsoft Agent Framework, custom-code, or other out-of-bound components. Reconcile them as simulated, manual, deferred, or blocked exactly as approved by the classification. Do not silently substitute an agentic platform, connector, service, data store, or Copilot Studio harness.
 
@@ -22,7 +22,7 @@ Microsoft Copilot Studio and Microsoft Cowork are independent agentic platforms/
 
 | Harness | Choose when | Signature capabilities | Billing | Build path |
 |---|---|---|---|---|
-| **GitHub Copilot harness** | Reasoning-heavy, multi-step business processes; the agent must take a goal, break it into steps, adapt and recover, and orchestrate across connectors, knowledge, MCP, and connected agents | Native Word/Excel/PowerPoint/PDF create & edit, **skills**, **memory**, autonomous multi-step tool orchestration, secure sandbox | Copilot Credits from build time; verify environment allocation before creation | **Path B** |
+| **Microsoft Copilot Harness** | Reasoning-heavy, multi-step business processes; the agent must take a goal, break it into steps, adapt and recover, and orchestrate across connectors, knowledge, MCP, and connected agents | Native Word/Excel/PowerPoint/PDF create & edit, **skills**, **memory**, autonomous multi-step tool orchestration, secure sandbox | Copilot Credits from build time; verify environment allocation before creation | **Path B** |
 | **Standard harness** | Rule-based, well-defined, predictable, potentially high-volume agents and structured conversations/agent flows | Generative orchestration, approved prompts/flows, knowledge, tools, and deterministic paths; classic orchestration only for approved compatibility needs | Standard licensing plus prepaid Copilot Credits or PAYG; validate quotas and peak throughput | **Path A** |
 | **Copilot chat harness** | The goal is a focused internal agent inside **Microsoft 365 Copilot Chat** | Instructions, suggested prompts, enterprise knowledge, and approved tools for internal users; not the harness for GitHub-exclusive skills, memory, native file work, or long autonomous processes | Consumption-based or included in eligible Microsoft 365 Copilot licensing | **Path C** |
 
@@ -36,7 +36,7 @@ applicable path; never load the others.
 | Path | Platform / harness | Instructions | Status |
 |---|---|---|---|
 | A | Copilot Studio · Standard | `resources\build-path-standard.md` | Supported |
-| B | Copilot Studio · GitHub Copilot | `resources\build-path-github-copilot.md` | Supported |
+| B | Copilot Studio · Microsoft Copilot Harness | `resources\build-path-github-copilot.md` | Supported |
 | C | Copilot Studio · Copilot chat | `resources\build-path-copilot-chat.md` | Supported |
 | D | Microsoft Cowork | `resources\build-path-cowork.md` | Supported |
 | F | Microsoft Foundry agents | None yet | Roadmap |
@@ -77,14 +77,14 @@ Then:
    - Personal delegated work owned and privately consumed by one authenticated employee, with Cowork skills/plugins and tenant availability → **Microsoft Cowork**. Set `harness` to `null` and follow Path D.
    - Managed agent authoring, channels, topics, flows, knowledge, tools, or connected agents in Copilot Studio → **Microsoft Copilot Studio**. Continue to harness selection.
 3. For Microsoft Copilot Studio only, choose the harness using these decision signals:
-   - Requires file authoring, **skills**, **memory**, **MCP**, autonomous planning/recovery, or long multi-step processes across many tools → **GitHub Copilot harness**.
+   - Requires file authoring, **skills**, **memory**, **MCP**, autonomous planning/recovery, or long multi-step processes across many tools → **Microsoft Copilot Harness**.
    - Well-defined, rule-based, predictable topic/prompt flows over enterprise knowledge → **standard harness**.
    - Primary goal is a focused internal experience inside Microsoft 365 Copilot Chat using instructions, enterprise knowledge, suggested prompts, and bounded approved tools → **Copilot chat harness**.
 4. If a capability the Copilot Studio scenario needs is only available on one harness, that harness wins — state why.
 5. If the Copilot Studio harness is genuinely ambiguous, select the best-fit harness on the recorded evidence, state the rejected alternative and the billing implication of each, and continue. Do not stop to ask; record the rationale so it can be reviewed.
 6. Run the platform-specific gate before construction:
    - **Microsoft Cowork:** verify the browser identity, tenant, licensing, product availability, skills/plugins, connection behavior, approvals, and reproducible configuration path. Do not run Copilot Studio harness or PAC environment gates for a Cowork-only build.
-   - **GitHub Copilot:** verify the scenario genuinely needs its exclusive capabilities and confirm Copilot Credits are allocated to the target environment because build-time use consumes credits.
+   - **Microsoft Copilot Harness:** verify the scenario genuinely needs its exclusive capabilities and confirm Copilot Credits are allocated to the target environment because build-time use consumes credits.
    - **Standard:** estimate peak requests per minute, tool/flow demand, and generative-AI demand; compare them with current environment quotas and confirm prepaid capacity or PAYG.
    - **Copilot chat:** confirm internal-only publishing and eligible licensing/consumption. If the scenario needs GitHub-exclusive skills, memory, native file creation/editing, long autonomous planning, or external-customer publication, reject this harness; bounded tools are supported and do not by themselves disqualify it.
 7. Validate the classified agentic platform and, for Copilot Studio, its harness against live tenant capability. If a legacy classification represents Cowork as a harness, normalize it to `agenticPlatform: Microsoft Cowork` and `harness: null`, and record `classificationMismatch` plus the normalization. Never silently change the selected platform.
@@ -200,7 +200,7 @@ Document before any remote operation:
 | Tools / flows | Required actions only |
 | Connected/child agents | Explicit routing and fallback behavior |
 | Authentication / access | Required runtime model |
-| Harness-specific | GitHub Copilot: skills, memory, file output, MCP · Standard: topics, prompt library, orchestration mode |
+| Harness-specific | Microsoft Copilot Harness: skills, memory, file output, MCP · Standard: topics, prompt library, orchestration mode |
 | Target | Confirmed environment name, URL, ID, authenticated user |
 | Solution architecture | Exact reusable components, boundaries, interfaces, ownership, dependencies, and failure behavior |
 | Quality attributes | Reliability, security, cost optimization, operational excellence, and performance-efficiency decisions |
@@ -341,7 +341,7 @@ Before publishing the build for evaluation:
 5. Save, reload, pull/download, and verify the exact persisted instructions remotely.
 6. Do not grade behavior or modify instructions from observed responses. Produce the evaluator handoff and let `agent-evaluator` run the behavioral gates.
 
-For every Copilot Studio harness build (Standard, GitHub Copilot, or Copilot chat), include
+For every Copilot Studio harness build (Standard, Microsoft Copilot Harness, or Copilot chat), include
 `instructionOptimization` in the build handoff: `seedSha256` for exact persisted UTF-8 instructions,
 `editableSections` using
 the Section 5 heading names, `protectedClauses` copied verbatim from mandatory safety/authority/
@@ -351,7 +351,7 @@ editable. Record protection for mandatory rules even when they occur inside an e
 This is construction metadata, not behavioral optimization. GEPA requires a new validated build
 handoff if the contract is missing; do not silently retrofit a committed build artifact.
 
-GitHub Copilot-harness GEPA readiness is in Path B, step B5.
+Microsoft Copilot Harness GEPA readiness is in Path B, step B5.
 
 ## 5.5 Execute the selected build path
 

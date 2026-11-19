@@ -6,8 +6,8 @@ endpoint, credential file, synthetic runtime score, or hidden reasoning is used 
 The pilot optimizes only existing instructions, not tools, code, requirements, rubrics or agent
 architecture. LISA decides eligibility from the harness, evaluator evidence and dataset shape; it
 is never end-user configuration, and missing prerequisites for an eligible run are blockers.
-Supported harness values are `Standard`, `GitHub Copilot` and `Copilot chat` (GHCP means the
-Copilot Studio harness, not a separate model provider). The target and shadow must use the same
+Supported harness values are `Standard`, `GitHub Copilot` and `Copilot chat`. Use `GitHub Copilot`
+for the Microsoft Copilot Harness in Copilot Studio. The target and shadow must use the same
 canonical value. Microsoft Cowork is out of scope and is always recorded as `unsupported-harness`,
 because it has no instruction authoring path and no evaluator test surface.
 
@@ -50,7 +50,7 @@ Example host-supplied plan policy (LISA adds `enabled`, `seed`, the budgets and 
 }
 ```
 
-For GHCP, set `shadowAgent.harness` to `GitHub Copilot` and add this to `policy.gepa`
+For Microsoft Copilot Harness, set `shadowAgent.harness` to `GitHub Copilot` and add this to `policy.gepa`
 before the initial build/evaluation:
 
 ```json
@@ -73,10 +73,10 @@ The pilot still excludes multi-agent optimization and binding/state-changing too
 | Harness | Instruction persistence | Candidate and target tests |
 |---|---|---|
 | Standard | Existing PAC pull/change/push/publish/pull path | Existing harness-correct evaluator routing, normally `/bots/<agentId>/overview` |
-| GitHub Copilot | Builder Path B's `cli-copilot` workspace; verify PAC support and live signature before push/publish/pull. If unsupported, new-agent UI keyboard insertion, Save/reload and Dataverse read-back | Pinned `/environments/<environmentId>/agents/<agentId>/preview` on `copilotstudio.preview.microsoft.com`; `surfaceUsed: preview-canvas` |
+| Microsoft Copilot Harness | Builder Path B's `cli-copilot` workspace; verify PAC support and live signature before push/publish/pull. If unsupported, new-agent UI keyboard insertion, Save/reload and Dataverse read-back | Pinned `/environments/<environmentId>/agents/<agentId>/preview` on `copilotstudio.preview.microsoft.com`; `surfaceUsed: preview-canvas` |
 | Copilot chat | Builder Path C's Microsoft 365 Copilot agent page: edit, Save/reload, publish internally, then read back the M365 Copilot agent resource. Never convert it to a Standard agent | Published Microsoft 365 Copilot channel; `surfaceUsed: m365-copilot` |
 
-Before provisioning a GHCP shadow, verify `pac copilot init help` exposes `--authoring-mode`
+Before provisioning a Microsoft Copilot Harness shadow, verify `pac copilot init help` exposes `--authoring-mode`
 and `cli-copilot`. Use `--authoring-mode cli-copilot` when creating through PAC, not the Standard
 template. If PAC cannot author this surface, use Builder's new-agent UI fallback. Keep the shadow
 workspace and construction evidence under `output/optimization/gepa/`; do not write to the
@@ -89,7 +89,7 @@ committed build directory. For rich-text edits use real keyboard insertion, not 
 
 Record `authoringPath` as `pac-cli-copilot` or `new-agent-ui`. A label in an artifact is not proof
 of the live signature. Persist evidence of the pull/read-back. Do not use the Standard overview
-pane or convert the agent's harness when a GHCP preview is unavailable; report a surface blocker.
+pane or convert the agent's harness when a Microsoft Copilot Harness preview is unavailable; report a surface blocker.
 Use the same authoring/read-back path for promotion and rollback, and verify the original target
 identity before either operation. Changing harness or memory policy requires a new GEPA session.
 
@@ -134,8 +134,8 @@ Required response shape:
 }
 ```
 
-GHCP requests additionally contain `payload.execution` with a derived preview URL, memory mode,
-and expected `harnessSignature`. Retain the exact requested GHCP `agent` identity in the response.
+Microsoft Copilot Harness requests additionally contain `payload.execution` with a derived preview URL, memory mode,
+and expected `harnessSignature`. Retain the exact requested Microsoft Copilot Harness `agent` identity in the response.
 Add the live `harnessSignature` and `authoringPath` to `persistenceReceipt`, and these fields to
 each test result (the URL must identify the requested shadow, not the original target):
 
@@ -152,7 +152,7 @@ For `reset-between-tests`, record `memoryState: reset` only after verifying the 
 case, including protected cases. Use the ordinary evidence files to substantiate these fields.
 Both initial and final target evaluations require these per-test observations with the target
 preview URL and a top-level `gepaExecution` object containing the live `harnessSignature` and
-`authoringPath`. They do not use the candidate `persistenceReceipt` wrapper. If an earlier GHCP
+`authoringPath`. They do not use the candidate `persistenceReceipt` wrapper. If an earlier Microsoft Copilot Harness
 baseline lacks this evidence, rerun initial evaluation under the fixed memory policy before
 freezing it. Do not manufacture execution metadata for an old run.
 
@@ -209,12 +209,12 @@ cleanup/deletion requires separate explicit consent and must not delete target r
 - `gepa-eligibility.json`: LISA's immutable decision, reason code and the source evaluation it used.
 - `gepa-run.json`: engine/version, seed, status, candidate lineage, Pareto membership, selected hash,
   search and held-out deltas, instruction bytes, evaluator runs and measured/unknown cost.
-  Execution records identify the harness and shadow ID; GHCP adds preview surface and memory mode.
+  Execution records identify the harness and shadow ID; Microsoft Copilot Harness adds preview surface and memory mode.
 - `gepa/`: immutable session, candidate texts, host requests and reflection receipts; pending cursor.
 - `optimization-outcome.json`: computed strategy, execution summary, search impact and independently
   verified final target impact. `not-measured` means no comparable target result, not zero gain.
 - `optimization-impact.md`: generated human-readable impact summary.
-  Includes harness and, for GHCP, the candidate test surface and memory isolation policy.
+  Includes harness and, for Microsoft Copilot Harness, the candidate test surface and memory isolation policy.
 - `optimization-run-report.md`: original narrative plus generated GEPA execution/impact section.
 - `optimization-plan.json` and `optimization-change-log.json`: add `gepaCandidateId` and
   `gepaRunSha256` to the promoted round; preserve all ordinary round/snapshot/rollback records.

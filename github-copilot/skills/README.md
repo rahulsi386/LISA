@@ -470,7 +470,7 @@ It validates rather than redesigns the approved platform, Copilot Studio harness
 Supported build paths are:
 
 - **Standard harness:** PAC CLI/classic authoring plus browser fallback for unsupported components.
-- **GitHub Copilot harness:** `cli-copilot` or new agent UI, including skills, workflows, memory, knowledge, tools, and connected agents.
+- **Microsoft Copilot Harness:** `cli-copilot` or new agent UI, including skills, workflows, memory, knowledge, tools, and connected agents.
 - **Copilot chat harness:** Microsoft 365 Copilot agent page and internal publication.
 - **Microsoft Cowork:** configuration/evidence mode with no Copilot Studio harness and no fabricated ZIP.
 
@@ -606,7 +606,7 @@ Run IDs match `EVAL-YYYYMMDD-HHMMSS-XXXXXXXX`; statuses are `pass`, `fail`, and 
 3. Create schema-valid JSON/CSV dataset and rubric. Cover every critical/high requirement and define automatic gate failures.
 4. Select the harness-correct surface:
    - Standard → `/overview` “Test your agent” pane, then classic canvas, demo website, or Teams fallback.
-   - GitHub Copilot → `/agents/<id>/preview`.
+   - Microsoft Copilot Harness → `/agents/<id>/preview`.
    - Copilot chat → Microsoft 365 Copilot channel or documented fallback.
 5. Through Playwright, isolate each conversation, submit the exact prompt, wait for the stable final answer (not interim reasoning/status), dismiss nonfunctional surveys, capture citations/tool activity/errors/side effects and evidence, and retry only a demonstrably transient browser failure once. Optional parallel execution must use isolated browser contexts per test.
 6. Record every PASS, FAIL, BLOCKED, and NOT_RUN result. Never infer hidden tool use, grounding, or side effects.
@@ -660,9 +660,9 @@ Agent Optimizer is an **agent-directed post-evaluation mutation and rollback met
 Agency also includes a LISA-decided **GEPA 0.1.4 instruction-search driver** in `gepa_runtime.py`.
 `decide_eligibility` records an immutable decision and reason code in `gepa-eligibility.json`; there
 is no end-user GEPA setting, and the driver derives its own seed, budgets and dataset partitions.
-It supports matching Standard, GitHub Copilot (GHCP) or Copilot chat target/shadow pairs, and
+It supports matching Standard, Microsoft Copilot Harness or Copilot chat target/shadow pairs, and
 excludes Microsoft Cowork, which has no instruction authoring path or evaluator test surface.
-GHCP requires the
+Microsoft Copilot Harness requires the
 CliCopilot live signature, pinned preview canvas, verified Credits and per-case memory isolation;
 the outcome report identifies these execution conditions alongside measured impact.
 It emits hash-bound requests for host reflection and evaluator-owned shadow tests, with bounded

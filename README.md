@@ -131,7 +131,7 @@ Both setup paths use the same runtime checker for Python, PowerShell, Node.js, n
 ## Scope and limits
 
 - The distribution is Windows-oriented and builds agents in **Microsoft Copilot Studio** across its
-  Standard, GitHub Copilot, and Copilot chat harnesses. For **Microsoft Cowork**, LISA builds skills
+  Standard, Microsoft Copilot Harness, and Copilot chat harnesses. For **Microsoft Cowork**, LISA builds skills
   only and ends as a documented handoff.
 - No host replaces tenant authentication, licensing, permissions, or human approval.
 - A failed validation, blocked stage, rejected review, or unverified publication stops the workflow

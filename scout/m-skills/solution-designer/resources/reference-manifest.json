@@ -29,7 +29,7 @@
       "url": "https://learn.microsoft.com/en-us/microsoft-copilot-studio/harnesses-overview",
       "updatedAt": "2026-08-03T14:59:00Z",
       "gitCommit": "d3dd478d56933bdfd2dc0d5e562fd9546ab9823e",
-      "guidance": "Show the evidenced GitHub Copilot, standard, or Copilot chat harness; do not treat harnesses as interchangeable."
+      "guidance": "Show the evidenced Microsoft Copilot Harness, standard, or Copilot chat harness; do not treat harnesses as interchangeable."
     },
     {
       "key": "copilot-studio-orchestration",

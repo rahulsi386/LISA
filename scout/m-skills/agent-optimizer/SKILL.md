@@ -135,7 +135,7 @@ Before editing, create the next immutable `rounds\round-NNN\` directory. Pull/do
 ### 4. Apply through the harness-correct path
 
 - **Standard harness:** pull the PAC workspace, make the minimal supported YAML/component change, validate, push, publish to the validated test target, and pull again to verify persistence. Use the Copilot Studio UI only for components PAC cannot manage.
-- **GitHub Copilot harness:** use the new agent UI; for rich-text instructions use real keyboard insertion, Save, reload, and verify the Dataverse configuration. Update skills/tools/knowledge/connected agents only when the plan requires it.
+- **Microsoft Copilot Harness:** use the new agent UI; for rich-text instructions use real keyboard insertion, Save, reload, and verify the Dataverse configuration. Update skills/tools/knowledge/connected agents only when the plan requires it.
 - **Copilot chat harness:** edit the agent from the Microsoft 365 Copilot agent page, not by changing a Standard-harness channel. Save/reload, publish internally, and verify the correct M365 Copilot agent resource.
 
 Never combine unrelated changes in one batch. After persistence verification, store the verified state under the same round and write `after-state-manifest.json`. If the batch is rejected, restore the before-state, verify it remotely, and write `rollback-state-manifest.json`. Resolve build errors, live-state drift, and missing dependencies before retesting.

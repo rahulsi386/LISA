@@ -74,7 +74,7 @@ Do not compare unlike choices as if they were substitutes.
 |---|---|---|
 | Experience | Where and for whom does work occur? | Microsoft 365 Copilot, Teams, web, mobile, API, line-of-business application, Cowork |
 | Process | Is execution deterministic, adaptive, or mixed? | Conventional code, workflow, Copilot Studio workflow or agent flow, agent |
-| Managed agent runtime | How much runtime behavior should the platform manage? | Copilot chat harness, standard harness, GitHub Copilot harness, Foundry Prompt Agent |
+| Managed agent runtime | How much runtime behavior should the platform manage? | Copilot chat harness, standard harness, Microsoft Copilot Harness, Foundry Prompt Agent |
 | Custom agent runtime | Is custom orchestration or code required? | Foundry Hosted Agent, self-hosted application |
 | Development framework | Which pro-code abstractions are required? | Microsoft Agent Framework or another approved framework |
 | Model and tools | Which models, knowledge, APIs, connectors, and protocols are approved? | Foundry models and tools, Copilot Studio connectors, MCP, custom APIs |
@@ -122,7 +122,7 @@ Break the scenario into independently deployable or governable components. Assig
 | Conventional software | Fully specified logic, exact calculations, strict validation, or no need for language reasoning | Function, service, rules engine, or application code |
 | Knowledge retrieval | Answers grounded in enterprise content; limited action requirements | Copilot chat harness or standard harness |
 | Deterministic execution | Known stages, branches, approvals, deadlines, retries, and system updates | Copilot Studio workflow, agent flow, standard harness, or conventional workflow platform |
-| Adaptive reasoning | Must investigate, plan, choose tools, interpret varied evidence, or recover dynamically | GitHub Copilot harness, Foundry Prompt Agent, or Foundry Hosted Agent |
+| Adaptive reasoning | Must investigate, plan, choose tools, interpret varied evidence, or recover dynamically | Microsoft Copilot Harness, Foundry Prompt Agent, or Foundry Hosted Agent |
 | Delegated personal work | A person delegates work, owns the context, and directly consumes the result | Cowork, subject to mandatory gates and verified availability |
 | Custom agent software | Custom protocols, models, state, middleware, algorithms, UI, hosting, or orchestration | Microsoft Agent Framework with Foundry Hosted Agents or approved self-hosting |
 
@@ -136,7 +136,7 @@ Ratings are directional starting points, not evidence. Validate exact capabiliti
 
 Legend: **High** = native strength, **Medium** = supported with configuration or constraints, **Low** = not a focus, **Owner-built** = engineering must implement and operate it.
 
-| Dimension | Copilot Chat Harness | Standard Harness | GitHub Copilot Harness | Microsoft Cowork | Foundry Prompt Agent | Foundry Hosted Agent | Microsoft Agent Framework |
+| Dimension | Copilot Chat Harness | Standard Harness | Microsoft Copilot Harness | Microsoft Cowork | Foundry Prompt Agent | Foundry Hosted Agent | Microsoft Agent Framework |
 |---|---|---|---|---|---|---|---|
 | Primary purpose | Grounded M365 Copilot extension | Structured agents and repeatable processes | Managed deep-reasoning agents and workflows | Delegated work for an individual | Managed configurable agent API | Managed hosting for custom agent code | Pro-code agent and workflow development |
 | Primary audience | Internal M365 users | Internal or external users | Internal or external users | Individual employee | Custom application users or services | Custom application users or services | Determined by the application |
@@ -166,7 +166,7 @@ Legend: **High** = native strength, **Medium** = supported with configuration or
 ## Interpretation Notes
 
 - The **standard harness** is not purely deterministic. Generative orchestration can select and chain topics, tools, knowledge, and agents, and respond to events. Evaluate whether its bounded flexibility is sufficient.
-- The **GitHub Copilot harness** is strongest when long adaptive work, file handling, skills, memory, and automatic recovery matter more than low-level orchestration.
+- The **Microsoft Copilot Harness** is strongest when long adaptive work, file handling, skills, memory, and automatic recovery matter more than low-level orchestration.
 - **Foundry Prompt Agents** fit API-addressable managed agents needing model choice and Azure controls without custom orchestration code.
 - **Foundry Hosted Agents** run custom code with managed endpoints, scaling, identity, session state, and observability. They can host Agent Framework applications.
 - **Agent Framework** is not a managed cloud service by itself. Security, durability, scaling, deployment, and compliance depend on its providers, stores, tools, and host.
@@ -196,7 +196,7 @@ Consider **Microsoft Cowork** when the employee owns the work context and output
 
 ## Question 5: Is a managed low-code agent sufficient for adaptive work?
 
-Choose the **GitHub Copilot harness** when the system must investigate, plan, work across tools and files, adapt, and recover while a managed Copilot Studio experience meets the requirements.
+Choose the **Microsoft Copilot Harness** when the system must investigate, plan, work across tools and files, adapt, and recover while a managed Copilot Studio experience meets the requirements.
 
 ## Question 6: Can the agent be expressed as instructions, a model, and supported tools?
 
@@ -270,7 +270,7 @@ Use a workflow to own state, deadlines, retries, approvals, and writes. Invoke a
 
 ## Pattern 2: Managed Agent with Guarded Tools
 
-Use the GitHub Copilot harness or a Foundry Prompt Agent to reason and plan. Expose narrow, idempotent tools with schemas, least privilege, validation, approval thresholds, and audit events.
+Use the Microsoft Copilot Harness or a Foundry Prompt Agent to reason and plan. Expose narrow, idempotent tools with schemas, least privilege, validation, approval thresholds, and audit events.
 
 ## Pattern 3: Custom Agent on Managed Hosting
 
@@ -372,7 +372,7 @@ Choose for grounded answers inside Microsoft 365 Copilot when users are internal
 
 Choose for controlled, repeatable conversations and processes using topics, rules, flows, approvals, connectors, and triggers. It can use generative orchestration for bounded interpretation, tool selection, MCP, and connected agents; do not classify it as purely deterministic.
 
-## GitHub Copilot Harness
+## Microsoft Copilot Harness
 
 Choose for reasoning-heavy, adaptive, multi-step, or file-centric work where managed skills, memory, tools, evaluation, monitoring, and supported channels fit. Avoid when a fixed workflow is sufficient or custom runtime-level control is mandatory.
 

@@ -83,7 +83,7 @@ def check_edit_scope(seed: str, text: str, contract: dict) -> None:
 
 def github_copilot_execution(agent: dict, memory_mode: str) -> dict:
     if agent["harness"] != "GitHub Copilot" or memory_mode not in ("disabled", "reset-between-tests"):
-        raise ArtifactError("Invalid GitHub Copilot execution contract")
+        raise ArtifactError("Invalid Microsoft Copilot Harness execution contract")
     environment_id = quote(agent["environmentId"], safe="")
     agent_id = quote(agent["agentId"], safe="")
     return {"surface": "preview-canvas",
@@ -95,17 +95,17 @@ def github_copilot_execution(agent: dict, memory_mode: str) -> dict:
 
 def validate_github_copilot_execution(expected: dict, receipt: dict, observations: list[dict]) -> None:
     if receipt.get("harnessSignature") != expected["harnessSignature"]:
-        raise ArtifactError("GitHub Copilot live harness signature mismatch")
+        raise ArtifactError("Microsoft Copilot Harness live signature mismatch")
     if receipt.get("authoringPath") not in ("pac-cli-copilot", "new-agent-ui"):
-        raise ArtifactError("GitHub Copilot authoring path must be recorded")
+        raise ArtifactError("Microsoft Copilot Harness authoring path must be recorded")
     memory_state = "disabled" if expected["memoryMode"] == "disabled" else "reset"
     if not observations:
-        raise ArtifactError("GitHub Copilot evaluation requires execution observations")
+        raise ArtifactError("Microsoft Copilot Harness evaluation requires execution observations")
     for observed in observations:
         if observed.get("surfaceUsed") != expected["surface"] or observed.get("surfaceUrl") != expected["url"]:
-            raise ArtifactError("GitHub Copilot evaluation must use the pinned preview surface")
+            raise ArtifactError("Microsoft Copilot Harness evaluation must use the pinned preview surface")
         if observed.get("conversationReset") is not True or observed.get("memoryState") != memory_state:
-            raise ArtifactError("GitHub Copilot conversation and memory isolation is unverified")
+            raise ArtifactError("Microsoft Copilot Harness conversation and memory isolation is unverified")
 
 
 def validate_response(request: dict, response: dict, evidence_root: Path) -> None:
@@ -143,7 +143,7 @@ def validate_response(request: dict, response: dict, evidence_root: Path) -> Non
     if payload["agent"]["harness"] == "GitHub Copilot":
         expected = github_copilot_execution(payload["agent"], payload.get("execution", {}).get("memoryMode"))
         if payload.get("execution") != expected:
-            raise ArtifactError("GitHub Copilot request execution contract mismatch")
+            raise ArtifactError("Microsoft Copilot Harness request execution contract mismatch")
         validate_github_copilot_execution(expected, receipt, [item.get("playwrightObservations", {}) for item in results])
     for item in results:
         if item.get("status") not in ("PASS", "FAIL"):

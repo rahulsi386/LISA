@@ -110,7 +110,7 @@ networkx==3.6.1
 # ---------------------------------------------------------------------------
 # - Power Platform authentication to the exact configured tenant/environment.
 # - Copilot Studio/Microsoft 365 Copilot/Cowork/Teams licensing and capacity
-#   appropriate to the selected platform and harness; GitHub Copilot harness
+#   appropriate to the selected platform and harness; Microsoft Copilot Harness
 #   requires allocated Copilot Credits.
 # - A browser identity in the same tenant with access to the authoring and test
 #   surfaces. Evaluation requires source-grounded evalData and a deployed agent.

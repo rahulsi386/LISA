@@ -21,7 +21,7 @@ demonstration coverage. Never hide a missing capability to make the allowed tool
 
   | When | Sections |
   |---|---|
-  | Every run | Team PoC/MVP Delivery Profile through Phase 5 (including the Evidence Register); Hybrid Architecture Patterns; Control Requirements for Agentic Actions; State, Memory, and Evidence; Evaluation and Operational Readiness; Final Golden Rules; and the Copilot Chat, Standard, GitHub Copilot, and Microsoft Cowork platform guidance |
+  | Every run | Team PoC/MVP Delivery Profile through Phase 5 (including the Evidence Register); Hybrid Architecture Patterns; Control Requirements for Agentic Actions; State, Memory, and Evidence; Evaluation and Operational Readiness; Final Golden Rules; and the Copilot Chat, Standard, Microsoft Copilot Harness, and Microsoft Cowork platform guidance |
   | Stage 2 or 3 research only | Microsoft Foundry Prompt Agents, Microsoft Foundry Hosted Agents, Microsoft Agent Framework |
   | Only when a decision needs it | Common Anti-Patterns, Architecture Decision Record Template, Authoritative References |
 - Classify every in-scope finding: Required, Confirmed, Current, Preferred and Near-term. Do not

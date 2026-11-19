@@ -1,9 +1,9 @@
-# Build path B — GitHub Copilot harness
+# Build path B — Microsoft Copilot Harness
 
 Read this file only when the validated platform is Microsoft Copilot Studio and the harness is
 `GitHub Copilot`. The shared gates in `SKILL.md` Sections 1–8 still apply.
 
-Use this path for every currently supported GitHub Copilot-harness composition. Component types are composable, not mutually exclusive: build an instructions-only agent, or any required combination of knowledge, tools, workflows, skills, memory, file capabilities, and connected agents. Build exactly the non-empty component set defined by the validated classification and design; never force unnecessary components and never omit a required component because another component is present.
+Use this path for every currently supported Microsoft Copilot Harness composition. Component types are composable, not mutually exclusive: build an instructions-only agent, or any required combination of knowledge, tools, workflows, skills, memory, file capabilities, and connected agents. Build exactly the non-empty component set defined by the validated classification and design; never force unnecessary components and never omit a required component because another component is present.
 
 ## B0. Resolve the component matrix and dependency graph
 
@@ -178,10 +178,10 @@ Inspect the single ZIP and require all expected agents, bot components, skills, 
 
 Create `agent-solution-manifest.json` containing the scenario solution identity, the single package path/hash, primary agent, every child ID/schema/role, relationships, deployment order, project paths, and per-agent component inventories. A single-agent build uses the same manifest with one agent and no relationships.
 
-## B5. GEPA readiness (GitHub Copilot harness)
+## B5. GEPA readiness (Microsoft Copilot Harness)
 
-For an Agency GitHub Copilot (GHCP) GEPA build, retain the harness signature and exact
-configured skill/tool/knowledge inventory in construction evidence. Record the approved GHCP
+For an Agency Microsoft Copilot Harness GEPA build, retain the harness signature and exact
+configured skill/tool/knowledge inventory in construction evidence. Record the approved Microsoft Copilot Harness
 memory isolation mode (`disabled` or `reset-between-tests`) before initial evaluation. Use
 `disabled` only when memory is not required; otherwise verify a supported `reset-between-tests`
 procedure. Never disable a required capability just to make the shadow testable. If state cannot

@@ -4165,7 +4165,7 @@ def _score_model(
         )
     ):
         raise ClassifierError(
-            "GitHub Copilot harness requires skills, memory, or autonomous multi-step orchestration"
+            "Microsoft Copilot Harness requires skills, memory, or autonomous multi-step orchestration"
         )
     if (
         harness in {"Standard", "Copilot chat"}

@@ -336,7 +336,7 @@ When Copilot Studio can satisfy all requirements:
 
 1. Use the consulted harness documentation, Copilot Studio guidance, Microsoft 365 documentation, and Power Platform Well-Architected guidance.
 2. Select exactly one harness:
-   - GitHub Copilot
+   - Microsoft Copilot Harness
    - Standard
    - Copilot chat
 3. Record the rationale and billing implication.
@@ -345,7 +345,7 @@ When Copilot Studio can satisfy all requirements:
 
 Harness validation:
 
-- GitHub Copilot requires skills, memory, or autonomous multi-step planning/orchestration.
+- Microsoft Copilot Harness requires skills, memory, or autonomous multi-step planning/orchestration.
 - Standard excludes those requirements and supports predictable orchestration, knowledge, tools, flows, and supported triggers.
 - Copilot chat requires the matching Microsoft 365 Copilot Chat channel.
 

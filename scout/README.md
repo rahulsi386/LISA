@@ -15,7 +15,7 @@ explicit review and safety gates for consequential decisions and remote changes.
 
 > [!IMPORTANT]
 > **Current build scope:** LISA builds agents only in **Microsoft Copilot Studio**, using all three
-> supported Copilot Studio harnesses: **Standard**, **GitHub Copilot**, and **Copilot chat**. For
+> supported Copilot Studio harnesses: **Standard**, **Microsoft Copilot Harness**, and **Copilot chat**. For
 > **Microsoft Cowork**, LISA builds **skills only**.
 
 This repository provides LISA as a suite of ten local Scout skills covering requirement analysis,
