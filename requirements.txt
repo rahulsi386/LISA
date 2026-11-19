@@ -3,15 +3,10 @@
 # One manifest for every LISA target platform:
 #   - GitHub Copilot CLI
 #   - Microsoft Agency (internal Microsoft only)
-#   - Microsoft Scout Desktop (deprecated LISA distribution)
 #
 # This file is intentionally pip-compatible: only the uncommented requirement
 # lines are installed by pip. System software, platform hosts, and cloud
 # prerequisites are documented below and checked by Install-LISA-Prerequisites.ps1.
-#
-# Entries marked [SCOUT ONLY] apply solely to Microsoft Scout Desktop.
-# Entries marked [PLUGIN ONLY] apply to GitHub Copilot CLI and Microsoft Agency.
-# Everything else is shared by all platforms.
 #
 # Supported host: Windows 11
 # Python: 3.11 or newer; CPython 3.13.15 verified
@@ -45,23 +40,13 @@ networkx==3.6.1
 # ---------------------------------------------------------------------------
 # Platform host (choose one; the installer prompts for it)
 # ---------------------------------------------------------------------------
-# [SCOUT ONLY] Microsoft Scout
-#   - WinGet package: Microsoft.ScoutAgent
-#   - Installed and signed in for the current Windows user.
-#   - The LISA skill folders and skills-metadata.json must be deployed to the
-#     active Scout local-skills root: %USERPROFILE%\.scout\m-skills.
-#   - Source artifacts live under scout\m-skills and scout\m-automations.
-#   - Filesystem, shell, Playwright, m_get_skill, m_ask_user, web access,
-#     browser file upload, screenshots, and browser_run_code_unsafe must be
-#     enabled. Scout supplies Playwright; do not install the npm package here.
-#
-# [PLUGIN ONLY] GitHub Copilot CLI
+# GitHub Copilot CLI
 #   - WinGet package: GitHub.Copilot, or npm @github/copilot
 #   - An active GitHub Copilot plan and `copilot /login` sign-in.
 #   - Registers the plugin from github-copilot, which ships its own
 #     self-contained requirements.txt for standalone plugin installs.
 #
-# [PLUGIN ONLY] Microsoft Agency (internal Microsoft only)
+# Microsoft Agency (internal Microsoft only)
 #   - Installed from the internal Microsoft channel; not publicly available.
 #   - Registers the same github-copilot plugin for its Copilot or Claude engine.
 
@@ -125,7 +110,7 @@ networkx==3.6.1
 #   is required by the packaged standard path; tests use unittest.
 
 # ---------------------------------------------------------------------------
-# [PLUGIN ONLY] Optional GEPA instruction optimization
+# Optional GEPA instruction optimization
 # ---------------------------------------------------------------------------
 # Complete inventory:
 #   github-copilot/skills/agent-optimizer/requirements-gepa.txt
@@ -134,12 +119,12 @@ networkx==3.6.1
 # evidence-guided workflow, so this stack remains optional.
 
 # ---------------------------------------------------------------------------
-# [PLUGIN ONLY] Optional video-generator (explicit invocation, outside CAD)
+# Optional video-generator (explicit invocation, outside CAD)
 # ---------------------------------------------------------------------------
 # Complete pip-compatible inventory:
 #   github-copilot/skills/video-generator/requirements.txt
 # Python speech dependency: edge-tts==7.2.7; install into the generated production
-# folder's work/speech-env venv, not the Scout or shared CAD Python environment.
+# folder's work/speech-env venv, not the shared CAD Python environment.
 # Node.js 20+, npm; template pins @napi-rs/canvas==0.1.80 and ffmpeg-static==5.2.0.
 # Optional custom UI icon package: lucide-static==0.468.0 when a production uses it.
 # PowerShell 7+, Windows 11 fonts Bahnschrift/Segoe UI/Segoe UI Bold/Consolas.

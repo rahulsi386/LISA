@@ -7,7 +7,8 @@
 > [!IMPORTANT]
 > **The `scout/` distribution of LISA is deprecated.** For new installations, use the
 > [GitHub Copilot CLI or Microsoft Agency plugin](../github-copilot/README.md). Existing Scout
-> users can continue using these skills and the `-Platform Scout` installer option.
+> installations are not modified. The root installer no longer supports Scout. This guide is
+> retained for reference; its installer instructions apply only to earlier checkouts.
 
 This guide covers running **LISA on Microsoft Scout Desktop**. See the [root README](../README.md)
 for the repository overview.

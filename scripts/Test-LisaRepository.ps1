@@ -1,7 +1,7 @@
 #requires -Version 7.0
 [CmdletBinding()]
 param(
-    [ValidateSet('Plugin', 'Scout', 'Gepa')]
+    [ValidateSet('Plugin', 'Gepa')]
     [string]$Suite = 'Plugin'
 )
 
@@ -38,11 +38,6 @@ try {
         }
         Invoke-RepositoryCheck node @('github-copilot/skills/artifact-publisher/tests/test_fast_publisher.js')
         Invoke-RepositoryCheck npm @('--prefix', 'github-copilot/skills/solution-designer/renderer', 'test')
-    }
-    elseif ($Suite -eq 'Scout') {
-        foreach ($Test in @('test_sync_skills_metadata.py', 'test_workflow_checkpoint.py', 'test_evidence_pipeline_contracts.py')) {
-            Invoke-RepositoryCheck python @((Join-Path 'scout/m-skills' $Test), '-q')
-        }
     }
     else {
         Invoke-RepositoryCheck python @('-c', 'from importlib.metadata import version; assert version("gepa") == "0.1.4", "Install requirements-gepa.txt before the engine check"')

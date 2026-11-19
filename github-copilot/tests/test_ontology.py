@@ -141,7 +141,7 @@ class OntologyTests(unittest.TestCase):
                 relative = PurePosixPath(source["sourcePath"])
                 self.assertFalse(relative.is_absolute())
                 self.assertNotIn("..", relative.parts)
-                self.assertNotIn("scout", [part.casefold() for part in relative.parts])
+                self.assertIn(relative.parts[0], {PLUGIN.name, "Install-LISA-Prerequisites.ps1", "scripts", ".github"})
                 path = REPOSITORY.joinpath(*relative.parts)
                 self.assertTrue(path.is_file(), str(path))
                 lines = path.read_text(encoding="utf-8-sig").splitlines()

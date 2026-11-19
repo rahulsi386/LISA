@@ -5,8 +5,7 @@ LISA is a community-maintained project with best-effort support through
 and provides no SLA or production-readiness guarantee.
 
 Before opening an issue, check the [plugin guide](github-copilot/README.md), its troubleshooting
-section, and existing issues. For the deprecated Scout distribution, start with the
-[Scout guide](scout/README.md).
+section, and existing issues.
 
 For a reproducible bug, include:
 

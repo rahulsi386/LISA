@@ -39,15 +39,12 @@ requires fresh remote verification, and cleanup requires the exact phrase `DELET
 
 ## Choose your platform
 
-For new installations, use the [LISA plugin](github-copilot/README.md) with GitHub Copilot CLI
-or Microsoft Agency. The `scout/` distribution is deprecated but remains available for existing
-Scout Desktop users.
+Use the [LISA plugin](github-copilot/README.md) with GitHub Copilot CLI or Microsoft Agency.
 
 | Platform | Who it is for | Guide |
 |---|---|---|
 | **GitHub Copilot CLI** | Anyone with an active GitHub Copilot plan | [github-copilot/README.md](github-copilot/README.md) |
 | **Microsoft Agency** | Internal Microsoft only, via its Copilot or Claude engine | [github-copilot/README.md](github-copilot/README.md) |
-| **Microsoft Scout Desktop (deprecated distribution)** | Existing Scout users running LISA as local skills | [scout/README.md](scout/README.md) |
 
 ## Quick start
 
@@ -62,10 +59,9 @@ powershell.exe -ExecutionPolicy Bypass -File .\Install-LISA-Prerequisites.ps1 -W
 powershell.exe -ExecutionPolicy Bypass -File .\Install-LISA-Prerequisites.ps1
 ```
 
-Skip the prompt with `-Platform CopilotCli` or `-Platform Agency`. Existing Scout users can still
-select `-Platform Scout`.
+Skip the prompt with `-Platform CopilotCli` or `-Platform Agency`.
 Use `-ProjectPath "C:\Projects\MySolution"` to choose a project location, or `-SkipProjectSetup`
-to install the skills/plugin without creating a project. Existing configuration, inputs, outputs,
+to install the plugin without creating a project. Existing configuration, inputs, outputs,
 and checkpoints are preserved. New projects receive a copy of the common root configuration.
 
 Then:
@@ -84,15 +80,10 @@ LISA\
 |-- lisa-config.json                 Common project configuration template
 |-- requirements.txt                 Common prerequisite manifest for all platforms
 |-- Install-LISA-Prerequisites.ps1   Common platform-aware installer
-|-- github-copilot\                  Plugin for GitHub Copilot CLI and Microsoft Agency
-|   |-- README.md
-|   |-- plugin.json
-|   `-- skills\
-`-- scout\                           Deprecated Microsoft Scout Desktop distribution
+`-- github-copilot\                  Plugin for GitHub Copilot CLI and Microsoft Agency
     |-- README.md
-    |-- m-skills\
-    |-- m-automations\
-    `-- m-mcp-servers.json
+    |-- plugin.json
+    `-- skills\
 ```
 
 ## Shared configuration
@@ -115,9 +106,8 @@ customer scenario per project run, and never store credentials or tokens in the 
 
 ## Requirements
 
-`requirements.txt` is the common manifest for all platforms. Entries marked `[SCOUT ONLY]` apply to
-Microsoft Scout Desktop, and `[PLUGIN ONLY]` entries apply to GitHub Copilot CLI and Microsoft
-Agency. Shared prerequisites include Windows 11, Python 3.11+, Node.js 20+, PowerShell 7+, Microsoft
+`requirements.txt` lists prerequisites for both plugin hosts:
+Windows 11, Python 3.11+, Node.js 20+, PowerShell 7+, Microsoft
 Edge, and — for cloud stages — the modern Power Platform CLI with a matching tenant identity.
 
 ```powershell
@@ -141,7 +131,6 @@ Both setup paths use the same runtime checker for Python, PowerShell, Node.js, n
 
 - [GitHub Copilot CLI and Agency plugin guide](github-copilot/README.md)
 - [Skill suite reference](github-copilot/skills/README.md)
-- [Microsoft Scout Desktop guide (deprecated distribution)](scout/README.md)
 
 ## Governance and support
 
