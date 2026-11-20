@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://microsoft-scout.local/schemas/regression-baseline.schema.json",
+  "$id": "urn:lisa:schemas:regression-baseline",
   "title": "Agent regression baseline",
   "type": "object",
   "additionalProperties": true,

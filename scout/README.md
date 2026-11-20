@@ -4,9 +4,14 @@
   <img src="../lisa-logo.png" alt="LISA logo" width="768">
 </p>
 
-This guide covers running **LISA on Microsoft Scout Desktop**. For the repository overview and the
-other supported platforms, see the [root README](../README.md). To run LISA on GitHub Copilot CLI
-or Microsoft Agency instead, see the [plugin guide](../github-copilot/README.md).
+> [!IMPORTANT]
+> **The `scout/` distribution of LISA is deprecated.** For new installations, use the
+> [GitHub Copilot CLI or Microsoft Agency plugin](../github-copilot/README.md). Existing Scout
+> installations are not modified. The root installer no longer supports Scout. This guide is
+> retained for reference; its installer instructions apply only to earlier checkouts.
+
+This guide covers running **LISA on Microsoft Scout Desktop**. See the [root README](../README.md)
+for the repository overview.
 
 **LISA** stands for **Low code Intelligent System Architect**. It is an intelligent system architect
 delivered here as a collection of automations and skills for Microsoft Scout. LISA can autonomously

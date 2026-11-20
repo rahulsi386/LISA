@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://microsoft-scout.local/schemas/optimization-state-manifest.schema.json",
+  "$id": "urn:lisa:schemas:optimization-state-manifest",
   "title": "Optimization round state manifest",
   "type": "object",
   "additionalProperties": true,

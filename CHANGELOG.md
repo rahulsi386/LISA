@@ -9,8 +9,8 @@ User-visible changes are recorded here. Unreleased entries are not a published r
 - MIT license for original LISA code, with Rahul Prashant Singh as copyright holder.
 - Repository ownership, contribution, security-reporting, support, and release policies.
 - Documented existing code ownership and administrator guidance for protected branches and private reporting.
-- Windows CI and a matching local runner for plugin tests, Scout shared-infrastructure checks,
-  and the synthetic GEPA engine test. CI performs no tenant operations.
+- Windows CI and a matching local runner for plugin tests and the synthetic GEPA engine test.
+  CI performs no tenant operations.
 
 ### Changed
 
@@ -45,6 +45,14 @@ User-visible changes are recorded here. Unreleased entries are not a published r
 - The plugin distribution now lives in `github-copilot/`. Installation commands, CI, test runners,
   and documentation use the new folder and GitHub subdirectory source `rahulsi386/LISA:github-copilot`.
   Existing installations referencing the previous location must be reinstalled from the new source.
+
+- The root installer now accepts only `-Platform CopilotCli` and `-Platform Agency`.
+  It no longer installs local skill registries. Existing installations are not modified.
+- Plugin schemas now use `urn:lisa:schemas:` identifiers instead of host-specific URLs.
+  Update external schema registrations if keyed by `$id`; artifact formats are unchanged.
+  Register each lifecycle manifest as `urn:lisa:schemas:<skill>:lifecycle-artifact-manifest`,
+  where `<skill>` is `agent-builder`, `agent-evaluator`, or `agent-optimizer`.
+  For newly generated execution trees, use `?lisaTheme=dark` or `?lisaTheme=light` to override the system theme.
 
 ### Fixed
 

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://microsoft-scout.local/schemas/artifact-contract.schema.json",
-  "title": "Microsoft Scout local skill artifact contract",
+  "$id": "urn:lisa:schemas:artifact-contract",
+  "title": "LISA skill artifact contract",
   "type": "object",
   "additionalProperties": false,
   "required": [

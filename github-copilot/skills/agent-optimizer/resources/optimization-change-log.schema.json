@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://microsoft-scout.local/schemas/optimization-change-log.schema.json",
+  "$id": "urn:lisa:schemas:optimization-change-log",
   "title": "Agent optimization change log",
   "type": "object",
   "additionalProperties": false,

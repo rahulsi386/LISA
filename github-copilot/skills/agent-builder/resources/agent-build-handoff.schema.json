@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://microsoft-scout.local/schemas/agent-build-handoff.schema.json",
+  "$id": "urn:lisa:schemas:agent-build-handoff",
   "title": "Agent builder handoff",
   "type": "object",
   "additionalProperties": true,

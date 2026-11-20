@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://microsoft-scout.local/schemas/evaluation-dataset.schema.json",
+  "$id": "urn:lisa:schemas:evaluation-dataset",
   "title": "Agent evaluation dataset",
   "type": "object",
   "additionalProperties": true,

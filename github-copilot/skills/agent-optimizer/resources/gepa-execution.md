@@ -226,4 +226,4 @@ Publish through the existing optimizer `generate_manifest.py`. It computes the o
 a fresh Evaluator PASS on the frozen dataset/rubric. `no-improvement`, `holdout-rejected` and
 `budget-exhausted` leave the target unchanged and do not block completion on their own. Blocked
 runs still publish an honest outcome.
-Do not create a new skill or alter Scout files for this Agency pilot.
+Keep this Agency pilot within the existing skill.
