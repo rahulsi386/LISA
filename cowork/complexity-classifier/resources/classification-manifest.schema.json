@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "stage", "runId", "status", "generatedAt", "input", "artifacts"],
+  "properties": {
+    "schemaVersion": {"const": "1.0"},
+    "stage": {"const": "classification"},
+    "runId": {"pattern": "^CC-[0-9]{8}_[0-9]{6}(?:_[0-9]{3})?-[A-F0-9]{8}$"},
+    "status": {"const": "validated"},
+    "generatedAt": {"type": "string", "format": "date-time"},
+    "input": {"$ref": "#/$defs/artifact"},
+    "artifacts": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {"$ref": "#/$defs/artifact"}
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relativePath", "sha256", "bytes"],
+      "properties": {
+        "relativePath": {"type": "string", "minLength": 1},
+        "sha256": {"pattern": "^[a-f0-9]{64}$"},
+        "bytes": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}
