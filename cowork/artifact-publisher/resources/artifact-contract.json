@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "1.0",
+  "skill": "artifact-publisher",
+  "stage": "publication",
+  "rootFolder": "publication",
+  "producesArtifacts": true,
+  "inputs": [
+    {"relativePath": "lisa-config.json", "required": true, "kind": "config"},
+    {"relativePath": "output/build/build-manifest.json", "required": true, "kind": "json"},
+    {"relativePath": "output/build/agent-build-handoff.json", "required": true, "kind": "json"},
+    {"relativePath": "output/design/current-design.json", "required": true, "kind": "state"},
+    {"relativePath": "output/evaluation/evaluation-manifest.json", "required": true, "kind": "json"},
+    {"relativePath": "output/optimization/optimization-manifest.json", "required": true, "kind": "json"},
+    {"relativePath": "output/artifacts", "required": true, "kind": "directory"}
+  ],
+  "runIdPattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+  "allowedStatuses": ["PUBLISHED", "PARTIAL", "FAILED", "SKIPPED"],
+  "manifest": "publication-manifest.json",
+  "resultSchema": null,
+  "files": [
+    {"relativePath": "publication-manifest.json", "required": true, "schema": null, "kind": "json"},
+    {"relativePath": "publication-record.json", "required": true, "schema": null, "kind": "json"}
+  ],
+  "directories": [],
+  "patterns": {
+    "record": "^publication-record\\.json$",
+    "manifest": "^publication-manifest\\.json$"
+  },
+  "forbiddenPathPatterns": [
+    "(?i)(^|/)(cookies?|tokens?|credentials?|secrets?)\\.(json|txt)$"
+  ]
+}
