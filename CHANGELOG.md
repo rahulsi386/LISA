@@ -5,6 +5,7 @@ User-visible changes are recorded here. Unreleased entries are not a published r
 ## Unreleased
 
 ### Added
+- solution-blueprint skill (independent, not in the CAD route): turns requirement documents into a self-contained, editable Solution Blueprint HTML with a scored seven-route recommendation, a JSON Schema for the embedded blueprint data, a validator script and regression tests. Optional LISA mode presents an existing classification without re-deriving it.
 
 - MIT license for original LISA code, with Rahul Prashant Singh as copyright holder.
 - Repository ownership, contribution, security-reporting, support, and release policies.

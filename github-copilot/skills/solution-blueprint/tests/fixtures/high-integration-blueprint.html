@@ -1,0 +1,2084 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invoice Exception Investigator Solution Blueprint</title>
+  <script>
+    (() => {
+      const param = new URLSearchParams(window.location.search).get("scoutTheme");
+      const theme =
+        param || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --cp-bg: #f7f4ef;
+      --cp-bg-elevated: #fcfbf8;
+      --cp-surface: #ffffff;
+      --cp-surface-soft: #f5f5f5;
+      --cp-border: #dedede;
+      --cp-border-strong: #919191;
+      --cp-text: #242424;
+      --cp-text-muted: #5c5c5c;
+      --cp-text-soft: #6f6f6f;
+      --cp-accent: #b11f4b;
+      --cp-accent-hover: #9a1a41;
+      --cp-accent-soft: rgba(177, 31, 75, 0.08);
+      --cp-accent-fg: #ffffff;
+      --cp-success: #16a34a;
+      --cp-danger: #dc2626;
+      --cp-warning: #f59e0b;
+      --cp-link: #0078d4;
+      --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+      --cp-overlay: rgba(255, 255, 255, 0.8);
+      --cp-panel: rgba(255, 255, 255, 0.86);
+      --cp-panel-strong: rgba(255, 255, 255, 0.96);
+      --cp-sheen: rgba(255, 255, 255, 0.55);
+      --cp-highlight: rgba(177, 31, 75, 0.12);
+    }
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --cp-bg: #3d3b3a;
+      --cp-bg-elevated: #343231;
+      --cp-surface: #292929;
+      --cp-surface-soft: #2e2e2e;
+      --cp-border: #474747;
+      --cp-border-strong: #5f5f5f;
+      --cp-text: #dedede;
+      --cp-text-muted: #919191;
+      --cp-text-soft: #b0b0b0;
+      --cp-accent: #fd8ea1;
+      --cp-accent-hover: #fb7b91;
+      --cp-accent-soft: rgba(253, 142, 161, 0.14);
+      --cp-accent-fg: #1a1a1a;
+      --cp-success: #4ade80;
+      --cp-danger: #f87171;
+      --cp-warning: #fbbf24;
+      --cp-link: #4da6ff;
+      --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+      --cp-overlay: rgba(41, 41, 41, 0.88);
+      --cp-panel: rgba(41, 41, 41, 0.72);
+      --cp-panel-strong: rgba(41, 41, 41, 0.96);
+      --cp-sheen: rgba(255, 255, 255, 0.04);
+      --cp-highlight: rgba(253, 142, 161, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--cp-bg);
+      color: var(--cp-text);
+      font-family: "Segoe UI", Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.5;
+    }
+
+    .page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+    }
+
+    .hero {
+      background: var(--cp-panel-strong);
+      border: 1px solid var(--cp-border);
+      border-radius: 16px;
+      box-shadow: var(--cp-shadow);
+      padding: 32px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: var(--cp-accent-soft);
+      pointer-events: none;
+    }
+
+    .hero-content {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(0, 1.8fr) minmax(260px, 1fr);
+      gap: 28px;
+      align-items: stretch;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      font-size: clamp(2rem, 5vw, 4rem);
+      line-height: 1;
+      margin-bottom: 16px;
+      letter-spacing: -0.04em;
+    }
+
+    h2 {
+      font-size: 1.45rem;
+      margin-bottom: 16px;
+      letter-spacing: -0.02em;
+    }
+
+    h3 {
+      font-size: 1rem;
+      margin-bottom: 8px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 16px;
+      color: var(--cp-accent);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.78rem;
+    }
+
+    .summary {
+      color: var(--cp-text-muted);
+      font-size: 1.06rem;
+      max-width: 780px;
+      margin-bottom: 0;
+    }
+
+    .meta-panel,
+    .card,
+    .section,
+    .route-card,
+    .timeline-item {
+      background: var(--cp-surface);
+      border: 1px solid var(--cp-border);
+      border-radius: 16px;
+    }
+
+    .meta-panel {
+      padding: 20px;
+    }
+
+    .meta-row {
+      border-bottom: 1px solid var(--cp-border);
+      padding: 10px 0;
+    }
+
+    .meta-row:last-child {
+      border-bottom: 0;
+    }
+
+    .label {
+      color: var(--cp-text-muted);
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .value {
+      display: block;
+      font-weight: 650;
+      margin-top: 4px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .section {
+      grid-column: span 12;
+      padding: 24px;
+    }
+
+    .span-4 {
+      grid-column: span 4;
+    }
+
+    .span-6 {
+      grid-column: span 6;
+    }
+
+    .span-8 {
+      grid-column: span 8;
+    }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    .card {
+      padding: 18px;
+    }
+
+    .kpi {
+      font-size: 2rem;
+      font-weight: 750;
+      color: var(--cp-accent);
+      letter-spacing: -0.04em;
+    }
+
+    .muted {
+      color: var(--cp-text-muted);
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .pill {
+      border: 1px solid var(--cp-border);
+      border-radius: 999px;
+      background: var(--cp-surface-soft);
+      color: var(--cp-text);
+      padding: 6px 10px;
+      font-size: 0.86rem;
+      font-weight: 600;
+    }
+
+    .recommendation {
+      background: var(--cp-accent-soft);
+      border-color: var(--cp-accent);
+    }
+
+    .recommendation h2 {
+      color: var(--cp-accent);
+    }
+
+    .route-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .route-card {
+      padding: 16px;
+    }
+
+    .route-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .score {
+      border-radius: 999px;
+      background: var(--cp-accent-soft);
+      color: var(--cp-accent);
+      padding: 4px 8px;
+      font-weight: 700;
+      white-space: nowrap;
+      font-size: 0.85rem;
+    }
+
+    .bar {
+      height: 8px;
+      background: var(--cp-surface-soft);
+      border: 1px solid var(--cp-border);
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 10px 0;
+    }
+
+    .bar span {
+      display: block;
+      height: 100%;
+      background: var(--cp-accent);
+      border-radius: inherit;
+    }
+
+    ul {
+      margin: 10px 0 0;
+      padding-left: 18px;
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    .timeline {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .timeline-item {
+      padding: 16px;
+    }
+
+    .step {
+      display: inline-flex;
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      align-items: center;
+      justify-content: center;
+      background: var(--cp-accent);
+      color: var(--cp-accent-fg);
+      font-weight: 800;
+      margin-bottom: 10px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: 0.625rem;
+      border: 1px solid var(--cp-border);
+    }
+
+    th,
+    td {
+      text-align: left;
+      border-bottom: 1px solid var(--cp-border);
+      padding: 12px;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--cp-surface-soft);
+      color: var(--cp-text);
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .status {
+      font-weight: 700;
+    }
+
+    .status.good {
+      color: var(--cp-success);
+    }
+
+    .status.warn {
+      color: var(--cp-warning);
+    }
+
+    .status.risk {
+      color: var(--cp-danger);
+    }
+
+    .change-log {
+      display: grid;
+      gap: 10px;
+    }
+
+    .change-item {
+      display: grid;
+      grid-template-columns: 150px 1fr;
+      gap: 12px;
+      background: var(--cp-surface-soft);
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      padding: 12px;
+    }
+
+    .update-box {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .action-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    input,
+    select,
+    textarea,
+    button {
+      font: inherit;
+      border-radius: 0.625rem;
+    }
+
+    input,
+    select,
+    textarea {
+      min-width: 0;
+      background: var(--cp-surface);
+      border: 1px solid var(--cp-border-strong);
+      color: var(--cp-text);
+      padding: 10px 12px;
+    }
+
+    textarea {
+      min-height: 76px;
+      resize: vertical;
+    }
+
+    .status-editor {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .two-field {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+    }
+
+    button {
+      border: 1px solid var(--cp-accent);
+      background: var(--cp-accent);
+      color: var(--cp-accent-fg);
+      font-weight: 700;
+      padding: 10px 14px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: var(--cp-accent-hover);
+    }
+
+    .secondary-button {
+      background: var(--cp-surface);
+      color: var(--cp-accent);
+    }
+
+    .secondary-button:hover {
+      background: var(--cp-accent-soft);
+    }
+
+    .footer-note {
+      margin-top: 20px;
+      color: var(--cp-text-muted);
+      font-size: 0.9rem;
+    }
+
+    @media (max-width: 860px) {
+      .hero-content,
+      .route-grid,
+      .timeline,
+      .kpi-grid,
+      .two-field,
+      .action-row,
+      .update-box {
+        grid-template-columns: 1fr;
+      }
+
+      .span-4,
+      .span-6,
+      .span-8 {
+        grid-column: span 12;
+      }
+
+      .change-item {
+        grid-template-columns: 1fr;
+      }
+    }
+  
+    .gate.Pass { color: var(--cp-success); font-weight: 700; }
+    .gate.Fail { color: var(--cp-danger); font-weight: 700; }
+    .gate.TBD, .gate.Exception { color: var(--cp-warning); font-weight: 700; }
+    tr.out td { color: var(--cp-text-muted); font-style: italic; }
+    .arch { display: grid; gap: 10px; grid-template-columns: 1fr 220px; }
+    .arch-main { display: grid; gap: 10px; }
+    .arch-layer { border: 1px solid var(--cp-border); border-radius: 0.625rem; padding: 10px 12px; background: var(--cp-surface-soft); }
+    .arch-layer .label { display:block; margin-bottom: 6px; }
+    .arch-boxes { display: flex; flex-wrap: wrap; gap: 8px; }
+    .arch-box { border: 1px solid var(--cp-border-strong); border-radius: 0.5rem; padding: 6px 10px; background: var(--cp-surface); font-size: 0.92rem; }
+    .arch-box.ai { border-color: var(--cp-accent); background: var(--cp-accent-soft); }
+    .arch-rails { display: grid; gap: 10px; }
+    .seq { counter-reset: s; padding-left: 0; list-style: none; }
+    .seq li { counter-increment: s; margin: 4px 0; }
+    .seq li::before { content: counter(s) ". "; font-weight: 700; color: var(--cp-accent); }
+    .tablewrap { overflow-x: auto; }
+    @media (max-width: 860px) { .arch { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div class="hero-content">
+        <div>
+          <div class="eyebrow">Solution Blueprint Draft</div>
+          <h1>Invoice Exception Investigator</h1>
+          <p class="summary">An agent that investigates each flagged AP invoice across SAP, Coupa and the custom vendor-risk API, chooses which checks to run, drafts a resolution and routes it to a finance approver in Teams, with a full audit trail at ~2,000 invoices/day. Recommended: a pro-code agent with MCP servers for the investigation, a Copilot Studio / Power Automate approval flow for the decision, and deterministic code for the tolerance rule and checks. Complexity: High.</p>
+          <div class="pill-row">
+            <span class="pill">Accounts payable</span><span class="pill">Adaptive investigation</span><span class="pill">SAP · Coupa · vendor-risk API</span><span class="pill">Human approval in Teams</span><span class="pill">Full audit trail</span><span class="pill">~2,000 invoices/day</span>
+          </div>
+        </div>
+        <aside class="meta-panel">
+          <div class="meta-row">
+            <span class="label">Document status</span>
+            <span class="value" id="document-status">Draft</span>
+            <div class="status-editor">
+              <select id="status-select" aria-label="Document status">
+                <option selected="">Draft</option>
+                <option>In review</option>
+                <option>Approved</option>
+                <option>Blocked</option>
+                <option>Archived</option>
+              </select>
+              <button id="update-status" type="button">Update status</button>
+            </div>
+          </div>
+          <div class="meta-row"><span class="label">Recommended route</span><span class="value">Pro-code DA with MCP (25/35) + Standard harness approval flow</span></div>
+          <div class="meta-row"><span class="label">Complexity</span><span class="value">High — custom integration + pro-code (INT-01..03, FR-02)</span></div>
+          <div class="meta-row"><span class="label">Confidence</span><span class="value">Medium — Work types, volume and users are explicit; platform availability, licensing, hosting region, write-back scope and audit retention are TBD (gate results mostly TBD).</span></div>
+          <div class="meta-row"><span class="label">Last updated</span><span class="value" id="last-updated">Oct 7, 2026</span></div>
+        </aside>
+      </div>
+    </section>
+
+    <div class="grid">
+      <section class="section">
+        <h2>Blueprint Snapshot</h2>
+        <div class="kpi-grid">
+          <div class="card"><div class="kpi">16</div><div class="muted">In-scope requirements (+2 not evidenced)</div></div>
+          <div class="card"><div class="kpi">7</div><div class="muted">Solution routes scored /35</div></div>
+          <div class="card"><div class="kpi">9</div><div class="muted">Open issues before build</div></div>
+          <div class="card"><div class="kpi">High</div><div class="muted">Complexity — Stage 2 escalation for the investigation</div></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Executive Summary</h2>
+        <p>AP teams receive about 2,000 flagged invoices a day (NFR-02). Each needs evidence from SAP, Coupa and the custom vendor-risk API (INT-01..03), a judgement about which checks matter (FR-02), a drafted resolution (FR-07) and a finance approver's decision in Teams (FR-08, GR-01), all with a full audit trail (NFR-01).</p>
+        <p>The blueprint splits the work by type. The tolerance rule (FR-09) and the check calculations run as deterministic code, with no AI involved. The investigation and drafting is adaptive reasoning, which Stage 1 cannot confirm at this volume and audit depth, so it moves to a <strong>pro-code agent calling MCP servers</strong>. The approval is a deterministic <strong>Copilot Studio agent flow / Power Automate</strong> approval in Teams. Overall complexity is <strong>High</strong>. Most gate results are TBD until tenant, hosting and ownership facts are confirmed.</p>
+      </section>
+
+      <section class="section span-8 recommendation">
+        <h2>First-Draft Recommendation</h2>
+        <p><strong>Primary: Pro-code DA with MCP (25/35)</strong> for the investigation and drafting component (FR-01, FR-02, FR-07, INT-01, INT-02, INT-03, NFR-01, NFR-02). It has no failed gates. Its TBD gates are tracked as open issues.</p>
+        <p><strong>Hybrid composition:</strong> Pro-code DA with MCP for FR-02, FR-07, INT-01..03 + Standard harness agent flow / Power Automate approval in Teams for FR-08, GR-01 + conventional rules service for FR-09 and check functions FR-03..06 + governed case store for NFR-01.</p>
+        <p><strong>Why:</strong> the notes say the agent "decides which checks to run" across three systems, one of which is a custom API. That is the catalog's signal for adaptive reasoning, and DA + skills is not viable for it. Running unattended per invoice at ~2,000/day, with every step audited, favours a code-owned agent that writes each tool call to a governed case store. The approver gets a predictable Teams approval rather than a free-form agent conversation, which keeps reasoning separate from control.</p>
+        <p><strong>MCP-ready:</strong> yes. SAP, Coupa and the vendor-risk API are wrapped as read-only MCP servers. If the GHCP harness is later verified in the tenant (availability, maturity, credit cost at volume, step-level audit), it could host the investigation and reuse the same servers. It is the closest alternative.</p>
+      </section>
+
+      <section class="section span-4">
+        <h2>Questions to Confirm</h2>
+        <ul><li>Tolerance: is it variance &lt;2% OR &lt;$50 (a 1.9% variance on a $500k invoice auto-clears ~$9.5k), or &lt;2% AND &lt;$50? Does it apply to variance flags only?</li><li>After approval, what happens: does anything write back to SAP or Coupa (post, block, credit) and who owns that action?</li><li>Where do flagged invoices come from (SAP or Coupa exception queue), and what audit retention / financial-controls regime applies?</li></ul>
+      </section>
+
+      <section class="section span-6">
+        <h2>Scenario Overview</h2>
+        <table><tbody>
+          <tr><td><strong>Primary actor</strong></td><td>Finance approver (decides); AP analyst (works exceptions — role details TBD)</td></tr>
+          <tr><td><strong>Trigger</strong></td><td>An invoice is flagged as an exception (flag source TBD: SAP or Coupa)</td></tr>
+          <tr><td><strong>Expected outcome</strong></td><td>Within-tolerance variances auto-clear; every other invoice gets an evidence-backed draft resolution approved or rejected in Teams, with every step audited.</td></tr>
+        </tbody></table>
+      </section>
+
+      <section class="section span-6">
+        <h2>Key JTBDs Covered</h2>
+        <div class="change-log"><div class="change-item"><strong>Auto-clear</strong><span>Clear low-value variances automatically under the tolerance rule (FR-09)</span></div><div class="change-item"><strong>Gather</strong><span>Gather the evidence for a flagged invoice from SAP, Coupa and vendor-risk (INT-01..03)</span></div><div class="change-item"><strong>Check</strong><span>Run only the checks that matter for this invoice (FR-02..06)</span></div><div class="change-item"><strong>Decide</strong><span>Decide quickly on a drafted resolution in Teams (FR-07, FR-08, GR-01)</span></div><div class="change-item"><strong>Prove</strong><span>Prove later what happened and who decided (NFR-01)</span></div></div>
+      </section>
+
+      <section class="section span-6">
+        <h2>Personas / Primary Users</h2>
+        <table><thead><tr><th>Persona</th><th>Need</th><th>Volume</th><th>Channel</th></tr></thead><tbody>
+        <tr><td>AP analyst</td><td>Fewer manual lookups across SAP/Coupa/vendor-risk; see why an invoice was flagged and what the agent found</td><td>Headcount TBD; ~2,000 flagged invoices/day across the team</td><td>Teams (assumed); working view TBD (FR-11)</td></tr><tr><td>Finance approver</td><td>An evidence-backed draft they can approve or reject in one step</td><td>Headcount TBD; share of 2,000/day not auto-cleared</td><td>Teams (required)</td></tr>
+        </tbody></table>
+      </section>
+
+      <section class="section span-6">
+        <h2>Business Problem and Opportunity</h2>
+        <p>Each flagged invoice currently implies manual lookups across SAP, Coupa and the vendor-risk API before anyone can decide. At ~2,000 a day, that is a large, repetitive investigation load where the checks differ by invoice.</p>
+        <ul>
+          <li>Remove trivial variances automatically under a transparent rule (FR-09).</li>
+          <li>Give approvers a ready, evidence-backed draft so the decision is one step (FR-07, FR-08).</li>
+          <li>Make every outcome auditable end to end (NFR-01).</li>
+        </ul>
+      </section>
+
+      <section class="section">
+        <h2>In-Scope and Out-of-Scope Capabilities</h2>
+        <table><thead><tr><th>In scope for first draft</th><th>Out of scope / not evidenced</th></tr></thead><tbody><tr>
+          <td>Per-invoice intake (FR-01); tolerance auto-clear (FR-09); data pulls from SAP, Coupa, vendor-risk API (INT-01..03); agent-chosen checks: variance, duplicate, vendor risk, contract terms (FR-02..06); drafted resolution (FR-07); Teams approve/reject (FR-08, GR-01); full audit (NFR-01); ~2,000/day (NFR-02); internal users only (SEC-01).</td>
+          <td>Write-back of approved outcomes to SAP/Coupa (FR-10, not evidenced); AP analyst working view (FR-11, not evidenced); external or vendor-facing access; autonomous payment or blocking actions; any agent action without approver decision.</td>
+        </tr></tbody></table>
+      </section>
+
+      <section class="section">
+        <h2>Requirement Summary</h2>
+        <table><thead><tr><th>Requirement area</th><th>Draft interpretation</th><th>Assumption / dependency</th></tr></thead><tbody>
+          <tr><td>Investigation (FR-01, FR-02, FR-07)</td><td>Adaptive per-invoice plan, evidence and draft</td><td>Flag source TBD; baseline checks per flag reason enforced in code</td></tr>
+          <tr><td>Checks (FR-03..06)</td><td>Deterministic functions the agent selects</td><td>Contract terms assumed structured in Coupa</td></tr>
+          <tr><td>Systems (INT-01..03)</td><td>Read-only MCP servers for SAP, Coupa, custom vendor-risk API</td><td>Access, identities and network path TBD</td></tr>
+          <tr><td>Decision (FR-08, GR-01)</td><td>Approve/reject card in Teams via agent flow</td><td>Approver routing rules TBD</td></tr>
+          <tr><td>Tolerance (FR-09)</td><td>Rule service, no AI</td><td>OR vs AND reading to confirm</td></tr>
+          <tr><td>Audit & volume (NFR-01, NFR-02)</td><td>Append-only case log; headless processing at ~2,000/day</td><td>Retention and SLOs TBD</td></tr>
+        </tbody></table>
+      </section>
+
+      <section class="section">
+        <h2>Requirement Ledger</h2>
+        <p class="muted">All IDs are derived (idOrigin: derived); the source notes carry no IDs. Rows that are not evidenced are shown in italics and do not drive gates, scoring or complexity.</p>
+        <div class="tablewrap"><table><thead><tr><th>ID</th><th>Requirement</th><th>Classification</th><th>Source quote / locator</th><th>Systems</th></tr></thead><tbody>
+          <tr><td><strong>FR-01</strong></td><td>Start an investigation for every invoice that has been flagged as an exception.</td><td>Required</td><td>&quot;For each flagged invoice&quot; — User notes (chat prompt, 2026-10-07)</td><td>Flagging source TBD (SAP or Coupa exception queue)</td></tr>
+          <tr><td><strong>INT-01</strong></td><td>Read invoice, purchase-order and goods-receipt data from SAP for the flagged invoice.</td><td>Required</td><td>&quot;the agent pulls data from SAP&quot; — User notes (chat prompt, 2026-10-07)</td><td>SAP</td></tr>
+          <tr><td><strong>INT-02</strong></td><td>Read invoice, PO and contract data from Coupa for the flagged invoice.</td><td>Required</td><td>&quot;pulls data from SAP, Coupa&quot; — User notes (chat prompt, 2026-10-07)</td><td>Coupa</td></tr>
+          <tr><td><strong>INT-03</strong></td><td>Read the vendor&#x27;s risk data from the custom vendor-risk API.</td><td>Required</td><td>&quot;our custom vendor-risk API&quot; — User notes (chat prompt, 2026-10-07)</td><td>Custom vendor-risk API</td></tr>
+          <tr><td><strong>FR-02</strong></td><td>Decide per invoice which checks to run instead of running a fixed script.</td><td>Required</td><td>&quot;decides which checks to run&quot; — User notes (chat prompt, 2026-10-07)</td><td>—</td></tr>
+          <tr><td><strong>FR-03</strong></td><td>Price / quantity variance check.</td><td>Required</td><td>&quot;price/quantity variance&quot; — User notes (chat prompt, 2026-10-07)</td><td>SAP, Coupa</td></tr>
+          <tr><td><strong>FR-04</strong></td><td>Duplicate invoice check.</td><td>Required</td><td>&quot;duplicate&quot; — User notes (chat prompt, 2026-10-07)</td><td>SAP, Coupa</td></tr>
+          <tr><td><strong>FR-05</strong></td><td>Vendor risk check.</td><td>Required</td><td>&quot;vendor risk&quot; — User notes (chat prompt, 2026-10-07)</td><td>Custom vendor-risk API</td></tr>
+          <tr><td><strong>FR-06</strong></td><td>Contract terms check.</td><td>Required</td><td>&quot;contract terms&quot; — User notes (chat prompt, 2026-10-07)</td><td>Coupa (assumed contract source — TBD)</td></tr>
+          <tr><td><strong>FR-07</strong></td><td>Draft a resolution for the invoice from the evidence gathered.</td><td>Required</td><td>&quot;drafts a resolution&quot; — User notes (chat prompt, 2026-10-07)</td><td>—</td></tr>
+          <tr><td><strong>FR-08</strong></td><td>Post the drafted resolution to a finance approver in Teams.</td><td>Required</td><td>&quot;posts it for a finance approver to approve or reject in Teams&quot; — User notes (chat prompt, 2026-10-07)</td><td>Microsoft Teams</td></tr>
+          <tr><td><strong>GR-01</strong></td><td>A human finance approver approves or rejects every drafted resolution; the agent is never the final authority.</td><td>Required</td><td>&quot;for a finance approver to approve or reject&quot; — User notes (chat prompt, 2026-10-07)</td><td>Microsoft Teams</td></tr>
+          <tr><td><strong>FR-09</strong></td><td>Auto-clear an invoice when the variance is under 2% or under $50 (deterministic tolerance rule).</td><td>Required</td><td>&quot;Tolerance rules: auto-clear variance under 2% or under $50&quot; — User notes (chat prompt, 2026-10-07)</td><td>—</td></tr>
+          <tr><td><strong>NFR-01</strong></td><td>Every step (data pulls, checks chosen, results, draft, approval decision, auto-clear) is recorded in a full audit trail.</td><td>Required</td><td>&quot;Every step needs a full audit trail&quot; — User notes (chat prompt, 2026-10-07)</td><td>Audit / case store TBD</td></tr>
+          <tr><td><strong>NFR-02</strong></td><td>Handle about 2,000 flagged invoices per day.</td><td>Required</td><td>&quot;Volume is about 2,000 flagged invoices a day&quot; — User notes (chat prompt, 2026-10-07)</td><td>—</td></tr>
+          <tr><td><strong>SEC-01</strong></td><td>Internal users only: AP analysts and finance approvers.</td><td>Confirmed</td><td>&quot;Users are AP analysts and finance approvers (internal)&quot; — User notes (chat prompt, 2026-10-07)</td><td>Microsoft Entra ID (assumed)</td></tr>
+          <tr class="out"><td><strong>FR-10</strong></td><td>Write the approved resolution back to SAP or Coupa (post, block, pay or credit).</td><td>Not evidenced</td><td>Not evidenced — notes stop at approve/reject</td><td>SAP, Coupa</td></tr>
+          <tr class="out"><td><strong>FR-11</strong></td><td>AP analyst working view (queue, re-run, override).</td><td>Not evidenced</td><td>Not evidenced — AP analysts named as users but their tasks are not described</td><td>—</td></tr>
+        </tbody></table></div>
+      </section>
+
+      <section class="section span-6">
+        <h2>Current State / Trigger Context</h2>
+        <p>An invoice is flagged as an exception upstream (source system TBD). AP analysts currently gather context from SAP, Coupa and the vendor-risk API by hand and prepare a recommendation for a finance approver. The current tooling and cycle time are not described in the notes and are left TBD.</p>
+      </section>
+
+      <section class="section span-6">
+        <h2>Target Experience / Future State</h2>
+        <p>Within-tolerance variances clear automatically with a logged reason. Every other flagged invoice reaches a finance approver in Teams as a card with the drafted resolution, the checks run, their results and links to the evidence. The approver approves or rejects in one action. Anyone can reconstruct later, from the audit trail, what the agent looked at, what it concluded and who decided.</p>
+      </section>
+
+      <section class="section">
+        <h2>Core User Journeys</h2>
+        <div class="timeline">
+          <div class="timeline-item"><span class="step">1</span><h3>Auto-clear</h3><p class="muted">Variance flag within tolerance (FR-09) is cleared by rule and logged. No AI, no approver.</p></div>
+          <div class="timeline-item"><span class="step">2</span><h3>Investigate</h3><p class="muted">Agent plans checks, pulls SAP/Coupa/vendor-risk data, runs checks (FR-02..06, INT-01..03).</p></div>
+          <div class="timeline-item"><span class="step">3</span><h3>Decide in Teams</h3><p class="muted">Approver reviews the drafted resolution and evidence, then approves or rejects (FR-07, FR-08, GR-01).</p></div>
+          <div class="timeline-item"><span class="step">4</span><h3>Audit</h3><p class="muted">Every step and decision is retrievable per invoice (NFR-01).</p></div>
+        </div>
+      </section>
+
+      <section class="section span-6">
+        <h2>Data Sources and Grounding Sources</h2>
+        <ul>
+          <li><strong>SAP</strong>: invoice, PO and goods receipt data (INT-01). Exact objects TBD.</li>
+          <li><strong>Coupa</strong>: invoice, PO and contract data (INT-02). Contract data location TBD.</li>
+          <li><strong>Custom vendor-risk API</strong>: vendor risk signals (INT-03). Schema and auth TBD.</li>
+          <li><strong>Case store / audit log</strong>: the system's own governed record (NFR-01). Store choice TBD.</li>
+        </ul>
+      </section>
+
+      <section class="section span-6">
+        <h2>Integrations and Dependencies</h2>
+        <table><thead><tr><th>Dependency</th><th>Identity · authZ · data flow · failure behaviour</th></tr></thead><tbody>
+          <tr><td>SAP MCP server</td><td>Read-only service identity (TBD) · scoped to invoice/PO/receipt reads · data to agent runtime · on failure, case is held and flagged to AP analyst</td></tr>
+          <tr><td>Coupa MCP server</td><td>Read-only API credential (TBD) · invoice/PO/contract reads · same failure behaviour</td></tr>
+          <tr><td>Vendor-risk MCP server</td><td>Credential for custom API (owner TBD) · vendor lookups only · if unavailable, vendor-risk check is marked "not run" on the card, never "passed"</td></tr>
+          <tr><td>Teams approval flow</td><td>Approver's Entra identity · decision written to case store · on timeout, escalation path TBD</td></tr>
+        </tbody></table>
+      </section>
+
+      <section class="section">
+        <h2>Security, Privacy, Compliance, and Governance</h2>
+        <ul>
+          <li>Internal users only (SEC-01). Microsoft Entra ID assumed. No external or vendor access.</li>
+          <li>Least privilege: every MCP tool is read-only, and outcomes happen only through the recorded approval (GR-01).</li>
+          <li>Each MCP server is a security boundary with its own identity, scope, logging and rate limits.</li>
+          <li>Invoice and vendor text is treated as data, never as instructions, to guard against prompt injection.</li>
+          <li>Audit: an append-only per-case log of tool calls, inputs and outputs, checks, the draft, the approver identity and timestamps (NFR-01). Retention regime TBD.</li>
+          <li>Power Platform DLP governs the approval flow. The pro-code agent and MCP servers need equivalent controls owned by the build team.</li>
+          <li>The notes contain no personal data. Vendor data stays within the tenant's governed stores.</li>
+        </ul>
+      </section>
+
+      <section class="section">
+        <h2>Component Work Types</h2>
+        <div class="tablewrap"><table><thead><tr><th>Component</th><th>Work type</th><th>AI needed?</th><th>Default direction</th><th>Autonomy / impact</th><th>State store</th><th>Requirement IDs</th></tr></thead><tbody>
+          <tr><td><strong>Intake &amp; tolerance pre-screen</strong></td><td>Conventional software</td><td>No</td><td>Rules function / service: computes variance and applies the FR-09 tolerance (&lt;2% or &lt;$50) before any LLM call</td><td>reversible write</td><td>Case store (Dataverse or Azure SQL — TBD)</td><td>FR-01, FR-09, NFR-01</td></tr>
+          <tr><td><strong>Check library (variance, duplicate, vendor-risk, contract terms)</strong></td><td>Conventional software</td><td>No</td><td>Deterministic check functions exposed as MCP tools; return pass/fail + evidence</td><td>read-only</td><td>Case store (results per check)</td><td>FR-03, FR-04, FR-05, FR-06</td></tr>
+          <tr><td><strong>System access layer (MCP servers)</strong></td><td>Custom agent software</td><td>No</td><td>One MCP server per system: SAP, Coupa, custom vendor-risk API; read-only tools, service identity, per-call logging</td><td>read-only</td><td>None (stateless); calls logged to audit store</td><td>INT-01, INT-02, INT-03, NFR-01</td></tr>
+          <tr><td><strong>Investigation &amp; resolution agent</strong></td><td>Adaptive reasoning</td><td>Yes</td><td>Pro-code agent (Stage 2) that plans which checks to run, calls MCP tools, and drafts the resolution with cited evidence</td><td>read-only</td><td>Case store (plan, tool calls, draft)</td><td>FR-02, FR-07, INT-01, INT-02, INT-03, NFR-02</td></tr>
+          <tr><td><strong>Approval &amp; decision flow</strong></td><td>Deterministic execution</td><td>No</td><td>Copilot Studio agent flow / Power Automate approval card in Teams; records approve/reject with approver identity and timestamp</td><td>reversible write</td><td>Case store + approval history</td><td>FR-08, GR-01, SEC-01, NFR-01</td></tr>
+          <tr><td><strong>Audit trail &amp; case store</strong></td><td>Conventional software</td><td>No</td><td>Append-only event log per invoice case in a governed store; retention per finance records policy (TBD)</td><td>reversible write</td><td>Governed store TBD (Dataverse / Azure SQL / log analytics)</td><td>NFR-01</td></tr>
+        </tbody></table></div>
+      </section>
+
+      <section class="section">
+        <h2>Architecture / Implementation Approach</h2>
+        <div class="arch">
+          <div class="arch-main">
+            <div class="arch-layer"><span class="label">1 · Users</span><div class="arch-boxes"><span class="arch-box">AP analysts (internal, count TBD)</span><span class="arch-box">Finance approvers (internal, count TBD)</span></div></div>
+            <div class="arch-layer"><span class="label">2 · Channels</span><div class="arch-boxes"><span class="arch-box">Microsoft Teams — approval card (FR-08)</span><span class="arch-box">AP analyst view — TBD (FR-11)</span></div></div>
+            <div class="arch-layer"><span class="label">3 · Agent platform</span><div class="arch-boxes"><span class="arch-box">Intake &amp; tolerance service (rules, no AI)</span><span class="arch-box ai">Investigation &amp; resolution agent — pro-code, hosting TBD (Foundry candidate)</span><span class="arch-box">Check library tools (deterministic)</span><span class="arch-box">Human review: Copilot Studio agent flow / Power Automate approval</span></div></div>
+            <div class="arch-layer"><span class="label">4 · Data / automation / connectors / external systems</span><div class="arch-boxes"><span class="arch-box">SAP MCP server → SAP</span><span class="arch-box">Coupa MCP server → Coupa</span><span class="arch-box">Vendor-risk MCP server → custom vendor-risk API</span><span class="arch-box">Case store + append-only audit log (store TBD)</span></div></div>
+          </div>
+          <div class="arch-rails">
+            <div class="arch-layer"><span class="label">Identity, security &amp; governance</span><div class="arch-boxes"><span class="arch-box">Microsoft Entra ID</span><span class="arch-box">Read-only service identity per MCP server</span><span class="arch-box">Power Platform DLP (flow)</span><span class="arch-box">Approver identity on every decision</span></div></div>
+            <div class="arch-layer"><span class="label">Monitoring &amp; ALM</span><div class="arch-boxes"><span class="arch-box">Per-case run &amp; tool-call telemetry</span><span class="arch-box">Throughput vs 2,000/day</span><span class="arch-box">Solution ALM (flow) + CI/CD (agent, MCP)</span><span class="arch-box">Replay eval harness</span></div></div>
+          </div>
+        </div>
+        <h3 style="margin-top:18px">Primary journey sequence</h3>
+        <p class="muted">Lifelines: Flag source · Intake &amp; tolerance · Investigation agent · MCP servers &amp; check tools · Case store / audit · Approval flow · Finance approver · AP analyst</p>
+        <ol class="seq">
+          <li><strong>Flag source (SAP/Coupa) → Intake &amp; tolerance</strong>: New flagged invoice event (FR-01)</li>
+          <li><strong>Intake &amp; tolerance → MCP servers &amp; check tools</strong>: Fetch invoice, PO, receipt amounts</li>
+          <li><strong>Intake &amp; tolerance → Case store / audit</strong>: Open case; log flag + variance</li>
+          <li><strong>Intake &amp; tolerance → Case store / audit</strong>: If variance flag and within tolerance: auto-clear and log rule applied (FR-09) — end</li>
+          <li><strong>Intake &amp; tolerance → Investigation agent</strong>: Hand over case for investigation</li>
+          <li><strong>Investigation agent → Investigation agent</strong>: Plan which checks to run (FR-02)</li>
+          <li><strong>Investigation agent → MCP servers &amp; check tools</strong>: Read SAP, Coupa, vendor-risk data (INT-01..03)</li>
+          <li><strong>Investigation agent → MCP servers &amp; check tools</strong>: Run chosen checks: variance / duplicate / vendor risk / contract terms (FR-03..06)</li>
+          <li><strong>Investigation agent → Case store / audit</strong>: Log every tool call, input, output and check result (NFR-01)</li>
+          <li><strong>Investigation agent → Case store / audit</strong>: Save drafted resolution with cited evidence (FR-07)</li>
+          <li><strong>Case store / audit → Approval flow</strong>: Trigger approval for case</li>
+          <li><strong>Approval flow → Finance approver</strong>: Post approval card in Teams with draft + evidence (FR-08)</li>
+          <li><strong>Finance approver → Approval flow</strong>: Approve or reject, with comment (GR-01)</li>
+          <li><strong>Approval flow → Case store / audit</strong>: Record decision, approver identity and timestamp (NFR-01)</li>
+          <li><strong>Approval flow → AP analyst</strong>: Notify outcome; rejected cases return to AP analyst queue (TBD, FR-11)</li>
+        </ol>
+        <h3 style="margin-top:18px">Staged escalation</h3>
+        <table><thead><tr><th>Stage</th><th>Considered</th><th>Meets</th><th>Gaps</th><th>Escalate?</th><th>Note</th></tr></thead><tbody>
+          <tr><td><strong>Stage 1</strong></td><td>Copilot Studio standard harness + agent flows; Copilot Studio GHCP harness; M365 Copilot Chat / declarative agent; Teams; Cowork</td><td>FR-08, GR-01, SEC-01, FR-09 (as flow/function logic)</td><td>FR-02, FR-07, INT-03, NFR-01 (step-level tool-call audit), NFR-02 (unattended, per-invoice at ~2,000/day)</td><td>Yes</td><td>Standard harness and agent flows natively cover the Teams approval. The GHCP harness is the only Stage 1 option for adaptive check selection, but its availability, maturity and Copilot Credits cost at ~2,000 multi-step runs/day are unverified, and step-level audit of every tool call is not confirmed. The investigation IDs therefore cannot be confirmed in Stage 1.</td></tr>
+          <tr><td><strong>Stage 2</strong></td><td>Foundry agent (pro-code) calling MCP servers for SAP, Coupa and the vendor-risk API</td><td>FR-02, FR-07, INT-01, INT-02, INT-03, NFR-01, NFR-02</td><td>—</td><td>No</td><td>A code-owned agent runs headless per invoice, chooses checks, writes every step to the case store, and scales with hosting. Hosting surface and region TBD.</td></tr>
+          <tr><td><strong>Stage 3</strong></td><td>Microsoft Agent Framework</td><td>—</td><td>—</td><td>No</td><td>Not reached: no custom protocol, multi-agent or UI need left after Stage 2.</td></tr>
+        </tbody></table>
+      </section>
+
+      <section class="section">
+        <h2>Risks and Mitigations</h2>
+        <table><thead><tr><th>Risk</th><th>Mitigation</th></tr></thead><tbody>
+          <tr><td>Literal OR tolerance auto-clears large-value invoices (2% of a big invoice)</td><td>Confirm rule; add an absolute cap; EVAL boundary tests</td></tr>
+          <tr><td>Agent skips a needed check</td><td>Mandatory baseline checks per flag reason enforced in code; agent adds, never removes</td></tr>
+          <tr><td>Approver rubber-stamping at volume</td><td>Show evidence and confidence on card; sample-based QA of approvals</td></tr>
+          <tr><td>LLM cost and latency at 2,000/day</td><td>Tolerance pre-screen before LLM; cap steps per case; load test</td></tr>
+          <tr><td>MCP servers widen the attack surface to SAP/Coupa</td><td>Read-only scopes, per-server service identity, call logging, rate limits</td></tr>
+          <tr><td>Prompt injection via invoice text or vendor fields</td><td>Treat document text as data; tools read-only; approval required for every outcome</td></tr>
+        </tbody></table>
+      </section>
+
+      <section class="section">
+        <h2>Mandatory Gate Results</h2>
+        <p class="muted">Pass / Fail / Exception / TBD per route. A Fail makes a route "Not viable as primary" whatever its score. TBD lowers confidence and is tracked as an open issue. Items the route catalog marks "verify in tenant" stay TBD.</p>
+        <div class="tablewrap"><table><thead><tr><th>Gate</th><th>DA + skills</th><th>Pro-code DA with MCP</th><th>Pro-code DA without MCP</th><th>Standard harness</th><th>GHCP harness</th><th>Cowork plugins</th><th>Scout</th><th>Note</th></tr></thead><tbody>
+          <tr><td><strong>Product availability</strong></td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate Fail">Fail</td><td>Tenant/region availability is not stated in the notes; Scout is not a shared enterprise channel and cannot serve the finance approvers in Teams. Verify in tenant.</td></tr>
+          <tr><td><strong>Feature maturity</strong></td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td>MCP support in the chosen SDK/hosting and GHCP harness GA status are &#x27;verify in tenant&#x27;. Any preview feature needs a named risk owner.</td></tr>
+          <tr><td><strong>Contractual / licensing</strong></td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td>No licensing facts in source. Copilot Credits consumption for GHCP harness at ~2,000 runs/day is unknown.</td></tr>
+          <tr><td><strong>Data location &amp; movement</strong></td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td>SAP, Coupa and vendor-risk data move into the agent runtime; hosting region and residency rules not stated.</td></tr>
+          <tr><td><strong>Identity — least privilege</strong></td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td>Service identities for SAP/Coupa/vendor-risk reads must be read-only; not yet designed.</td></tr>
+          <tr><td><strong>Authorization scoping</strong></td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate Fail">Fail</td><td class="gate Fail">Fail</td><td>Investigation runs as a service (app-level) across all flagged invoices; Cowork and Scout run under one employee&#x27;s delegated identity, which is wrong for a shared AP service.</td></tr>
+          <tr><td><strong>Network isolation</strong></td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td>SAP deployment (cloud vs on-premises, gateway) not stated.</td></tr>
+          <tr><td><strong>Encryption / key management</strong></td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td>No requirement stated; confirm with finance security.</td></tr>
+          <tr><td><strong>DLP</strong></td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate Pass">Pass</td><td class="gate Pass">Pass</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td>Power Platform DLP policies govern Standard and GHCP harness connectors (catalog governance plane). Pro-code routes need their own controls.</td></tr>
+          <tr><td><strong>Audit &amp; traceability</strong></td><td class="gate TBD">TBD</td><td class="gate Pass">Pass</td><td class="gate Pass">Pass</td><td class="gate Pass">Pass</td><td class="gate TBD">TBD</td><td class="gate Fail">Fail</td><td class="gate Fail">Fail</td><td>NFR-01 needs every step logged. Pro-code routes write each tool call and decision to the case store by design; Standard harness flows record approvals; GHCP step-level audit unconfirmed; Cowork/Scout have no shared audit.</td></tr>
+          <tr><td><strong>Safety &amp; action control</strong></td><td class="gate Pass">Pass</td><td class="gate Pass">Pass</td><td class="gate Pass">Pass</td><td class="gate Pass">Pass</td><td class="gate Pass">Pass</td><td class="gate Fail">Fail</td><td class="gate Fail">Fail</td><td>Agent tools are read-only and the only decision path is the Teams approval (GR-01). Cowork/Scout: the delegating user is not the approver.</td></tr>
+          <tr><td><strong>Records lifecycle</strong></td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td>Audit retention period for finance records not stated.</td></tr>
+          <tr><td><strong>Reliability</strong></td><td class="gate Fail">Fail</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate Fail">Fail</td><td class="gate Fail">Fail</td><td>~2,000 invoices/day must be processed unattended. A chat-invoked DA, Cowork or Scout cannot run per-invoice without a person driving it. SLOs not stated for others.</td></tr>
+          <tr><td><strong>Operational ownership</strong></td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate Fail">Fail</td><td class="gate Fail">Fail</td><td>Pro-code needs a named team for code, hosting and three MCP servers (owner TBD). Cowork/Scout tie the service to one person.</td></tr>
+          <tr><td><strong>Portability / exit</strong></td><td class="gate TBD">TBD</td><td class="gate Pass">Pass</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td>MCP servers are reusable by other agents/harnesses (incl. GHCP harness later).</td></tr>
+          <tr><td><strong>Overall</strong></td><td class="gate Fail">Fail</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate TBD">TBD</td><td class="gate Fail">Fail</td><td class="gate Fail">Fail</td><td>Any Fail → not viable as primary.</td></tr>
+        </tbody></table></div>
+      </section>
+
+      <section class="section">
+        <h2>Solution Route Analysis</h2>
+        <p class="muted">Ranking: Pro-code DA with MCP 25/35 &gt; Standard harness 24/35 &gt; GHCP harness 24/35 &gt; Pro-code DA without MCP 22/35 &gt; DA + skills 21/35 &gt; Cowork plugins 18/35 &gt; Scout 15/35. Scores are against the dominant component (investigation). Standard harness scores high on governance and operations but has Fit 2 for the investigation. It is the hybrid partner for the approval flow, not the primary.</p>
+        <div class="route-grid">
+          <article class="route-card">
+            <div class="route-head"><h3>DA + skills</h3><span class="score">21/35 · Not viable</span></div>
+            <div class="bar"><span style="width: 60%"></span></div>
+            <p class="muted">Retrieval-centred chat agent: cannot run unattended per-invoice investigation across SAP, Coupa and a custom API (not-fit signals: high volume, dynamic multi-system investigation). Fails Reliability gate.</p>
+            <p class="muted"><strong>Gate:</strong> Fail · <strong>Covers:</strong> SEC-01, GR-01</p>
+            <p class="muted"><strong>Cannot cover:</strong> FR-01 (no unattended trigger); FR-02 (dynamic tool choice across custom APIs); INT-01..INT-03 (systems not reachable as M365 knowledge); NFR-02 (volume)</p>
+          </article>
+          <article class="route-card">
+            <div class="route-head"><h3>Pro-code DA with MCP</h3><span class="score">25/35 · Primary (investigation)</span></div>
+            <div class="bar"><span style="width: 71%"></span></div>
+            <p class="muted">Native match to the dominant adaptive-reasoning component: code-owned agent chooses checks, calls read-only MCP tools for SAP, Coupa and vendor-risk, writes every step to the case store. Cost: pro-code build and ownership of hosting + 3 MCP servers.</p>
+            <p class="muted"><strong>Gate:</strong> TBD · <strong>Covers:</strong> FR-01, FR-02, FR-03, FR-04, FR-05, FR-06, FR-07, INT-01, INT-02, INT-03, NFR-01, NFR-02</p>
+            <p class="muted"><strong>Cannot cover:</strong> FR-08 / GR-01 (Teams approval best left to a deterministic flow — paired with Standard harness)</p>
+          </article>
+          <article class="route-card">
+            <div class="route-head"><h3>Pro-code DA without MCP</h3><span class="score">22/35 · Alternative</span></div>
+            <div class="bar"><span style="width: 63%"></span></div>
+            <p class="muted">Same investigation capability through direct API calls; fewer moving parts but three systems and four checks are exactly the &#x27;many tools, reuse&#x27; case where MCP is cheaper to extend.</p>
+            <p class="muted"><strong>Gate:</strong> TBD · <strong>Covers:</strong> FR-01, FR-02, FR-03, FR-04, FR-05, FR-06, FR-07, INT-01, INT-02, INT-03, NFR-01, NFR-02</p>
+            <p class="muted"><strong>Cannot cover:</strong> FR-08 / GR-01 (needs approval flow)</p>
+          </article>
+          <article class="route-card">
+            <div class="route-head"><h3>Standard harness</h3><span class="score">24/35 · Hybrid partner (approval flow)</span></div>
+            <div class="bar"><span style="width: 69%"></span></div>
+            <p class="muted">Best plane for the deterministic Teams approval (FR-08, GR-01) with DLP, ALM and auditable flows. Not-fit for the investigation itself: the agent must decide which checks to run (FR-02).</p>
+            <p class="muted"><strong>Gate:</strong> TBD · <strong>Covers:</strong> FR-08, GR-01, SEC-01, FR-09, NFR-01 (approval steps)</p>
+            <p class="muted"><strong>Cannot cover:</strong> FR-02 (open-ended check selection); FR-07 (evidence-based drafting across systems)</p>
+          </article>
+          <article class="route-card">
+            <div class="route-head"><h3>GHCP harness</h3><span class="score">24/35 · Alternative (re-evaluate)</span></div>
+            <div class="bar"><span style="width: 69%"></span></div>
+            <p class="muted">Adaptive, MCP-capable harness and the lowest-complexity way to host the investigation if verified. Partial fit today: availability/maturity unverified, Copilot Credits at ~2,000 multi-step runs/day unknown, step-level audit unconfirmed.</p>
+            <p class="muted"><strong>Gate:</strong> TBD · <strong>Covers:</strong> FR-02, FR-07, INT-01, INT-02, INT-03 (via the same MCP servers)</p>
+            <p class="muted"><strong>Cannot cover:</strong> NFR-01 (step-level audit unconfirmed); NFR-02 (credit cost at volume unknown)</p>
+          </article>
+          <article class="route-card">
+            <div class="route-head"><h3>Cowork plugins</h3><span class="score">18/35 · Not viable</span></div>
+            <div class="bar"><span style="width: 51%"></span></div>
+            <p class="muted">Personal delegated work for one employee; this is a shared AP service with separate approvers and 2,000 invoices/day. Fails authorization, audit, reliability and ownership gates.</p>
+            <p class="muted"><strong>Gate:</strong> Fail · <strong>Covers:</strong> FR-07 (draft for one user)</p>
+            <p class="muted"><strong>Cannot cover:</strong> FR-01; NFR-01; NFR-02; GR-01 (approver is a different person)</p>
+          </article>
+          <article class="route-card">
+            <div class="route-head"><h3>Scout</h3><span class="score">15/35 · Not viable</span></div>
+            <div class="bar"><span style="width: 43%"></span></div>
+            <p class="muted">Single power-user workstation; no shared enterprise channel, audit or SLO. Useful only to prototype the MCP tools.</p>
+            <p class="muted"><strong>Gate:</strong> Fail · <strong>Covers:</strong> FR-02 (prototype only)</p>
+            <p class="muted"><strong>Cannot cover:</strong> FR-01; FR-08; GR-01; NFR-01; NFR-02</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Route Scoring Rubric</h2>
+        <table><thead><tr><th>Criterion</th><th>1</th><th>3</th><th>5</th></tr></thead><tbody>
+          <tr><td>Fit</td><td>Misaligned with dominant work type</td><td>Partial; needs workarounds</td><td>Native match to dominant work type(s)</td></tr>
+          <tr><td>Implementation speed</td><td>Months of pro-code</td><td>Weeks; some custom pieces</td><td>Days; configuration-led</td></tr>
+          <tr><td>Governance</td><td>Ad-hoc; custom audit/DLP</td><td>Partial platform controls</td><td>Admin-managed, DLP, audit, ALM built in</td></tr>
+          <tr><td>Extensibility</td><td>Hard to add tools/sources</td><td>Possible with effort</td><td>Plug-in tools/connectors/skills easily</td></tr>
+          <tr><td>Integration readiness</td><td>Required systems unsupported</td><td>Needs custom connector/API</td><td>Required systems supported out of the box</td></tr>
+          <tr><td>User experience</td><td>Wrong channel / friction</td><td>Acceptable</td><td>Native in the required channel(s)</td></tr>
+          <tr><td>Operational complexity (inverted)</td><td>Heavy infra &amp; ops ownership</td><td>Moderate</td><td>Minimal; platform-run</td></tr>
+        </tbody></table>
+        <div class="tablewrap"><table style="margin-top:14px"><thead><tr><th>Route</th><th>Fit</th><th>Speed</th><th>Governance</th><th>Extensibility</th><th>Integration</th><th>UX</th><th>Ops</th><th>Total</th></tr></thead><tbody>
+          <tr><td><strong>Pro-code DA with MCP</strong></td><td>5</td><td>2</td><td>3</td><td>5</td><td>4</td><td>4</td><td>2</td><td><strong>25/35</strong></td></tr>
+          <tr><td><strong>Standard harness</strong></td><td>2</td><td>3</td><td>5</td><td>3</td><td>3</td><td>4</td><td>4</td><td><strong>24/35</strong></td></tr>
+          <tr><td><strong>GHCP harness</strong></td><td>3</td><td>3</td><td>4</td><td>4</td><td>3</td><td>4</td><td>3</td><td><strong>24/35</strong></td></tr>
+          <tr><td><strong>Pro-code DA without MCP</strong></td><td>4</td><td>2</td><td>3</td><td>3</td><td>4</td><td>4</td><td>2</td><td><strong>22/35</strong></td></tr>
+          <tr><td><strong>DA + skills</strong></td><td>1</td><td>3</td><td>4</td><td>3</td><td>1</td><td>4</td><td>5</td><td><strong>21/35</strong></td></tr>
+          <tr><td><strong>Cowork plugins</strong></td><td>1</td><td>4</td><td>2</td><td>3</td><td>2</td><td>2</td><td>4</td><td><strong>18/35</strong></td></tr>
+          <tr><td><strong>Scout</strong></td><td>1</td><td>4</td><td>1</td><td>3</td><td>2</td><td>1</td><td>3</td><td><strong>15/35</strong></td></tr>
+        </tbody></table></div>
+      </section>
+
+      <section class="section span-4"><h2>Buildable natively</h2><ul><li>Tolerance pre-screen function (FR-09)</li><li>Check functions for variance and duplicate (FR-03, FR-04)</li><li>Teams approval flow with recorded decision (FR-08, GR-01)</li><li>Case store and append-only audit log (NFR-01)</li><li>Investigation agent orchestration and drafting (FR-02, FR-07) — once hosting is chosen</li></ul></section>
+      <section class="section span-4"><h2>Demonstrable only (simulated)</h2><ul><li>End-to-end pilot on sample/replayed flagged invoices before live SAP/Coupa access — must be labelled simulated</li><li>Throughput test at 2,000/day on synthetic load (NFR-02)</li></ul></section>
+      <section class="section span-4"><h2>External dependency</h2><ul><li>SAP read access + service identity (owner TBD) — INT-01</li><li>Coupa API access (owner TBD) — INT-02</li><li>Custom vendor-risk API access/contract (vendor-risk team, TBD) — INT-03</li><li>Hosting surface/region for the agent and MCP servers (TBD)</li><li>Finance approver roster/routing rules (Finance, TBD)</li><li>Write-back to SAP/Coupa if confirmed (FR-10)</li></ul></section>
+
+      <section class="section span-6">
+        <h2>Open Issues</h2>
+        <div class="change-log" id="open-issues"><div class="change-item"><strong>Open</strong><span>Confirm tolerance logic: &lt;2% OR &lt;$50 vs AND, and whether it applies to variance flags only (FR-09).</span></div><div class="change-item"><strong>Open</strong><span>Confirm post-approval action and write-back to SAP/Coupa (FR-10 not evidenced) and its owner.</span></div><div class="change-item"><strong>Open</strong><span>Identify the flag source (SAP or Coupa exception queue) that triggers FR-01.</span></div><div class="change-item"><strong>Open</strong><span>Define audit retention period and financial-controls regime for NFR-01 (Records lifecycle gate TBD).</span></div><div class="change-item"><strong>Open</strong><span>Verify in tenant: MCP support in the chosen SDK/hosting, and GHCP harness availability/maturity and Copilot Credits cost at ~2,000 runs/day.</span></div><div class="change-item"><strong>Open</strong><span>Name the owning team for agent code, hosting and the three MCP servers (Operational ownership gate TBD).</span></div><div class="change-item"><strong>Open</strong><span>Confirm SAP deployment and network path (cloud vs on-premises gateway) and read-only service identities for SAP, Coupa and the vendor-risk API.</span></div><div class="change-item"><strong>Open</strong><span>Confirm whether contract terms are structured in Coupa or only in contract documents (changes FR-06 work type).</span></div><div class="change-item"><strong>Open</strong><span>Define what AP analysts do in the loop (FR-11 not evidenced): queue view, overrides, rejected-case handling.</span></div></div>
+        <div class="update-box">
+          <input id="issue-input" aria-label="Open issue" placeholder="Add an open issue">
+          <button id="add-issue" type="button">Add issue</button>
+        </div>
+      </section>
+
+      <section class="section span-6">
+        <h2>Key Technical Decisions</h2>
+        <div class="change-log" id="technical-decisions"><div class="change-item"><strong>Proposed</strong><span>Tolerance rule (FR-09) and check calculations (FR-03..06) run as deterministic code before/alongside the agent; the LLM never decides auto-clear.</span></div><div class="change-item"><strong>Proposed</strong><span>Agent and MCP tools are read-only; the only path to an outcome is the Teams approval flow (GR-01).</span></div><div class="change-item"><strong>Proposed</strong><span>Expose SAP, Coupa and vendor-risk through MCP servers so the GHCP harness can reuse them if it is later verified.</span></div><div class="change-item"><strong>Proposed</strong><span>Every case event is written to an append-only governed case store, not conversation memory (NFR-01).</span></div><div class="change-item"><strong>Proposed</strong><span>Code enforces a mandatory baseline check set per flag reason; the agent may add checks but not drop them.</span></div></div>
+        <div class="update-box">
+          <input id="decision-input" aria-label="Technical decision" placeholder="Add a technical decision">
+          <button id="add-decision" type="button">Add decision</button>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>EVALs</h2>
+        <table><thead><tr><th>Eval area</th><th>What to measure</th><th>First-draft target</th><th>Status</th></tr></thead><tbody>
+        <tr><td>Tolerance rule correctness</td><td>Auto-clear decisions vs rule on labelled cases incl. boundary values (1.99%, $49.99, $50.00)</td><td>100% (deterministic)</td><td class='status warn'>Not started</td></tr><tr><td>Check selection</td><td>Checks chosen vs AP expert&#x27;s choice on replayed invoices</td><td>Proposed ≥90% recall of required checks</td><td class='status warn'>Not started</td></tr><tr><td>Resolution draft quality</td><td>Approver accepts draft without material edit</td><td>Proposed ≥80% in pilot</td><td class='status warn'>Not started</td></tr><tr><td>Audit completeness</td><td>Cases with every step logged (tool calls, results, draft, decision)</td><td>100%</td><td class='status warn'>Not started</td></tr><tr><td>Action safety</td><td>Any state change without recorded approval</td><td>0</td><td class='status warn'>Not started</td></tr><tr><td>Throughput &amp; latency</td><td>Invoices investigated per day; time from flag to approver card</td><td>≥2,000/day; latency target TBD</td><td class='status warn'>Not started</td></tr>
+        </tbody></table>
+      </section>
+
+      <section class="section">
+        <h2>Implementation Roadmap</h2>
+        <div class="timeline"><div class="timeline-item"><span class="step">1</span><h3>0. Confirm gates &amp; rules</h3><p class="muted">Tolerance logic, write-back scope, hosting region, licensing, owners. Exit: All Fail/TBD gates for the primary route resolved or owned.</p></div><div class="timeline-item"><span class="step">2</span><h3>1. Deterministic core</h3><p class="muted">Tolerance pre-screen, check functions, case store + audit log. Exit: Tolerance EVAL 100%; audit schema signed off.</p></div><div class="timeline-item"><span class="step">3</span><h3>2. MCP servers</h3><p class="muted">Read-only SAP, Coupa, vendor-risk MCP servers with service identities. Exit: Security review passed per server.</p></div><div class="timeline-item"><span class="step">4</span><h3>3. Agent + approval flow</h3><p class="muted">Investigation agent, drafting, Teams approval flow. Exit: Shadow-mode pilot on replayed invoices meets EVAL targets.</p></div><div class="timeline-item"><span class="step">5</span><h3>4. Scale</h3><p class="muted">Live flags, ramp to ~2,000/day, monitoring. Exit: Throughput, audit and safety EVALs green for 2 weeks.</p></div></div>
+      </section>
+
+      <section class="section">
+        <h2>Change Log</h2>
+        <div class="change-log" id="change-log"><div class="change-item"><strong>2026-10-07</strong><span>Initial draft generated from user notes (invoice exception investigator).</span></div></div>
+        <div class="update-box">
+          <input id="change-input" aria-label="Change log item" placeholder="Add a changelog line for preview">
+          <button id="add-change" type="button">Add to changelog</button>
+        </div>
+        <div class="action-row">
+          <button id="download-updated" class="secondary-button" type="button">Download updated HTML</button>
+        </div>
+        <p class="footer-note">Browser edits are temporary until you download the updated HTML. For durable changes, update this source file directly so the embedded blueprint data and visible changelog stay aligned.</p>
+      </section>
+    </div>
+  </main>
+
+  <script type="application/json" id="blueprint-data">{
+  "name": "Invoice Exception Investigator",
+  "slug": "invoice-exception-investigator",
+  "status": "Draft",
+  "lastUpdated": "2026-10-07",
+  "mode": "standalone",
+  "sourceArtifacts": [
+    {
+      "path": "User-provided notes in chat request (2026-10-07)",
+      "sha256": "",
+      "role": "requirements"
+    }
+  ],
+  "confidence": {
+    "level": "Medium",
+    "reason": "Work types, volume and users are explicit; platform availability, licensing, hosting region, write-back scope and audit retention are TBD (gate results mostly TBD)."
+  },
+  "executiveSummary": "An agent that investigates each flagged AP invoice across SAP, Coupa and the custom vendor-risk API, chooses which checks to run, drafts a resolution and routes it to a finance approver in Teams, with a full audit trail at ~2,000 invoices/day. Recommended: a pro-code agent with MCP servers for the investigation, a Copilot Studio / Power Automate approval flow for the decision, and deterministic code for the tolerance rule and checks. Complexity: High.",
+  "scenarioOverview": {
+    "primaryActor": "Finance approver (decides); AP analyst (works exceptions — role details TBD)",
+    "trigger": "An invoice is flagged as an exception (flag source TBD: SAP or Coupa)",
+    "expectedOutcome": "Within-tolerance variances auto-clear; every other invoice gets an evidence-backed draft resolution approved or rejected in Teams, with every step audited."
+  },
+  "jtbd": [
+    "Clear low-value variances automatically under the tolerance rule (FR-09)",
+    "Gather the evidence for a flagged invoice from SAP, Coupa and vendor-risk (INT-01..03)",
+    "Run only the checks that matter for this invoice (FR-02..06)",
+    "Decide quickly on a drafted resolution in Teams (FR-07, FR-08, GR-01)",
+    "Prove later what happened and who decided (NFR-01)"
+  ],
+  "personas": [
+    {
+      "name": "AP analyst",
+      "need": "Fewer manual lookups across SAP/Coupa/vendor-risk; see why an invoice was flagged and what the agent found",
+      "volume": "Headcount TBD; ~2,000 flagged invoices/day across the team",
+      "channel": "Teams (assumed); working view TBD (FR-11)"
+    },
+    {
+      "name": "Finance approver",
+      "need": "An evidence-backed draft they can approve or reject in one step",
+      "volume": "Headcount TBD; share of 2,000/day not auto-cleared",
+      "channel": "Teams (required)"
+    }
+  ],
+  "assumptions": [
+    "Tolerance is read literally as OR: auto-clear if variance <2% OR <$50 (to confirm).",
+    "Auto-clear applies only to price/quantity variance flags, not duplicate, vendor-risk or contract flags.",
+    "Auto-cleared invoices are logged but not sent to an approver.",
+    "Agent tools are read-only; no write-back to SAP/Coupa is in scope until confirmed (FR-10).",
+    "Contract terms are available as structured data in Coupa; if they live only in documents, the contract check becomes an AI component.",
+    "Users authenticate with Microsoft Entra ID."
+  ],
+  "questionsToConfirm": [
+    "Tolerance: is it variance <2% OR <$50 (a 1.9% variance on a $500k invoice auto-clears ~$9.5k), or <2% AND <$50? Does it apply to variance flags only?",
+    "After approval, what happens: does anything write back to SAP or Coupa (post, block, credit) and who owns that action?",
+    "Where do flagged invoices come from (SAP or Coupa exception queue), and what audit retention / financial-controls regime applies?"
+  ],
+  "requirements": [
+    {
+      "id": "FR-01",
+      "text": "Start an investigation for every invoice that has been flagged as an exception.",
+      "classification": "Required",
+      "source": "\"For each flagged invoice\" — User notes (chat prompt, 2026-10-07)",
+      "systems": [
+        "Flagging source TBD (SAP or Coupa exception queue)"
+      ],
+      "idOrigin": "derived"
+    },
+    {
+      "id": "INT-01",
+      "text": "Read invoice, purchase-order and goods-receipt data from SAP for the flagged invoice.",
+      "classification": "Required",
+      "source": "\"the agent pulls data from SAP\" — User notes (chat prompt, 2026-10-07)",
+      "systems": [
+        "SAP"
+      ],
+      "idOrigin": "derived"
+    },
+    {
+      "id": "INT-02",
+      "text": "Read invoice, PO and contract data from Coupa for the flagged invoice.",
+      "classification": "Required",
+      "source": "\"pulls data from SAP, Coupa\" — User notes (chat prompt, 2026-10-07)",
+      "systems": [
+        "Coupa"
+      ],
+      "idOrigin": "derived"
+    },
+    {
+      "id": "INT-03",
+      "text": "Read the vendor's risk data from the custom vendor-risk API.",
+      "classification": "Required",
+      "source": "\"our custom vendor-risk API\" — User notes (chat prompt, 2026-10-07)",
+      "systems": [
+        "Custom vendor-risk API"
+      ],
+      "idOrigin": "derived"
+    },
+    {
+      "id": "FR-02",
+      "text": "Decide per invoice which checks to run instead of running a fixed script.",
+      "classification": "Required",
+      "source": "\"decides which checks to run\" — User notes (chat prompt, 2026-10-07)",
+      "systems": [],
+      "idOrigin": "derived"
+    },
+    {
+      "id": "FR-03",
+      "text": "Price / quantity variance check.",
+      "classification": "Required",
+      "source": "\"price/quantity variance\" — User notes (chat prompt, 2026-10-07)",
+      "systems": [
+        "SAP",
+        "Coupa"
+      ],
+      "idOrigin": "derived"
+    },
+    {
+      "id": "FR-04",
+      "text": "Duplicate invoice check.",
+      "classification": "Required",
+      "source": "\"duplicate\" — User notes (chat prompt, 2026-10-07)",
+      "systems": [
+        "SAP",
+        "Coupa"
+      ],
+      "idOrigin": "derived"
+    },
+    {
+      "id": "FR-05",
+      "text": "Vendor risk check.",
+      "classification": "Required",
+      "source": "\"vendor risk\" — User notes (chat prompt, 2026-10-07)",
+      "systems": [
+        "Custom vendor-risk API"
+      ],
+      "idOrigin": "derived"
+    },
+    {
+      "id": "FR-06",
+      "text": "Contract terms check.",
+      "classification": "Required",
+      "source": "\"contract terms\" — User notes (chat prompt, 2026-10-07)",
+      "systems": [
+        "Coupa (assumed contract source — TBD)"
+      ],
+      "idOrigin": "derived"
+    },
+    {
+      "id": "FR-07",
+      "text": "Draft a resolution for the invoice from the evidence gathered.",
+      "classification": "Required",
+      "source": "\"drafts a resolution\" — User notes (chat prompt, 2026-10-07)",
+      "systems": [],
+      "idOrigin": "derived"
+    },
+    {
+      "id": "FR-08",
+      "text": "Post the drafted resolution to a finance approver in Teams.",
+      "classification": "Required",
+      "source": "\"posts it for a finance approver to approve or reject in Teams\" — User notes (chat prompt, 2026-10-07)",
+      "systems": [
+        "Microsoft Teams"
+      ],
+      "idOrigin": "derived"
+    },
+    {
+      "id": "GR-01",
+      "text": "A human finance approver approves or rejects every drafted resolution; the agent is never the final authority.",
+      "classification": "Required",
+      "source": "\"for a finance approver to approve or reject\" — User notes (chat prompt, 2026-10-07)",
+      "systems": [
+        "Microsoft Teams"
+      ],
+      "idOrigin": "derived"
+    },
+    {
+      "id": "FR-09",
+      "text": "Auto-clear an invoice when the variance is under 2% or under $50 (deterministic tolerance rule).",
+      "classification": "Required",
+      "source": "\"Tolerance rules: auto-clear variance under 2% or under $50\" — User notes (chat prompt, 2026-10-07)",
+      "systems": [],
+      "idOrigin": "derived"
+    },
+    {
+      "id": "NFR-01",
+      "text": "Every step (data pulls, checks chosen, results, draft, approval decision, auto-clear) is recorded in a full audit trail.",
+      "classification": "Required",
+      "source": "\"Every step needs a full audit trail\" — User notes (chat prompt, 2026-10-07)",
+      "systems": [
+        "Audit / case store TBD"
+      ],
+      "idOrigin": "derived"
+    },
+    {
+      "id": "NFR-02",
+      "text": "Handle about 2,000 flagged invoices per day.",
+      "classification": "Required",
+      "source": "\"Volume is about 2,000 flagged invoices a day\" — User notes (chat prompt, 2026-10-07)",
+      "systems": [],
+      "idOrigin": "derived"
+    },
+    {
+      "id": "SEC-01",
+      "text": "Internal users only: AP analysts and finance approvers.",
+      "classification": "Confirmed",
+      "source": "\"Users are AP analysts and finance approvers (internal)\" — User notes (chat prompt, 2026-10-07)",
+      "systems": [
+        "Microsoft Entra ID (assumed)"
+      ],
+      "idOrigin": "derived"
+    },
+    {
+      "id": "FR-10",
+      "text": "Write the approved resolution back to SAP or Coupa (post, block, pay or credit).",
+      "classification": "Not evidenced",
+      "source": "Not evidenced — notes stop at approve/reject",
+      "systems": [
+        "SAP",
+        "Coupa"
+      ],
+      "idOrigin": "derived"
+    },
+    {
+      "id": "FR-11",
+      "text": "AP analyst working view (queue, re-run, override).",
+      "classification": "Not evidenced",
+      "source": "Not evidenced — AP analysts named as users but their tasks are not described",
+      "systems": [],
+      "idOrigin": "derived"
+    }
+  ],
+  "components": [
+    {
+      "name": "Intake & tolerance pre-screen",
+      "workType": "Conventional software",
+      "aiNeeded": false,
+      "direction": "Rules function / service: computes variance and applies the FR-09 tolerance (<2% or <$50) before any LLM call",
+      "impact": "reversible write",
+      "stateStore": "Case store (Dataverse or Azure SQL — TBD)",
+      "requirementIds": [
+        "FR-01",
+        "FR-09",
+        "NFR-01"
+      ]
+    },
+    {
+      "name": "Check library (variance, duplicate, vendor-risk, contract terms)",
+      "workType": "Conventional software",
+      "aiNeeded": false,
+      "direction": "Deterministic check functions exposed as MCP tools; return pass/fail + evidence",
+      "impact": "read-only",
+      "stateStore": "Case store (results per check)",
+      "requirementIds": [
+        "FR-03",
+        "FR-04",
+        "FR-05",
+        "FR-06"
+      ]
+    },
+    {
+      "name": "System access layer (MCP servers)",
+      "workType": "Custom agent software",
+      "aiNeeded": false,
+      "direction": "One MCP server per system: SAP, Coupa, custom vendor-risk API; read-only tools, service identity, per-call logging",
+      "impact": "read-only",
+      "stateStore": "None (stateless); calls logged to audit store",
+      "requirementIds": [
+        "INT-01",
+        "INT-02",
+        "INT-03",
+        "NFR-01"
+      ]
+    },
+    {
+      "name": "Investigation & resolution agent",
+      "workType": "Adaptive reasoning",
+      "aiNeeded": true,
+      "direction": "Pro-code agent (Stage 2) that plans which checks to run, calls MCP tools, and drafts the resolution with cited evidence",
+      "impact": "read-only",
+      "stateStore": "Case store (plan, tool calls, draft)",
+      "requirementIds": [
+        "FR-02",
+        "FR-07",
+        "INT-01",
+        "INT-02",
+        "INT-03",
+        "NFR-02"
+      ]
+    },
+    {
+      "name": "Approval & decision flow",
+      "workType": "Deterministic execution",
+      "aiNeeded": false,
+      "direction": "Copilot Studio agent flow / Power Automate approval card in Teams; records approve/reject with approver identity and timestamp",
+      "impact": "reversible write",
+      "stateStore": "Case store + approval history",
+      "requirementIds": [
+        "FR-08",
+        "GR-01",
+        "SEC-01",
+        "NFR-01"
+      ]
+    },
+    {
+      "name": "Audit trail & case store",
+      "workType": "Conventional software",
+      "aiNeeded": false,
+      "direction": "Append-only event log per invoice case in a governed store; retention per finance records policy (TBD)",
+      "impact": "reversible write",
+      "stateStore": "Governed store TBD (Dataverse / Azure SQL / log analytics)",
+      "requirementIds": [
+        "NFR-01"
+      ]
+    }
+  ],
+  "escalation": [
+    {
+      "stage": 1,
+      "considered": [
+        "Copilot Studio standard harness + agent flows",
+        "Copilot Studio GHCP harness",
+        "M365 Copilot Chat / declarative agent",
+        "Teams",
+        "Cowork"
+      ],
+      "meets": [
+        "FR-08",
+        "GR-01",
+        "SEC-01",
+        "FR-09 (as flow/function logic)"
+      ],
+      "gaps": [
+        "FR-02",
+        "FR-07",
+        "INT-03",
+        "NFR-01 (step-level tool-call audit)",
+        "NFR-02 (unattended, per-invoice at ~2,000/day)"
+      ],
+      "escalate": true,
+      "note": "Standard harness and agent flows natively cover the Teams approval. The GHCP harness is the only Stage 1 option for adaptive check selection, but its availability, maturity and Copilot Credits cost at ~2,000 multi-step runs/day are unverified, and step-level audit of every tool call is not confirmed. The investigation IDs therefore cannot be confirmed in Stage 1."
+    },
+    {
+      "stage": 2,
+      "considered": [
+        "Foundry agent (pro-code) calling MCP servers for SAP, Coupa and the vendor-risk API"
+      ],
+      "meets": [
+        "FR-02",
+        "FR-07",
+        "INT-01",
+        "INT-02",
+        "INT-03",
+        "NFR-01",
+        "NFR-02"
+      ],
+      "gaps": [],
+      "escalate": false,
+      "note": "A code-owned agent runs headless per invoice, chooses checks, writes every step to the case store, and scales with hosting. Hosting surface and region TBD."
+    },
+    {
+      "stage": 3,
+      "considered": [
+        "Microsoft Agent Framework"
+      ],
+      "meets": [],
+      "gaps": [],
+      "escalate": false,
+      "note": "Not reached: no custom protocol, multi-agent or UI need left after Stage 2."
+    }
+  ],
+  "complexity": {
+    "rating": "High",
+    "drivers": [
+      "INT-01",
+      "INT-02",
+      "INT-03",
+      "FR-02",
+      "NFR-01",
+      "NFR-02"
+    ],
+    "reason": "Custom integration (three MCP servers incl. a custom API) plus a pro-code investigation agent."
+  },
+  "gates": [
+    {
+      "gate": "Product availability",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "TBD",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "TBD",
+        "Scout": "Fail"
+      },
+      "note": "Tenant/region availability is not stated in the notes; Scout is not a shared enterprise channel and cannot serve the finance approvers in Teams. Verify in tenant.",
+      "owner": "TBD"
+    },
+    {
+      "gate": "Feature maturity",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "TBD",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "TBD",
+        "Scout": "TBD"
+      },
+      "note": "MCP support in the chosen SDK/hosting and GHCP harness GA status are 'verify in tenant'. Any preview feature needs a named risk owner.",
+      "owner": "TBD"
+    },
+    {
+      "gate": "Contractual / licensing",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "TBD",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "TBD",
+        "Scout": "TBD"
+      },
+      "note": "No licensing facts in source. Copilot Credits consumption for GHCP harness at ~2,000 runs/day is unknown.",
+      "owner": "TBD"
+    },
+    {
+      "gate": "Data location & movement",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "TBD",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "TBD",
+        "Scout": "TBD"
+      },
+      "note": "SAP, Coupa and vendor-risk data move into the agent runtime; hosting region and residency rules not stated.",
+      "owner": "TBD"
+    },
+    {
+      "gate": "Identity — least privilege",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "TBD",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "TBD",
+        "Scout": "TBD"
+      },
+      "note": "Service identities for SAP/Coupa/vendor-risk reads must be read-only; not yet designed.",
+      "owner": "TBD"
+    },
+    {
+      "gate": "Authorization scoping",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "TBD",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "Fail",
+        "Scout": "Fail"
+      },
+      "note": "Investigation runs as a service (app-level) across all flagged invoices; Cowork and Scout run under one employee's delegated identity, which is wrong for a shared AP service.",
+      "owner": "TBD"
+    },
+    {
+      "gate": "Network isolation",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "TBD",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "TBD",
+        "Scout": "TBD"
+      },
+      "note": "SAP deployment (cloud vs on-premises, gateway) not stated.",
+      "owner": "TBD"
+    },
+    {
+      "gate": "Encryption / key management",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "TBD",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "TBD",
+        "Scout": "TBD"
+      },
+      "note": "No requirement stated; confirm with finance security.",
+      "owner": "TBD"
+    },
+    {
+      "gate": "DLP",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "Pass",
+        "GHCP harness": "Pass",
+        "Cowork plugins": "TBD",
+        "Scout": "TBD"
+      },
+      "note": "Power Platform DLP policies govern Standard and GHCP harness connectors (catalog governance plane). Pro-code routes need their own controls.",
+      "owner": "TBD"
+    },
+    {
+      "gate": "Audit & traceability",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "Pass",
+        "Pro-code DA without MCP": "Pass",
+        "Standard harness": "Pass",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "Fail",
+        "Scout": "Fail"
+      },
+      "note": "NFR-01 needs every step logged. Pro-code routes write each tool call and decision to the case store by design; Standard harness flows record approvals; GHCP step-level audit unconfirmed; Cowork/Scout have no shared audit.",
+      "owner": "TBD"
+    },
+    {
+      "gate": "Safety & action control",
+      "results": {
+        "DA + skills": "Pass",
+        "Pro-code DA with MCP": "Pass",
+        "Pro-code DA without MCP": "Pass",
+        "Standard harness": "Pass",
+        "GHCP harness": "Pass",
+        "Cowork plugins": "Fail",
+        "Scout": "Fail"
+      },
+      "note": "Agent tools are read-only and the only decision path is the Teams approval (GR-01). Cowork/Scout: the delegating user is not the approver.",
+      "owner": "TBD"
+    },
+    {
+      "gate": "Records lifecycle",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "TBD",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "TBD",
+        "Scout": "TBD"
+      },
+      "note": "Audit retention period for finance records not stated.",
+      "owner": "TBD"
+    },
+    {
+      "gate": "Reliability",
+      "results": {
+        "DA + skills": "Fail",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "TBD",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "Fail",
+        "Scout": "Fail"
+      },
+      "note": "~2,000 invoices/day must be processed unattended. A chat-invoked DA, Cowork or Scout cannot run per-invoice without a person driving it. SLOs not stated for others.",
+      "owner": "TBD"
+    },
+    {
+      "gate": "Operational ownership",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "TBD",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "Fail",
+        "Scout": "Fail"
+      },
+      "note": "Pro-code needs a named team for code, hosting and three MCP servers (owner TBD). Cowork/Scout tie the service to one person.",
+      "owner": "TBD"
+    },
+    {
+      "gate": "Portability / exit",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "Pass",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "TBD",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "TBD",
+        "Scout": "TBD"
+      },
+      "note": "MCP servers are reusable by other agents/harnesses (incl. GHCP harness later).",
+      "owner": "TBD"
+    }
+  ],
+  "routes": [
+    {
+      "name": "DA + skills",
+      "gate": "Fail",
+      "scores": {
+        "fit": 1,
+        "implementationSpeed": 3,
+        "governance": 4,
+        "extensibility": 3,
+        "integrationReadiness": 1,
+        "userExperience": 4,
+        "operationalComplexity": 5
+      },
+      "total": 21,
+      "covers": [
+        "SEC-01",
+        "GR-01"
+      ],
+      "cannotCover": [
+        "FR-01 (no unattended trigger)",
+        "FR-02 (dynamic tool choice across custom APIs)",
+        "INT-01..INT-03 (systems not reachable as M365 knowledge)",
+        "NFR-02 (volume)"
+      ],
+      "label": "Not viable",
+      "rationale": "Retrieval-centred chat agent: cannot run unattended per-invoice investigation across SAP, Coupa and a custom API (not-fit signals: high volume, dynamic multi-system investigation). Fails Reliability gate."
+    },
+    {
+      "name": "Pro-code DA with MCP",
+      "gate": "TBD",
+      "scores": {
+        "fit": 5,
+        "implementationSpeed": 2,
+        "governance": 3,
+        "extensibility": 5,
+        "integrationReadiness": 4,
+        "userExperience": 4,
+        "operationalComplexity": 2
+      },
+      "total": 25,
+      "covers": [
+        "FR-01",
+        "FR-02",
+        "FR-03",
+        "FR-04",
+        "FR-05",
+        "FR-06",
+        "FR-07",
+        "INT-01",
+        "INT-02",
+        "INT-03",
+        "NFR-01",
+        "NFR-02"
+      ],
+      "cannotCover": [
+        "FR-08 / GR-01 (Teams approval best left to a deterministic flow — paired with Standard harness)"
+      ],
+      "label": "Primary (investigation)",
+      "rationale": "Native match to the dominant adaptive-reasoning component: code-owned agent chooses checks, calls read-only MCP tools for SAP, Coupa and vendor-risk, writes every step to the case store. Cost: pro-code build and ownership of hosting + 3 MCP servers."
+    },
+    {
+      "name": "Pro-code DA without MCP",
+      "gate": "TBD",
+      "scores": {
+        "fit": 4,
+        "implementationSpeed": 2,
+        "governance": 3,
+        "extensibility": 3,
+        "integrationReadiness": 4,
+        "userExperience": 4,
+        "operationalComplexity": 2
+      },
+      "total": 22,
+      "covers": [
+        "FR-01",
+        "FR-02",
+        "FR-03",
+        "FR-04",
+        "FR-05",
+        "FR-06",
+        "FR-07",
+        "INT-01",
+        "INT-02",
+        "INT-03",
+        "NFR-01",
+        "NFR-02"
+      ],
+      "cannotCover": [
+        "FR-08 / GR-01 (needs approval flow)"
+      ],
+      "label": "Alternative",
+      "rationale": "Same investigation capability through direct API calls; fewer moving parts but three systems and four checks are exactly the 'many tools, reuse' case where MCP is cheaper to extend."
+    },
+    {
+      "name": "Standard harness",
+      "gate": "TBD",
+      "scores": {
+        "fit": 2,
+        "implementationSpeed": 3,
+        "governance": 5,
+        "extensibility": 3,
+        "integrationReadiness": 3,
+        "userExperience": 4,
+        "operationalComplexity": 4
+      },
+      "total": 24,
+      "covers": [
+        "FR-08",
+        "GR-01",
+        "SEC-01",
+        "FR-09",
+        "NFR-01 (approval steps)"
+      ],
+      "cannotCover": [
+        "FR-02 (open-ended check selection)",
+        "FR-07 (evidence-based drafting across systems)"
+      ],
+      "label": "Hybrid partner (approval flow)",
+      "rationale": "Best plane for the deterministic Teams approval (FR-08, GR-01) with DLP, ALM and auditable flows. Not-fit for the investigation itself: the agent must decide which checks to run (FR-02)."
+    },
+    {
+      "name": "GHCP harness",
+      "gate": "TBD",
+      "scores": {
+        "fit": 3,
+        "implementationSpeed": 3,
+        "governance": 4,
+        "extensibility": 4,
+        "integrationReadiness": 3,
+        "userExperience": 4,
+        "operationalComplexity": 3
+      },
+      "total": 24,
+      "covers": [
+        "FR-02",
+        "FR-07",
+        "INT-01",
+        "INT-02",
+        "INT-03 (via the same MCP servers)"
+      ],
+      "cannotCover": [
+        "NFR-01 (step-level audit unconfirmed)",
+        "NFR-02 (credit cost at volume unknown)"
+      ],
+      "label": "Alternative (re-evaluate)",
+      "rationale": "Adaptive, MCP-capable harness and the lowest-complexity way to host the investigation if verified. Partial fit today: availability/maturity unverified, Copilot Credits at ~2,000 multi-step runs/day unknown, step-level audit unconfirmed."
+    },
+    {
+      "name": "Cowork plugins",
+      "gate": "Fail",
+      "scores": {
+        "fit": 1,
+        "implementationSpeed": 4,
+        "governance": 2,
+        "extensibility": 3,
+        "integrationReadiness": 2,
+        "userExperience": 2,
+        "operationalComplexity": 4
+      },
+      "total": 18,
+      "covers": [
+        "FR-07 (draft for one user)"
+      ],
+      "cannotCover": [
+        "FR-01",
+        "NFR-01",
+        "NFR-02",
+        "GR-01 (approver is a different person)"
+      ],
+      "label": "Not viable",
+      "rationale": "Personal delegated work for one employee; this is a shared AP service with separate approvers and 2,000 invoices/day. Fails authorization, audit, reliability and ownership gates."
+    },
+    {
+      "name": "Scout",
+      "gate": "Fail",
+      "scores": {
+        "fit": 1,
+        "implementationSpeed": 4,
+        "governance": 1,
+        "extensibility": 3,
+        "integrationReadiness": 2,
+        "userExperience": 1,
+        "operationalComplexity": 3
+      },
+      "total": 15,
+      "covers": [
+        "FR-02 (prototype only)"
+      ],
+      "cannotCover": [
+        "FR-01",
+        "FR-08",
+        "GR-01",
+        "NFR-01",
+        "NFR-02"
+      ],
+      "label": "Not viable",
+      "rationale": "Single power-user workstation; no shared enterprise channel, audit or SLO. Useful only to prototype the MCP tools."
+    }
+  ],
+  "recommendedRoute": "Pro-code DA with MCP (investigation) + Standard harness approval flow + rules service",
+  "recommendation": {
+    "primary": "Pro-code DA with MCP",
+    "hybrid": "Pro-code DA with MCP for FR-02, FR-07, INT-01..03 + Standard harness agent flow / Power Automate approval in Teams for FR-08, GR-01 + conventional rules service for FR-09 and check functions FR-03..06 + governed case store for NFR-01.",
+    "why": "Only route that natively covers the dominant adaptive-reasoning component (FR-02, FR-07) across SAP, Coupa and the custom vendor-risk API (INT-01..03) unattended at NFR-02 volume with step-level audit (NFR-01). No gate fails; TBD gates are open issues.",
+    "requirementIds": [
+      "FR-01",
+      "FR-02",
+      "FR-03",
+      "FR-04",
+      "FR-05",
+      "FR-06",
+      "FR-07",
+      "FR-08",
+      "FR-09",
+      "GR-01",
+      "INT-01",
+      "INT-02",
+      "INT-03",
+      "NFR-01",
+      "NFR-02",
+      "SEC-01"
+    ]
+  },
+  "buildDemoDependency": {
+    "buildable": [
+      "Tolerance pre-screen function (FR-09)",
+      "Check functions for variance and duplicate (FR-03, FR-04)",
+      "Teams approval flow with recorded decision (FR-08, GR-01)",
+      "Case store and append-only audit log (NFR-01)",
+      "Investigation agent orchestration and drafting (FR-02, FR-07) — once hosting is chosen"
+    ],
+    "demonstrable": [
+      "End-to-end pilot on sample/replayed flagged invoices before live SAP/Coupa access — must be labelled simulated",
+      "Throughput test at 2,000/day on synthetic load (NFR-02)"
+    ],
+    "dependency": [
+      "SAP read access + service identity (owner TBD) — INT-01",
+      "Coupa API access (owner TBD) — INT-02",
+      "Custom vendor-risk API access/contract (vendor-risk team, TBD) — INT-03",
+      "Hosting surface/region for the agent and MCP servers (TBD)",
+      "Finance approver roster/routing rules (Finance, TBD)",
+      "Write-back to SAP/Coupa if confirmed (FR-10)"
+    ]
+  },
+  "architecture": {
+    "users": [
+      "AP analysts (internal)",
+      "Finance approvers (internal)"
+    ],
+    "channels": [
+      "Microsoft Teams (approval card)"
+    ],
+    "agentPlatform": {
+      "investigation": "Pro-code agent (Foundry hosting TBD) with planner + drafting instructions",
+      "tools": "MCP servers: SAP, Coupa, vendor-risk; check library tools",
+      "humanReview": "Copilot Studio agent flow / Power Automate approval in Teams",
+      "rules": "Tolerance pre-screen service"
+    },
+    "data": [
+      "SAP",
+      "Coupa",
+      "Custom vendor-risk API",
+      "Case store + audit log (TBD)"
+    ],
+    "identityGovernance": [
+      "Microsoft Entra ID",
+      "Read-only service identities per MCP server",
+      "Power Platform DLP for approval flow",
+      "Approver identity on every decision"
+    ],
+    "monitoringAlm": [
+      "Run/tool-call telemetry per invoice",
+      "Throughput & backlog vs 2,000/day",
+      "Solution-based ALM for the flow; CI/CD for agent + MCP servers",
+      "Eval harness on replayed invoices"
+    ]
+  },
+  "sequence": [
+    {
+      "from": "Flag source (SAP/Coupa)",
+      "to": "Intake & tolerance",
+      "message": "New flagged invoice event (FR-01)"
+    },
+    {
+      "from": "Intake & tolerance",
+      "to": "MCP servers & check tools",
+      "message": "Fetch invoice, PO, receipt amounts"
+    },
+    {
+      "from": "Intake & tolerance",
+      "to": "Case store / audit",
+      "message": "Open case; log flag + variance"
+    },
+    {
+      "from": "Intake & tolerance",
+      "to": "Case store / audit",
+      "message": "If variance flag and within tolerance: auto-clear and log rule applied (FR-09) — end"
+    },
+    {
+      "from": "Intake & tolerance",
+      "to": "Investigation agent",
+      "message": "Hand over case for investigation"
+    },
+    {
+      "from": "Investigation agent",
+      "to": "Investigation agent",
+      "message": "Plan which checks to run (FR-02)"
+    },
+    {
+      "from": "Investigation agent",
+      "to": "MCP servers & check tools",
+      "message": "Read SAP, Coupa, vendor-risk data (INT-01..03)"
+    },
+    {
+      "from": "Investigation agent",
+      "to": "MCP servers & check tools",
+      "message": "Run chosen checks: variance / duplicate / vendor risk / contract terms (FR-03..06)"
+    },
+    {
+      "from": "Investigation agent",
+      "to": "Case store / audit",
+      "message": "Log every tool call, input, output and check result (NFR-01)"
+    },
+    {
+      "from": "Investigation agent",
+      "to": "Case store / audit",
+      "message": "Save drafted resolution with cited evidence (FR-07)"
+    },
+    {
+      "from": "Case store / audit",
+      "to": "Approval flow",
+      "message": "Trigger approval for case"
+    },
+    {
+      "from": "Approval flow",
+      "to": "Finance approver",
+      "message": "Post approval card in Teams with draft + evidence (FR-08)"
+    },
+    {
+      "from": "Finance approver",
+      "to": "Approval flow",
+      "message": "Approve or reject, with comment (GR-01)"
+    },
+    {
+      "from": "Approval flow",
+      "to": "Case store / audit",
+      "message": "Record decision, approver identity and timestamp (NFR-01)"
+    },
+    {
+      "from": "Approval flow",
+      "to": "AP analyst",
+      "message": "Notify outcome; rejected cases return to AP analyst queue (TBD, FR-11)"
+    }
+  ],
+  "evals": [
+    {
+      "area": "Tolerance rule correctness",
+      "measure": "Auto-clear decisions vs rule on labelled cases incl. boundary values (1.99%, $49.99, $50.00)",
+      "target": "100% (deterministic)",
+      "status": "Not started"
+    },
+    {
+      "area": "Check selection",
+      "measure": "Checks chosen vs AP expert's choice on replayed invoices",
+      "target": "Proposed ≥90% recall of required checks",
+      "status": "Not started"
+    },
+    {
+      "area": "Resolution draft quality",
+      "measure": "Approver accepts draft without material edit",
+      "target": "Proposed ≥80% in pilot",
+      "status": "Not started"
+    },
+    {
+      "area": "Audit completeness",
+      "measure": "Cases with every step logged (tool calls, results, draft, decision)",
+      "target": "100%",
+      "status": "Not started"
+    },
+    {
+      "area": "Action safety",
+      "measure": "Any state change without recorded approval",
+      "target": "0",
+      "status": "Not started"
+    },
+    {
+      "area": "Throughput & latency",
+      "measure": "Invoices investigated per day; time from flag to approver card",
+      "target": "≥2,000/day; latency target TBD",
+      "status": "Not started"
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Literal OR tolerance auto-clears large-value invoices (2% of a big invoice)",
+      "mitigation": "Confirm rule; add an absolute cap; EVAL boundary tests"
+    },
+    {
+      "risk": "Agent skips a needed check",
+      "mitigation": "Mandatory baseline checks per flag reason enforced in code; agent adds, never removes"
+    },
+    {
+      "risk": "Approver rubber-stamping at volume",
+      "mitigation": "Show evidence and confidence on card; sample-based QA of approvals"
+    },
+    {
+      "risk": "LLM cost and latency at 2,000/day",
+      "mitigation": "Tolerance pre-screen before LLM; cap steps per case; load test"
+    },
+    {
+      "risk": "MCP servers widen the attack surface to SAP/Coupa",
+      "mitigation": "Read-only scopes, per-server service identity, call logging, rate limits"
+    },
+    {
+      "risk": "Prompt injection via invoice text or vendor fields",
+      "mitigation": "Treat document text as data; tools read-only; approval required for every outcome"
+    }
+  ],
+  "openIssues": [
+    "Confirm tolerance logic: <2% OR <$50 vs AND, and whether it applies to variance flags only (FR-09).",
+    "Confirm post-approval action and write-back to SAP/Coupa (FR-10 not evidenced) and its owner.",
+    "Identify the flag source (SAP or Coupa exception queue) that triggers FR-01.",
+    "Define audit retention period and financial-controls regime for NFR-01 (Records lifecycle gate TBD).",
+    "Verify in tenant: MCP support in the chosen SDK/hosting, and GHCP harness availability/maturity and Copilot Credits cost at ~2,000 runs/day.",
+    "Name the owning team for agent code, hosting and the three MCP servers (Operational ownership gate TBD).",
+    "Confirm SAP deployment and network path (cloud vs on-premises gateway) and read-only service identities for SAP, Coupa and the vendor-risk API.",
+    "Confirm whether contract terms are structured in Coupa or only in contract documents (changes FR-06 work type).",
+    "Define what AP analysts do in the loop (FR-11 not evidenced): queue view, overrides, rejected-case handling."
+  ],
+  "technicalDecisions": [
+    "Tolerance rule (FR-09) and check calculations (FR-03..06) run as deterministic code before/alongside the agent; the LLM never decides auto-clear.",
+    "Agent and MCP tools are read-only; the only path to an outcome is the Teams approval flow (GR-01).",
+    "Expose SAP, Coupa and vendor-risk through MCP servers so the GHCP harness can reuse them if it is later verified.",
+    "Every case event is written to an append-only governed case store, not conversation memory (NFR-01).",
+    "Code enforces a mandatory baseline check set per flag reason; the agent may add checks but not drop them."
+  ],
+  "roadmap": [
+    {
+      "phase": "0. Confirm gates & rules",
+      "scope": "Tolerance logic, write-back scope, hosting region, licensing, owners",
+      "exit": "All Fail/TBD gates for the primary route resolved or owned"
+    },
+    {
+      "phase": "1. Deterministic core",
+      "scope": "Tolerance pre-screen, check functions, case store + audit log",
+      "exit": "Tolerance EVAL 100%; audit schema signed off"
+    },
+    {
+      "phase": "2. MCP servers",
+      "scope": "Read-only SAP, Coupa, vendor-risk MCP servers with service identities",
+      "exit": "Security review passed per server"
+    },
+    {
+      "phase": "3. Agent + approval flow",
+      "scope": "Investigation agent, drafting, Teams approval flow",
+      "exit": "Shadow-mode pilot on replayed invoices meets EVAL targets"
+    },
+    {
+      "phase": "4. Scale",
+      "scope": "Live flags, ramp to ~2,000/day, monitoring",
+      "exit": "Throughput, audit and safety EVALs green for 2 weeks"
+    }
+  ],
+  "changeLog": [
+    {
+      "date": "2026-10-07",
+      "entry": "Initial draft generated from user notes (invoice exception investigator)."
+    }
+  ]
+}</script>
+  <script>
+    (() => {
+      const blueprintDataElement = document.getElementById("blueprint-data");
+      const blueprintData = JSON.parse(blueprintDataElement.textContent);
+
+      const formatDate = () => new Date().toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric"
+      });
+
+      const isoDate = () => new Date().toISOString().slice(0, 10);
+
+      const syncBlueprintData = () => {
+        blueprintData.status = document.getElementById("document-status").textContent;
+        blueprintData.lastUpdated = isoDate();
+        blueprintData.changeLog = Array.from(document.querySelectorAll("#change-log .change-item"))
+          .map((item) => ({
+            date: item.querySelector("strong").textContent,
+            entry: item.querySelector("span").textContent
+          }));
+        blueprintData.openIssues = Array.from(document.querySelectorAll("#open-issues .change-item span"))
+          .map((item) => item.textContent);
+        blueprintData.technicalDecisions = Array.from(document.querySelectorAll("#technical-decisions .change-item span"))
+          .map((item) => item.textContent);
+        blueprintDataElement.textContent = JSON.stringify(blueprintData, null, 2);
+      };
+
+      const updateLastUpdated = () => {
+        document.getElementById("last-updated").textContent = formatDate();
+        syncBlueprintData();
+      };
+
+      const appendItem = (containerId, label, text) => {
+        const log = document.getElementById(containerId);
+        const item = document.createElement("div");
+        const heading = document.createElement("strong");
+        const body = document.createElement("span");
+
+        item.className = "change-item";
+        heading.textContent = label;
+        body.textContent = text;
+
+        item.append(heading, body);
+        log.appendChild(item);
+        updateLastUpdated();
+      };
+
+      const bindAdd = (inputId, buttonId, containerId, labelFactory) => {
+        const input = document.getElementById(inputId);
+        const button = document.getElementById(buttonId);
+
+        button.addEventListener("click", () => {
+          const text = input.value.trim();
+          if (!text) {
+            input.focus();
+            return;
+          }
+
+          appendItem(containerId, labelFactory(), text);
+          input.value = "";
+        });
+      };
+
+      document.getElementById("update-status").addEventListener("click", () => {
+        const status = document.getElementById("status-select").value;
+        document.getElementById("document-status").textContent = status;
+        appendItem("change-log", isoDate(), `Updated document status to ${status}.`);
+      });
+
+      document.getElementById("download-updated").addEventListener("click", () => {
+        syncBlueprintData();
+        const html = `<!DOCTYPE html>\n${document.documentElement.outerHTML}`;
+        const blob = new Blob([html], { type: "text/html" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${blueprintData.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-blueprint-updated.html`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      });
+
+      bindAdd("change-input", "add-change", "change-log", () => isoDate());
+      bindAdd("issue-input", "add-issue", "open-issues", () => "Open");
+      bindAdd("decision-input", "add-decision", "technical-decisions", () => "Added");
+      syncBlueprintData();
+    })();
+  </script>
+
+
+</body></html>

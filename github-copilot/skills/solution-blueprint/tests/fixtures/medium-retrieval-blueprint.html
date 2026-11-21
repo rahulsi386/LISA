@@ -1,0 +1,2296 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contoso HR Policy Assistant Solution Blueprint</title>
+  <script>
+    (() => {
+      const param = new URLSearchParams(window.location.search).get("scoutTheme");
+      const theme =
+        param || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --cp-bg: #f7f4ef;
+      --cp-bg-elevated: #fcfbf8;
+      --cp-surface: #ffffff;
+      --cp-surface-soft: #f5f5f5;
+      --cp-border: #dedede;
+      --cp-border-strong: #919191;
+      --cp-text: #242424;
+      --cp-text-muted: #5c5c5c;
+      --cp-text-soft: #6f6f6f;
+      --cp-accent: #b11f4b;
+      --cp-accent-hover: #9a1a41;
+      --cp-accent-soft: rgba(177, 31, 75, 0.08);
+      --cp-accent-fg: #ffffff;
+      --cp-success: #16a34a;
+      --cp-danger: #dc2626;
+      --cp-warning: #f59e0b;
+      --cp-link: #0078d4;
+      --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+      --cp-overlay: rgba(255, 255, 255, 0.8);
+      --cp-panel: rgba(255, 255, 255, 0.86);
+      --cp-panel-strong: rgba(255, 255, 255, 0.96);
+      --cp-sheen: rgba(255, 255, 255, 0.55);
+      --cp-highlight: rgba(177, 31, 75, 0.12);
+    }
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --cp-bg: #3d3b3a;
+      --cp-bg-elevated: #343231;
+      --cp-surface: #292929;
+      --cp-surface-soft: #2e2e2e;
+      --cp-border: #474747;
+      --cp-border-strong: #5f5f5f;
+      --cp-text: #dedede;
+      --cp-text-muted: #919191;
+      --cp-text-soft: #b0b0b0;
+      --cp-accent: #fd8ea1;
+      --cp-accent-hover: #fb7b91;
+      --cp-accent-soft: rgba(253, 142, 161, 0.14);
+      --cp-accent-fg: #1a1a1a;
+      --cp-success: #4ade80;
+      --cp-danger: #f87171;
+      --cp-warning: #fbbf24;
+      --cp-link: #4da6ff;
+      --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+      --cp-overlay: rgba(41, 41, 41, 0.88);
+      --cp-panel: rgba(41, 41, 41, 0.72);
+      --cp-panel-strong: rgba(41, 41, 41, 0.96);
+      --cp-sheen: rgba(255, 255, 255, 0.04);
+      --cp-highlight: rgba(253, 142, 161, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--cp-bg);
+      color: var(--cp-text);
+      font-family: "Segoe UI", Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.5;
+    }
+
+    .page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+    }
+
+    .hero {
+      background: var(--cp-panel-strong);
+      border: 1px solid var(--cp-border);
+      border-radius: 16px;
+      box-shadow: var(--cp-shadow);
+      padding: 32px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: var(--cp-accent-soft);
+      pointer-events: none;
+    }
+
+    .hero-content {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(0, 1.8fr) minmax(260px, 1fr);
+      gap: 28px;
+      align-items: stretch;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      font-size: clamp(2rem, 5vw, 4rem);
+      line-height: 1;
+      margin-bottom: 16px;
+      letter-spacing: -0.04em;
+    }
+
+    h2 {
+      font-size: 1.45rem;
+      margin-bottom: 16px;
+      letter-spacing: -0.02em;
+    }
+
+    h3 {
+      font-size: 1rem;
+      margin-bottom: 8px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 16px;
+      color: var(--cp-accent);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.78rem;
+    }
+
+    .summary {
+      color: var(--cp-text-muted);
+      font-size: 1.06rem;
+      max-width: 780px;
+      margin-bottom: 0;
+    }
+
+    .meta-panel,
+    .card,
+    .section,
+    .route-card,
+    .timeline-item {
+      background: var(--cp-surface);
+      border: 1px solid var(--cp-border);
+      border-radius: 16px;
+    }
+
+    .meta-panel {
+      padding: 20px;
+    }
+
+    .meta-row {
+      border-bottom: 1px solid var(--cp-border);
+      padding: 10px 0;
+    }
+
+    .meta-row:last-child {
+      border-bottom: 0;
+    }
+
+    .label {
+      color: var(--cp-text-muted);
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .value {
+      display: block;
+      font-weight: 650;
+      margin-top: 4px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .section {
+      grid-column: span 12;
+      padding: 24px;
+    }
+
+    .span-4 {
+      grid-column: span 4;
+    }
+
+    .span-6 {
+      grid-column: span 6;
+    }
+
+    .span-8 {
+      grid-column: span 8;
+    }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    .card {
+      padding: 18px;
+    }
+
+    .kpi {
+      font-size: 2rem;
+      font-weight: 750;
+      color: var(--cp-accent);
+      letter-spacing: -0.04em;
+    }
+
+    .muted {
+      color: var(--cp-text-muted);
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .pill {
+      border: 1px solid var(--cp-border);
+      border-radius: 999px;
+      background: var(--cp-surface-soft);
+      color: var(--cp-text);
+      padding: 6px 10px;
+      font-size: 0.86rem;
+      font-weight: 600;
+    }
+
+    .recommendation {
+      background: var(--cp-accent-soft);
+      border-color: var(--cp-accent);
+    }
+
+    .recommendation h2 {
+      color: var(--cp-accent);
+    }
+
+    .route-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .route-card {
+      padding: 16px;
+    }
+
+    .route-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .score {
+      border-radius: 999px;
+      background: var(--cp-accent-soft);
+      color: var(--cp-accent);
+      padding: 4px 8px;
+      font-weight: 700;
+      white-space: nowrap;
+      font-size: 0.85rem;
+    }
+
+    .bar {
+      height: 8px;
+      background: var(--cp-surface-soft);
+      border: 1px solid var(--cp-border);
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 10px 0;
+    }
+
+    .bar span {
+      display: block;
+      height: 100%;
+      background: var(--cp-accent);
+      border-radius: inherit;
+    }
+
+    ul {
+      margin: 10px 0 0;
+      padding-left: 18px;
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    .timeline {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .timeline-item {
+      padding: 16px;
+    }
+
+    .step {
+      display: inline-flex;
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      align-items: center;
+      justify-content: center;
+      background: var(--cp-accent);
+      color: var(--cp-accent-fg);
+      font-weight: 800;
+      margin-bottom: 10px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: 0.625rem;
+      border: 1px solid var(--cp-border);
+    }
+
+    th,
+    td {
+      text-align: left;
+      border-bottom: 1px solid var(--cp-border);
+      padding: 12px;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--cp-surface-soft);
+      color: var(--cp-text);
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .status {
+      font-weight: 700;
+    }
+
+    .status.good {
+      color: var(--cp-success);
+    }
+
+    .status.warn {
+      color: var(--cp-warning);
+    }
+
+    .status.risk {
+      color: var(--cp-danger);
+    }
+
+    .change-log {
+      display: grid;
+      gap: 10px;
+    }
+
+    .change-item {
+      display: grid;
+      grid-template-columns: 150px 1fr;
+      gap: 12px;
+      background: var(--cp-surface-soft);
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      padding: 12px;
+    }
+
+    .update-box {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .action-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    input,
+    select,
+    textarea,
+    button {
+      font: inherit;
+      border-radius: 0.625rem;
+    }
+
+    input,
+    select,
+    textarea {
+      min-width: 0;
+      background: var(--cp-surface);
+      border: 1px solid var(--cp-border-strong);
+      color: var(--cp-text);
+      padding: 10px 12px;
+    }
+
+    textarea {
+      min-height: 76px;
+      resize: vertical;
+    }
+
+    .status-editor {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .two-field {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+    }
+
+    button {
+      border: 1px solid var(--cp-accent);
+      background: var(--cp-accent);
+      color: var(--cp-accent-fg);
+      font-weight: 700;
+      padding: 10px 14px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: var(--cp-accent-hover);
+    }
+
+    .secondary-button {
+      background: var(--cp-surface);
+      color: var(--cp-accent);
+    }
+
+    .secondary-button:hover {
+      background: var(--cp-accent-soft);
+    }
+
+    .footer-note {
+      margin-top: 20px;
+      color: var(--cp-text-muted);
+      font-size: 0.9rem;
+    }
+
+    @media (max-width: 860px) {
+      .hero-content,
+      .route-grid,
+      .timeline,
+      .kpi-grid,
+      .two-field,
+      .action-row,
+      .update-box {
+        grid-template-columns: 1fr;
+      }
+
+      .span-4,
+      .span-6,
+      .span-8 {
+        grid-column: span 12;
+      }
+
+      .change-item {
+        grid-template-columns: 1fr;
+      }
+    }
+  
+    .gate-table td.status { font-weight: 600; text-align: center; }
+    .ledger tr.out td { color: var(--cp-text-soft); opacity: 0.7; }
+    .table-wrap { overflow-x: auto; }
+    .arch { display: grid; grid-template-columns: minmax(0, 1fr) 190px; gap: 12px; }
+    .arch-main { display: grid; gap: 10px; }
+    .arch-layer { border: 1px solid var(--cp-border); border-radius: 12px; padding: 10px 12px; background: var(--cp-surface-soft); }
+    .arch-layer h3 { font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--cp-text-muted); margin-bottom: 6px; }
+    .arch-boxes { display: flex; flex-wrap: wrap; gap: 8px; }
+    .arch-box { border: 1px solid var(--cp-border-strong); border-radius: 8px; padding: 6px 10px; background: var(--cp-surface); font-size: 0.88rem; }
+    .arch-box.primary { border-color: var(--cp-accent); background: var(--cp-accent-soft); }
+    .arch-rail { border: 1px dashed var(--cp-border-strong); border-radius: 12px; padding: 10px 12px; font-size: 0.85rem; }
+    .arch-rail h3 { font-size: 0.82rem; text-transform: uppercase; color: var(--cp-text-muted); }
+    .arrow { text-align: center; color: var(--cp-text-muted); font-size: 1rem; line-height: 1; }
+    ol.seq li { margin-bottom: 4px; font-size: 0.92rem; }
+    .route-card .ids { font-size: 0.85rem; }
+    @media (max-width: 760px) { .arch { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div class="hero-content">
+        <div>
+          <div class="eyebrow">Solution Blueprint Draft</div>
+          <h1>Contoso HR Policy Assistant</h1>
+          <p class="summary">A Copilot Studio standard-harness agent in Teams and Microsoft 365 Copilot chat that answers Contoso HR policy questions only from the SharePoint &quot;HR Policies&quot; handbook with section citations, refuses out-of-scope topics, and hands personal cases to HR through one Power Automate flow that creates an item in the &quot;HR Requests&quot; list.</p>
+          <div class="pill-row">
+            <span class="pill">HR policy Q&amp;A</span>
+            <span class="pill">Cited answers (KS-01)</span>
+            <span class="pill">One Power Automate action</span>
+            <span class="pill">Teams + M365 Copilot chat</span>
+            <span class="pill">Entra ID SSO</span>
+          </div>
+        </div>
+        <aside class="meta-panel">
+          <div class="meta-row">
+            <span class="label">Document status</span>
+            <span class="value" id="document-status">Draft</span>
+            <div class="status-editor">
+              <select id="status-select" aria-label="Document status">
+                <option selected="">Draft</option>
+                <option>In review</option>
+                <option>Approved</option>
+                <option>Blocked</option>
+                <option>Archived</option>
+              </select>
+              <button id="update-status" type="button">Update status</button>
+            </div>
+          </div>
+          <div class="meta-row">
+            <span class="label">Recommended route</span>
+            <span class="value">Standard harness (Copilot Studio) + Power Automate flow — 33/35</span>
+          </div>
+          <div class="meta-row">
+            <span class="label">Complexity</span>
+            <span class="value">Medium — driven by FR-10, FR-11 (one agent flow / action); Stage 1 sufficient</span>
+          </div>
+          <div class="meta-row">
+            <span class="label">Confidence</span>
+            <span class="value">Medium — Requirements are complete and ID&#x27;d; route-separating gates (authorization scoping, feature maturity, M365 Copilot chat access, HR Requests list) are TBD.</span>
+          </div>
+          <div class="meta-row">
+            <span class="label">Last updated</span>
+            <span class="value" id="last-updated">Oct 7, 2026</span>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <div class="grid">
+      <section class="section">
+        <h2>Blueprint Snapshot</h2>
+        <div class="kpi-grid">
+          <div class="card"><div class="kpi">36</div><div class="muted">In-scope requirements in the ledger</div></div>
+          <div class="card"><div class="kpi">7</div><div class="muted">Solution routes evaluated</div></div>
+          <div class="card"><div class="kpi">3</div><div class="muted">Questions to confirm before build</div></div>
+          <div class="card"><div class="kpi">Medium</div><div class="muted">Complexity · Standard harness recommended</div></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Executive Summary</h2>
+        <p>Contoso's HR team receives about 1,200 repetitive policy questions a month by email and Teams, and the answers already exist in the approved HR Policy Handbook. The Contoso HR Policy Assistant answers those questions for ~8,000 employees in Microsoft Teams and Microsoft 365 Copilot chat, strictly from the SharePoint site "HR Policies" (KS-01), citing the handbook section (FR-06), and refuses payroll, other-employee, legal and medical topics (GR-01..GR-04).</p>
+        <p>Personal decisions and exceptions are handed to HR through one deterministic "Raise HR request" step: the agent collects category, description and urgency (FR-09), a Power Automate flow creates an item in the SharePoint list "HR Requests" (FR-10) and the request ID is returned (FR-11). This is retrieval plus one action — <strong>Medium</strong> complexity with no need to escalate beyond Stage 1. Route ranking: Standard harness 33/35 &gt; DA + skills 29/35 &gt; GHCP harness 25/35 &gt; Pro-code DA without MCP 18/35 &gt; Pro-code DA with MCP 17/35 &gt; Cowork plugins 16/35 &gt; Scout 14/35.</p>
+      </section>
+
+      <section class="section span-8 recommendation">
+        <h2>First-Draft Recommendation</h2>
+        <p>Build on the <strong>Standard harness (Copilot Studio)</strong> — 33/35, no failed gates. It is a native match for the dominant work types (knowledge retrieval for FR-01..FR-07 and deterministic execution for FR-08..FR-11), it is the platform the source names as target with licensing and environment confirmed (AD-01), and the IT Collaboration team already owns its governance plane (§9).</p>
+        <p><strong>Hybrid composition:</strong> Standard harness for FR-01..FR-08, FR-12, GR-01..GR-06 + Power Automate flow for FR-09..FR-11 writing to SharePoint list &quot;HR Requests&quot;. Greeting/suggested prompts (FR-12) and feedback/telemetry (FR-13, NFR-04) are configuration, not AI.</p>
+        <p><strong>Runner-up:</strong> DA + skills (29/35) is a good fit for the cited Q&amp;A but scores lower on integration readiness for the write-back action and on per-user availability (verify in tenant). GHCP harness and both pro-code routes are <em>over-engineered for current scope</em>; Cowork plugins and Scout fail the availability and ownership gates for a company-wide service.</p>
+      </section>
+
+      <section class="section span-4">
+        <h2>Questions to Confirm</h2>
+        <ul><li>Does the SharePoint list &quot;HR Requests&quot; already exist, and who owns and triages it?</li><li>Under which identity should the flow write requests, and who may read them?</li><li>Can all ~8,000 employees use the Microsoft 365 Copilot chat channel, or is Teams the launch channel?</li></ul>
+      </section>
+
+      <section class="section span-6">
+        <h2>Scenario Overview</h2>
+        <div class="meta-row"><span class="label">Primary actor</span><span class="value">Contoso employee (~8,000, English, Entra ID SSO)</span></div>
+        <div class="meta-row"><span class="label">Trigger</span><span class="value">An HR policy question on leave, WFH, travel/expenses or holidays (~1,200 / month today via email and Teams)</span></div>
+        <div class="meta-row"><span class="label">Expected outcome</span><span class="value">Cited answer from the handbook, or a tracked HR request with a returned request ID</span></div>
+      </section>
+
+      <section class="section span-6">
+        <h2>Key JTBDs Covered</h2>
+        <ul><li>Get a correct, cited policy answer in seconds (FR-01..FR-06)</li><li>Be asked what I mean when my question is ambiguous (FR-07)</li><li>Hand my personal case to HR without email and get a reference (FR-08..FR-11)</li><li>Know when the agent cannot help and what to do next (GR-01..GR-06)</li></ul>
+      </section>
+
+      <section class="section span-6">
+        <h2>Personas / Primary Users</h2>
+        <div class="table-wrap"><table class=""><thead><tr><th>Persona</th><th>Need</th><th>Volume</th><th>Channel</th></tr></thead><tbody><tr><td>Contoso employee</td><td>Fast, cited answers on leave, WFH, travel/expenses, holidays; raise a case when personal</td><td>~8,000 employees; ~1,200 policy questions / month</td><td>Microsoft Teams, Microsoft 365 Copilot chat</td></tr><tr><td>HR team</td><td>Fewer repetitive questions; tracked requests for cases needing judgement</td><td>TBD headcount</td><td>SharePoint list &quot;HR Requests&quot;</td></tr><tr><td>HR Operations Lead (business owner)</td><td>Approve content, go-live; track SM-01..03</td><td>1</td><td>Telemetry / analytics</td></tr><tr><td>IT Collaboration team (platform owner)</td><td>Configure Copilot Studio, Teams, SharePoint, Power Automate</td><td>TBD</td><td>Power Platform / Copilot Studio admin</td></tr></tbody></table></div>
+      </section>
+
+      <section class="section span-6">
+        <h2>Business Problem and Opportunity</h2>
+        <p>~1,200 repetitive questions a month divert HR capacity from cases needing judgement, delay replies that could be immediate and produce inconsistent answers (§1). Opportunity: resolve 70% without HR within 3 months (SM-01), CSAT &ge; 4/5 (SM-02) and halve HR email volume (SM-03).</p>
+      </section>
+
+      <section class="section">
+        <h2>In-Scope and Out-of-Scope Capabilities</h2>
+        <div class="table-wrap"><table class=""><thead><tr><th>In scope</th><th>Out of scope</th></tr></thead><tbody><tr><td>Policy questions on leave, work from home, travel and expenses, public holidays (FR-01..FR-04); raising HR requests for personal decisions, exceptions and out-of-scope questions (FR-08..FR-11); answer feedback (FR-13); English only (NFR-07)</td><td>Payroll and individual salary details (GR-01); other employees' data (GR-02); legal (GR-03) or medical advice (GR-04); any answer not grounded in KS-01 (GR-05, GR-06); any extra knowledge source without business-owner approval (DATA-01)</td></tr></tbody></table></div>
+      </section>
+
+      <section class="section">
+        <h2>Requirement Summary</h2>
+        <p>13 functional (FR-01..FR-13), 6 guardrails (GR-01..GR-06), 1 knowledge source (KS-01), 7 non-functional (NFR-01..NFR-07), 3 success metrics (SM-01..SM-03) and 3 assumptions/dependencies (AD-01..AD-03), all with source IDs kept verbatim. Three rows are derived from source text (DATA-01, UX-01, SEC-01) and one out-of-scope row (OOS-01) is listed but excluded from gates, scoring and complexity.</p>
+      </section>
+
+      <section class="section">
+        <h2>Requirement Ledger</h2>
+        <div class="table-wrap"><table class="ledger"><thead><tr><th>ID</th><th>Requirement</th><th>Classification</th><th>Source quote — locator</th><th>Systems</th></tr></thead><tbody>
+<tr><td><strong>FR-01</strong></td><td>Answer leave questions (annual, sick, parental) from Handbook A1-A3.</td><td>Required</td><td>&quot;Answer employee questions on leave: annual leave, sick leave and parental leave&quot; — §3 Functional requirements</td><td>Contoso HR Policy Handbook</td></tr>
+<tr><td><strong>FR-02</strong></td><td>Answer work-from-home questions from Handbook A4.</td><td>Required</td><td>&quot;Answer employee questions on work from home (Handbook A4)&quot; — §3</td><td>Contoso HR Policy Handbook</td></tr>
+<tr><td><strong>FR-03</strong></td><td>Answer travel and expense-claim questions from Handbook A6-A7.</td><td>Required</td><td>&quot;Answer employee questions on travel and expense claims&quot; — §3</td><td>Contoso HR Policy Handbook</td></tr>
+<tr><td><strong>FR-04</strong></td><td>Answer public-holiday questions from Handbook A5.</td><td>Required</td><td>&quot;Answer employee questions on public holidays (Handbook A5)&quot; — §3</td><td>Contoso HR Policy Handbook</td></tr>
+<tr><td><strong>FR-05</strong></td><td>Ground every policy answer only in KS-01.</td><td>Required</td><td>&quot;Ground every policy answer only in the HR policy knowledge source (KS-01)&quot; — §3</td><td>SharePoint site &quot;HR Policies&quot;</td></tr>
+<tr><td><strong>FR-06</strong></td><td>Cite the handbook section in each policy answer.</td><td>Required</td><td>&quot;Cite the policy section ... in each policy answer&quot; — §3</td><td>—</td></tr>
+<tr><td><strong>FR-07</strong></td><td>Ask a clarifying question when the request is ambiguous.</td><td>Required</td><td>&quot;Ask a clarifying question when the employee&#x27;s request is ambiguous&quot; — §3</td><td>—</td></tr>
+<tr><td><strong>FR-08</strong></td><td>Offer &quot;Raise HR request&quot; for personal decisions, exceptions, out-of-scope questions and refusals.</td><td>Required</td><td>&quot;Offer the \&quot;Raise HR request\&quot; capability when the employee needs a personal decision or exception&quot; — §3</td><td>—</td></tr>
+<tr><td><strong>FR-09</strong></td><td>Collect category, short description and urgency before submitting.</td><td>Required</td><td>&quot;collect the category, a short description and the urgency&quot; — §3 / §3.1</td><td>—</td></tr>
+<tr><td><strong>FR-10</strong></td><td>Create an item in SharePoint list &quot;HR Requests&quot; via a Power Automate flow.</td><td>Required</td><td>&quot;Create an item in the SharePoint list \&quot;HR Requests\&quot; through a Power Automate flow&quot; — §3</td><td>Power Automate; SharePoint list &quot;HR Requests&quot;</td></tr>
+<tr><td><strong>FR-11</strong></td><td>Return the created request ID to the employee.</td><td>Required</td><td>&quot;Return the request ID of the created item to the employee&quot; — §3</td><td>SharePoint list &quot;HR Requests&quot;</td></tr>
+<tr><td><strong>FR-12</strong></td><td>Greet the employee and show exactly 3 suggested prompts.</td><td>Required</td><td>&quot;Greet the employee at the start of a conversation and show 3 suggested prompts&quot; — §3 / §3.2</td><td>—</td></tr>
+<tr><td><strong>FR-13</strong></td><td>Capture thumbs up / thumbs down feedback on answers.</td><td>Required</td><td>&quot;Capture thumbs up / thumbs down feedback on answers&quot; — §3</td><td>—</td></tr>
+<tr><td><strong>GR-01</strong></td><td>Refuse payroll / individual salary questions; offer an HR request.</td><td>Required</td><td>&quot;No payroll information or individual salary details&quot; — §4</td><td>—</td></tr>
+<tr><td><strong>GR-02</strong></td><td>Never disclose another employee&#x27;s data.</td><td>Required</td><td>&quot;Never disclose another employee&#x27;s data&quot; — §4</td><td>—</td></tr>
+<tr><td><strong>GR-03</strong></td><td>No legal advice.</td><td>Required</td><td>&quot;No legal advice&quot; — §4</td><td>—</td></tr>
+<tr><td><strong>GR-04</strong></td><td>No medical advice (stating the A2 certificate rule is allowed).</td><td>Required</td><td>&quot;No medical advice&quot; — §4</td><td>—</td></tr>
+<tr><td><strong>GR-05</strong></td><td>Do not answer from general web knowledge.</td><td>Required</td><td>&quot;general web knowledge is disabled&quot; — §4</td><td>—</td></tr>
+<tr><td><strong>GR-06</strong></td><td>When the policy is silent, say so and offer an HR request.</td><td>Required</td><td>&quot;Do not answer when the policy is silent on the question&quot; — §4</td><td>—</td></tr>
+<tr><td><strong>KS-01</strong></td><td>Single knowledge source: Contoso HR Policy Handbook in SharePoint site &quot;HR Policies&quot;.</td><td>Required</td><td>&quot;SharePoint site \&quot;HR Policies\&quot;, document library&quot; — §5</td><td>SharePoint site &quot;HR Policies&quot;</td></tr>
+<tr><td><strong>DATA-01</strong> <span class="muted">(derived)</span></td><td>No other knowledge source may be connected without business-owner approval.</td><td>Required</td><td>&quot;No other knowledge source may be connected without the business owner&#x27;s approval&quot; — §5</td><td>—</td></tr>
+<tr><td><strong>UX-01</strong> <span class="muted">(derived)</span></td><td>Available in Microsoft Teams and Microsoft 365 Copilot chat.</td><td>Required</td><td>&quot;It must be available in the following channels: Microsoft Teams, Microsoft 365 Copilot chat&quot; — §2</td><td>Microsoft Teams; Microsoft 365 Copilot chat</td></tr>
+<tr><td><strong>SEC-01</strong> <span class="muted">(derived)</span></td><td>Requester identity comes from the Entra ID sign-in and is not asked again.</td><td>Required</td><td>&quot;the requester&#x27;s identity comes from the Entra ID sign-in and is not asked for again&quot; — §3.1</td><td>Microsoft Entra ID</td></tr>
+<tr><td><strong>NFR-01</strong></td><td>Response time under 5 s for 95% of questions.</td><td>Required</td><td>&quot;Response time under 5 seconds for 95% of questions&quot; — §6</td><td>—</td></tr>
+<tr><td><strong>NFR-02</strong></td><td>Answer accuracy at least 90% on the evaluation set.</td><td>Required</td><td>&quot;Answer accuracy of at least 90% on the evaluation set&quot; — §6</td><td>—</td></tr>
+<tr><td><strong>NFR-03</strong></td><td>Available during business hours 08:00-20:00 IST.</td><td>Required</td><td>&quot;Available during business hours, 08:00–20:00 IST&quot; — §6</td><td>—</td></tr>
+<tr><td><strong>NFR-04</strong></td><td>Telemetry on usage, deflection and feedback.</td><td>Required</td><td>&quot;Telemetry is captured on usage, deflection and feedback&quot; — §6</td><td>—</td></tr>
+<tr><td><strong>NFR-05</strong></td><td>Data stays within the Contoso Microsoft 365 tenant.</td><td>Required</td><td>&quot;Data stays within the Contoso Microsoft 365 tenant&quot; — §6</td><td>—</td></tr>
+<tr><td><strong>NFR-06</strong></td><td>Sign-in through Microsoft Entra ID SSO.</td><td>Required</td><td>&quot;Sign-in through Microsoft Entra ID single sign-on&quot; — §6</td><td>Microsoft Entra ID</td></tr>
+<tr><td><strong>NFR-07</strong></td><td>English only.</td><td>Required</td><td>&quot;English only&quot; — §6</td><td>—</td></tr>
+<tr><td><strong>SM-01</strong></td><td>70% of policy questions resolved without HR within 3 months.</td><td>Confirmed</td><td>&quot;70% within 3 months of launch&quot; — §7</td><td>—</td></tr>
+<tr><td><strong>SM-02</strong></td><td>CSAT at least 4 / 5.</td><td>Confirmed</td><td>&quot;At least 4 out of 5&quot; — §7</td><td>—</td></tr>
+<tr><td><strong>SM-03</strong></td><td>HR email volume reduced by 50%.</td><td>Confirmed</td><td>&quot;Reduced by 50%&quot; — §7</td><td>—</td></tr>
+<tr><td><strong>AD-01</strong></td><td>Copilot Studio licensing and a Power Platform environment are available.</td><td>Confirmed</td><td>&quot;Copilot Studio licensing and a Power Platform environment are available for the build&quot; — §8</td><td>Microsoft Copilot Studio; Power Platform</td></tr>
+<tr><td><strong>AD-02</strong></td><td>SharePoint site &quot;HR Policies&quot; exists and holds the handbook.</td><td>Confirmed</td><td>&quot;The SharePoint site \&quot;HR Policies\&quot; already exists&quot; — §8</td><td>SharePoint site &quot;HR Policies&quot;</td></tr>
+<tr><td><strong>AD-03</strong></td><td>HR team owns policy content and updates it quarterly.</td><td>Confirmed</td><td>&quot;The HR team owns policy content and updates it quarterly&quot; — §8</td><td>—</td></tr>
+<tr class="muted"><td><strong>OOS-01</strong> <span class="muted">(derived)</span></td><td>Payroll, individual salary, other employees&#x27; data, legal or medical advice, ungrounded answers.</td><td>Explicitly excluded</td><td>&quot;Out of scope: payroll and individual salary details, other employees&#x27; data, legal or medical advice&quot; — §1.2</td><td>—</td></tr>
+</tbody></table></div>
+      </section>
+
+      <section class="section span-6">
+        <h2>Current State / Trigger Context</h2>
+        <p>Employees email or message HR in Teams; HR answers by hand from the handbook, with variable wording and completeness (§1). There is no tracked intake for personal cases described in the source.</p>
+      </section>
+
+      <section class="section span-6">
+        <h2>Target Experience / Future State</h2>
+        <p>Employee signs in once (Entra ID SSO), sees a greeting and 3 suggested prompts, gets a cited answer in under 5 s (NFR-01), is asked to clarify ambiguous questions, and can raise a tracked HR request that returns an ID — all in Teams or Microsoft 365 Copilot chat.</p>
+      </section>
+
+      <section class="section">
+        <h2>Core User Journeys</h2>
+        <div class="timeline">
+          <div class="timeline-item"><span class="step">1</span><h3>Ask a policy question</h3><p class="muted">Cited answer from KS-01 (FR-01..FR-06).</p></div>
+          <div class="timeline-item"><span class="step">2</span><h3>Clarify</h3><p class="muted">Ambiguous question → clarifying question first (FR-07).</p></div>
+          <div class="timeline-item"><span class="step">3</span><h3>Refuse safely</h3><p class="muted">Out-of-scope or policy silent → brief refusal + HR request offer (GR-01..GR-06, FR-08).</p></div>
+          <div class="timeline-item"><span class="step">4</span><h3>Raise HR request</h3><p class="muted">3 fields → flow → "HR Requests" item → request ID (FR-09..FR-11).</p></div>
+        </div>
+      </section>
+
+      <section class="section span-6">
+        <h2>Data Sources and Grounding Sources</h2>
+        <ul>
+          <li><strong>KS-01</strong> — Contoso HR Policy Handbook, SharePoint site "HR Policies", document library, sections A1–A7; owner HR team; reviewed quarterly (AD-03).</li>
+          <li>No other knowledge source without business-owner approval (DATA-01); general web knowledge disabled (GR-05).</li>
+          <li>Write target: SharePoint list "HR Requests" (FR-10) — existence and schema TBD.</li>
+        </ul>
+      </section>
+
+      <section class="section span-6">
+        <h2>Integrations and Dependencies</h2>
+        <ul>
+          <li>Power Automate flow → SharePoint list "HR Requests" (FR-10, FR-11) — flow connection identity TBD.</li>
+          <li>Microsoft Entra ID SSO (NFR-06, SEC-01).</li>
+          <li>Channels: Microsoft Teams, Microsoft 365 Copilot chat (UX-01).</li>
+          <li>Copilot Studio licensing + Power Platform environment (AD-01); SharePoint site "HR Policies" exists (AD-02).</li>
+        </ul>
+      </section>
+
+      <section class="section">
+        <h2>Security, Privacy, Compliance, and Governance</h2>
+        <div class="table-wrap"><table class=""><thead><tr><th>Area</th><th>Requirement</th><th>Design response</th></tr></thead><tbody><tr><td>Identity</td><td>NFR-06, SEC-01</td><td>Entra ID SSO; requester taken from sign-in, never asked.</td></tr><tr><td>Data residency</td><td>NFR-05</td><td>Knowledge and requests stay in the Contoso Microsoft 365 tenant; environment region TBD.</td></tr><tr><td>Privacy</td><td>GR-01, GR-02</td><td>Knowledge source holds policy only; refusals for salary and other-employee data; list read permissions TBD.</td></tr><tr><td>Grounding</td><td>FR-05, GR-05, GR-06, DATA-01</td><td>Single knowledge source, web knowledge off, change control by business owner.</td></tr><tr><td>Action control</td><td>FR-09, FR-10</td><td>Single reversible write only after all 3 fields are collected; deterministic topic, not model-decided.</td></tr><tr><td>Telemetry</td><td>NFR-04, FR-13</td><td>Platform analytics for usage, deflection, feedback.</td></tr></tbody></table></div>
+      </section>
+
+      <section class="section">
+        <h2>Component Work Types</h2>
+        <div class="table-wrap"><table><thead><tr><th>Component</th><th>Work type</th><th>AI needed?</th><th>Default direction</th><th>Autonomy / impact</th><th>State store</th><th>Requirement IDs</th></tr></thead><tbody>
+<tr><td>Policy Q&amp;A with citations</td><td>Knowledge retrieval</td><td>Yes</td><td>Copilot Studio standard harness — generative answers over KS-01 only, web knowledge off</td><td>read-only</td><td>None (stateless answers; source in SharePoint &quot;HR Policies&quot;)</td><td>FR-01, FR-02, FR-03, FR-04, FR-05, FR-06, FR-07, KS-01, DATA-01, NFR-02, NFR-07</td></tr>
+<tr><td>Guardrails and refusals</td><td>Knowledge retrieval</td><td>Yes</td><td>Agent instructions + restricted knowledge; refusal routes to Raise HR request</td><td>read-only</td><td>None</td><td>GR-01, GR-02, GR-03, GR-04, GR-05, GR-06, FR-08</td></tr>
+<tr><td>Raise HR request</td><td>Deterministic execution</td><td>No</td><td>Copilot Studio topic collects 3 fields; Power Automate flow writes list item and returns ID</td><td>reversible write</td><td>SharePoint list &quot;HR Requests&quot;</td><td>FR-08, FR-09, FR-10, FR-11, SEC-01</td></tr>
+<tr><td>Greeting and suggested prompts</td><td>Conventional software</td><td>No</td><td>Configured conversation-start message with 3 fixed prompts</td><td>read-only</td><td>Agent configuration</td><td>FR-12</td></tr>
+<tr><td>Feedback and telemetry</td><td>Conventional software</td><td>No</td><td>Platform analytics + feedback capture (mechanism TBD)</td><td>reversible write</td><td>Platform analytics store (TBD)</td><td>FR-13, NFR-04</td></tr>
+</tbody></table></div>
+      </section>
+
+      <section class="section">
+        <h2>Architecture / Implementation Approach</h2>
+        
+        <div class="arch">
+          <div class="arch-main">
+            <div class="arch-layer"><h3>1 · Users</h3><div class="arch-boxes"><span class="arch-box">Contoso employees (~8,000, English, India)</span><span class="arch-box">HR team</span><span class="arch-box">HR Operations Lead</span></div></div>
+            <div class="arrow">▼</div>
+            <div class="arch-layer"><h3>2 · Channels</h3><div class="arch-boxes"><span class="arch-box">Microsoft Teams</span><span class="arch-box">Microsoft 365 Copilot chat</span></div></div>
+            <div class="arrow">▼</div>
+            <div class="arch-layer"><h3>3 · Agent platform</h3><div class="arch-boxes"><span class="arch-box primary">Microsoft Copilot Studio — standard harness</span><span class="arch-box">Instructions: Answer only from KS-01; cite handbook section; refuse GR-01..GR-06 and offer HR request</span><span class="arch-box">Knowledge: SharePoint site &quot;HR Policies&quot; (KS-01)</span><span class="arch-box">Tools: &quot;Raise HR request&quot; topic → Power Automate flow</span><span class="arch-box">Connected agents: None</span><span class="arch-box">Human review: HR team works the request in SharePoint list &quot;HR Requests&quot;</span></div></div>
+            <div class="arrow">▼</div>
+            <div class="arch-layer"><h3>4 · Data / automation / external systems</h3><div class="arch-boxes"><span class="arch-box">SharePoint site &quot;HR Policies&quot; — Contoso HR Policy Handbook A1–A7</span><span class="arch-box">Power Automate flow</span><span class="arch-box">SharePoint list &quot;HR Requests&quot;</span></div></div>
+          </div>
+          <div class="arch-main">
+            <div class="arch-rail"><h3>Identity, security &amp; governance</h3><ul><li>Microsoft Entra ID SSO (NFR-06)</li><li>Power Platform environment + DLP (AD-01)</li><li>Data in Contoso M365 tenant (NFR-05)</li><li>Flow connection identity — TBD</li></ul></div>
+            <div class="arch-rail"><h3>Monitoring &amp; ALM</h3><ul><li>Copilot Studio analytics: usage, deflection, feedback (NFR-04)</li><li>Solution-based ALM dev → test → prod (environments TBD)</li><li>Quarterly handbook review (AD-03)</li></ul></div>
+          </div>
+        </div>
+        <h3 style="margin-top:16px">Primary journey sequence</h3>
+        <ol class="seq"><li><strong>Employee</strong> → <strong>Teams / M365 Copilot chat</strong>: Opens the agent (SSO via Entra ID)</li><li><strong>Copilot Studio agent</strong> → <strong>Employee</strong>: Greeting + 3 suggested prompts (FR-12)</li><li><strong>Employee</strong> → <strong>Copilot Studio agent</strong>: &quot;How many days do I get?&quot;</li><li><strong>Copilot Studio agent</strong> → <strong>Employee</strong>: Clarifying question: which leave type? (FR-07)</li><li><strong>Employee</strong> → <strong>Copilot Studio agent</strong>: &quot;Annual leave — can I carry forward 15 days?&quot;</li><li><strong>Copilot Studio agent</strong> → <strong>SharePoint &quot;HR Policies&quot; (KS-01)</strong>: Retrieve handbook A1 (FR-05)</li><li><strong>Copilot Studio agent</strong> → <strong>Employee</strong>: Up to 10 days carry forward; cites &quot;Handbook A1 Annual leave&quot; (FR-06)</li><li><strong>Employee</strong> → <strong>Copilot Studio agent</strong>: Asks for an exception</li><li><strong>Copilot Studio agent</strong> → <strong>Employee</strong>: Offers &quot;Raise HR request&quot; (FR-08)</li><li><strong>Copilot Studio agent</strong> → <strong>Employee</strong>: Collects category, description, urgency (FR-09)</li><li><strong>Copilot Studio agent</strong> → <strong>Power Automate flow</strong>: Submit 3 fields + requester from Entra ID (SEC-01)</li><li><strong>Power Automate flow</strong> → <strong>SharePoint list &quot;HR Requests&quot;</strong>: Create item (FR-10)</li><li><strong>SharePoint list &quot;HR Requests&quot;</strong> → <strong>Power Automate flow</strong>: Item ID</li><li><strong>Power Automate flow</strong> → <strong>Copilot Studio agent</strong>: Request ID</li><li><strong>Copilot Studio agent</strong> → <strong>Employee</strong>: Shows request ID (FR-11) + feedback option (FR-13)</li><li><strong>Copilot Studio agent</strong> → <strong>Analytics</strong>: Usage / deflection / feedback telemetry (NFR-04)</li></ol>
+        <h3 style="margin-top:16px">Staged escalation</h3>
+        <div class="table-wrap"><table><thead><tr><th>Stage</th><th>Considered</th><th>Meets</th><th>Gaps</th><th>Escalate?</th><th>Note</th></tr></thead><tbody><tr><td>Stage 1</td><td>Copilot Studio standard harness, M365 Copilot declarative agent, Teams, Cowork</td><td>FR-01, FR-02, FR-03, FR-04, FR-05, FR-06, FR-07, FR-08, FR-09, FR-10, FR-11, FR-12, FR-13, GR-01, GR-02, GR-03, GR-04, GR-05, GR-06, KS-01, DATA-01, UX-01, SEC-01, NFR-03, NFR-04, NFR-05, NFR-06, NFR-07</td><td>None</td><td>No</td><td class="muted">NFR-01 (p95 &lt; 5 s) and NFR-02 (&gt;= 90% accuracy) are verified by EVALs, not by escalation.</td></tr><tr><td>Stage 2</td><td>Foundry</td><td>—</td><td>None</td><td>No</td><td class="muted">Not reached — no Stage 1 gaps.</td></tr><tr><td>Stage 3</td><td>Agent Framework</td><td>—</td><td>None</td><td>No</td><td class="muted">Not reached.</td></tr></tbody></table></div>
+      </section>
+
+      <section class="section">
+        <h2>Risks and Mitigations</h2>
+        <div class="table-wrap"><table><thead><tr><th>Risk</th><th>Mitigation</th></tr></thead><tbody><tr><td>Generated answer includes content not in the handbook (FR-05).</td><td>Single knowledge source, web knowledge off, grounding EVAL with 0 tolerance, HR review of eval set.</td></tr><tr><td>Stale answers after quarterly handbook update (AD-03).</td><td>HR publishes in place in &quot;HR Policies&quot;; re-run eval set after each update.</td></tr><tr><td>Accuracy below 90% (NFR-02) on ambiguous leave questions.</td><td>Clarifying-question rule (FR-07), section-level handbook structure, iterate instructions against Appendix B.</td></tr><tr><td>Flow failure leaves employee without request ID (FR-11).</td><td>Flow error branch returns a clear message and offers retry; monitor flow runs.</td></tr><tr><td>Over-broad flow permissions on &quot;HR Requests&quot; expose other employees&#x27; requests (GR-02).</td><td>Resolve Authorization scoping gate before build; item-level permissions TBD.</td></tr><tr><td>p95 latency above 5 s (NFR-01).</td><td>Measure in pilot; keep a single, well-structured knowledge source.</td></tr></tbody></table></div>
+      </section>
+
+      <section class="section">
+        <h2>Mandatory Gate Results</h2>
+        <div class="table-wrap"><table class="gate-table"><thead><tr><th>Gate</th><th>DA + skills</th><th>Pro-code DA with MCP</th><th>Pro-code DA without MCP</th><th>Standard harness</th><th>GHCP harness</th><th>Cowork plugins</th><th>Scout</th><th>Note</th></tr></thead><tbody>
+<tr><td><strong>Product availability</strong></td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status good">Pass</td><td class="status warn">TBD</td><td class="status risk">Fail</td><td class="status risk">Fail</td><td class="muted">Std: target platform named in source (§ Document control) + AD-01. DA: per-user Copilot availability for ~8,000 employees is verify-in-tenant. Cowork/Scout: no shared Teams / M365 Copilot chat service for all employees (UX-01). <em>Owner: IT Collaboration team</em></td></tr>
+<tr><td><strong>Feature maturity</strong></td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="muted">GA vs preview of every feature used (SharePoint knowledge, M365 Copilot chat channel, feedback capture) not stated in source. <em>Owner: IT Collaboration team</em></td></tr>
+<tr><td><strong>Contractual / licensing</strong></td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status good">Pass</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="muted">AD-01 confirms Copilot Studio licensing + Power Platform environment only. GHCP consumes Copilot Credits from build time. <em>Owner: HR Operations Lead</em></td></tr>
+<tr><td><strong>Data location &amp; movement</strong></td><td class="status good">Pass</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status good">Pass</td><td class="status good">Pass</td><td class="status warn">TBD</td><td class="status risk">Fail</td><td class="muted">NFR-05: data stays in tenant. Pro-code hosting location TBD; Scout runs on a local workstation. <em>Owner: IT Collaboration team</em></td></tr>
+<tr><td><strong>Identity — least privilege</strong></td><td class="status good">Pass</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status good">Pass</td><td class="status good">Pass</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="muted">Entra ID SSO (NFR-06, SEC-01). Pro-code needs Entra app registrations — scopes TBD. <em>Owner: IT Collaboration team</em></td></tr>
+<tr><td><strong>Authorization scoping</strong></td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="muted">Which identity the flow uses to write to &quot;HR Requests&quot; (user-delegated vs flow owner) and item-level permissions on the list are not specified. <em>Owner: IT Collaboration team</em></td></tr>
+<tr><td><strong>Network isolation</strong></td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="muted">No network requirement in source. <em>Owner: TBD</em></td></tr>
+<tr><td><strong>Encryption / key management</strong></td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="muted">No encryption / key requirement in source. <em>Owner: TBD</em></td></tr>
+<tr><td><strong>DLP</strong></td><td class="status good">Pass</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status good">Pass</td><td class="status good">Pass</td><td class="status warn">TBD</td><td class="status risk">Fail</td><td class="muted">Platform DLP planes per route catalog; pro-code requires custom controls; Scout has no shared governance plane. <em>Owner: IT Collaboration team</em></td></tr>
+<tr><td><strong>Audit &amp; traceability</strong></td><td class="status good">Pass</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status good">Pass</td><td class="status good">Pass</td><td class="status warn">TBD</td><td class="status risk">Fail</td><td class="muted">FR-10 list items are traceable; NFR-04 telemetry. Scout: no central audit. <em>Owner: IT Collaboration team</em></td></tr>
+<tr><td><strong>Safety &amp; action control</strong></td><td class="status good">Pass</td><td class="status good">Pass</td><td class="status good">Pass</td><td class="status good">Pass</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="muted">Single reversible write (FR-10) after all 3 fields collected (FR-09). GHCP autonomous orchestration needs explicit confirmation design. <em>Owner: Employee Experience (UX)</em></td></tr>
+<tr><td><strong>Records lifecycle</strong></td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="muted">Retention of &quot;HR Requests&quot; items and conversation transcripts not specified. <em>Owner: HR Operations Lead</em></td></tr>
+<tr><td><strong>Reliability</strong></td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status risk">Fail</td><td class="muted">NFR-01 p95 &lt; 5 s and NFR-03 08:00–20:00 IST must be measured. Scout depends on one workstation. <em>Owner: IT Collaboration team</em></td></tr>
+<tr><td><strong>Operational ownership</strong></td><td class="status good">Pass</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status good">Pass</td><td class="status good">Pass</td><td class="status risk">Fail</td><td class="status risk">Fail</td><td class="muted">IT Collaboration team owns Copilot Studio, Teams, SharePoint, Power Automate (§9). No owner named for pro-code hosting. Cowork/Scout are owned by one employee, not a shared service. <em>Owner: IT Collaboration team</em></td></tr>
+<tr><td><strong>Portability / exit</strong></td><td class="status good">Pass</td><td class="status good">Pass</td><td class="status good">Pass</td><td class="status good">Pass</td><td class="status good">Pass</td><td class="status good">Pass</td><td class="status good">Pass</td><td class="muted">Knowledge stays in SharePoint and requests in a SharePoint list — content portable on any route. <em>Owner: IT Collaboration team</em></td></tr>
+<tr><td><strong>Overall</strong></td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status warn">TBD</td><td class="status risk">Fail</td><td class="status risk">Fail</td><td class="muted">Any Fail = not viable as primary; TBD lowers confidence.</td></tr>
+</tbody></table></div>
+      </section>
+
+      <section class="section">
+        <h2>Solution Route Analysis</h2>
+        <div class="route-grid">
+          <article class="route-card">
+            <div class="route-head">
+              <h3>Standard harness</h3>
+              <span class="score">33/35 · Primary</span>
+            </div>
+            <div class="bar"><span style="width: 94%"></span></div>
+            <p class="muted">Native match for retrieval (KS-01) plus one deterministic action (FR-10) in the platform the source names as target (Copilot Studio, AD-01); Power Automate and SharePoint are covered without custom connectors; governed by the IT Collaboration team&#x27;s existing Power Platform plane.</p>
+            <p class="ids"><strong>Gates:</strong> TBD<br><strong>Covers:</strong> FR-01, FR-02, FR-03, FR-04, FR-05, FR-06, FR-07, FR-08, FR-09, FR-10, FR-11, FR-12, FR-13, GR-01, GR-02, GR-03, GR-04, GR-05, GR-06, KS-01, DATA-01, UX-01, SEC-01, NFR-04, NFR-05, NFR-06, NFR-07<br><strong>Cannot cover:</strong> NFR-01 / NFR-02 — must be proven by EVALs, not assumed</p>
+          </article>
+          <article class="route-card">
+            <div class="route-head">
+              <h3>DA + skills</h3>
+              <span class="score">29/35 · Runner-up</span>
+            </div>
+            <div class="bar"><span style="width: 83%"></span></div>
+            <p class="muted">Strong for handbook Q&amp;A with citations, but the source targets Copilot Studio, per-user availability for ~8,000 employees is verify-in-tenant, and the write-back action plus deflection telemetry are less direct.</p>
+            <p class="ids"><strong>Gates:</strong> TBD<br><strong>Covers:</strong> FR-01, FR-02, FR-03, FR-04, FR-05, FR-06, FR-07, GR-01, GR-02, GR-03, GR-04, GR-05, GR-06, KS-01, UX-01, NFR-06, NFR-07<br><strong>Cannot cover:</strong> FR-10 / FR-11 — action into Power Automate needs extra action wiring (TBD); NFR-04 — deflection telemetry mechanism TBD; FR-12 — exact-3-prompt greeting to verify</p>
+          </article>
+          <article class="route-card">
+            <div class="route-head">
+              <h3>GHCP harness</h3>
+              <span class="score">25/35 · Over-engineered</span>
+            </div>
+            <div class="bar"><span style="width: 71%"></span></div>
+            <p class="muted">Not-fit signal matches: simple retrieval + one predictable flow; credit consumption and non-determinism not justified for Medium scope.</p>
+            <p class="ids"><strong>Gates:</strong> TBD<br><strong>Covers:</strong> FR-01, FR-02, FR-03, FR-04, FR-05, FR-06, FR-07, FR-08, FR-09, FR-10, FR-11, UX-01<br><strong>Cannot cover:</strong> GR-05 / FR-05 — non-deterministic autonomous orchestration adds risk to strict grounding; AD-01 — Copilot Credits from build time not covered by stated licensing</p>
+          </article>
+          <article class="route-card">
+            <div class="route-head">
+              <h3>Pro-code DA without MCP</h3>
+              <span class="score">18/35 · Over-engineered</span>
+            </div>
+            <div class="bar"><span style="width: 51%"></span></div>
+            <p class="muted">Could build everything, but the scenario is retrieval + one flow that configuration-led routes already cover; adds code, hosting and app registrations without a requirement that needs them.</p>
+            <p class="ids"><strong>Gates:</strong> TBD<br><strong>Covers:</strong> FR-01, FR-02, FR-03, FR-04, FR-05, FR-06, FR-07, FR-08, FR-09, FR-10, FR-11, UX-01, NFR-06<br><strong>Cannot cover:</strong> Operational ownership — no team named to own code and hosting (§9); NFR-05 — hosting location TBD</p>
+          </article>
+          <article class="route-card">
+            <div class="route-head">
+              <h3>Pro-code DA with MCP</h3>
+              <span class="score">17/35 · Over-engineered</span>
+            </div>
+            <div class="bar"><span style="width: 49%"></span></div>
+            <p class="muted">Not-fit: single-action scenario; an MCP layer is a new security boundary and pro-code estate with no requirement driving it (High complexity vs derived Medium).</p>
+            <p class="ids"><strong>Gates:</strong> TBD<br><strong>Covers:</strong> FR-01, FR-02, FR-03, FR-04, FR-05, FR-06, FR-07, FR-08, FR-09, FR-10, FR-11, UX-01<br><strong>Cannot cover:</strong> Operational ownership — MCP servers and hosting have no owner; No requirement for multi-system adaptive reasoning or reusable MCP tools</p>
+          </article>
+          <article class="route-card">
+            <div class="route-head">
+              <h3>Cowork plugins</h3>
+              <span class="score">16/35 · Not viable</span>
+            </div>
+            <div class="bar"><span style="width: 46%"></span></div>
+            <p class="muted">Built for delegated personal work owned by one employee; this is a shared HR service for the whole company.</p>
+            <p class="ids"><strong>Gates:</strong> Fail<br><strong>Covers:</strong> FR-01, FR-03<br><strong>Cannot cover:</strong> UX-01 — not a shared Teams / M365 Copilot chat service for ~8,000 employees; NFR-04 — no central deflection telemetry; Gates: Product availability, Operational ownership = Fail</p>
+          </article>
+          <article class="route-card">
+            <div class="route-head">
+              <h3>Scout</h3>
+              <span class="score">14/35 · Not viable</span>
+            </div>
+            <div class="bar"><span style="width: 40%"></span></div>
+            <p class="muted">Individual workstation prototyping tool; production shared service is out of scope for this route.</p>
+            <p class="ids"><strong>Gates:</strong> Fail<br><strong>Covers:</strong> FR-01<br><strong>Cannot cover:</strong> UX-01 — not a shared enterprise channel; NFR-03 / NFR-05 — workstation-bound, data on local device; Gates: Product availability, Data location, DLP, Audit, Reliability, Operational ownership = Fail</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Route Scoring Rubric</h2>
+        <div class="table-wrap"><table><thead><tr><th>Criterion</th><th>1</th><th>3</th><th>5</th></tr></thead><tbody><tr><td><strong>Fit</strong></td><td>Misaligned with dominant work type</td><td>Partial; needs workarounds</td><td>Native match to dominant work type(s)</td></tr><tr><td><strong>Implementation speed</strong></td><td>Months of pro-code</td><td>Weeks; some custom pieces</td><td>Days; configuration-led</td></tr><tr><td><strong>Governance</strong></td><td>Ad-hoc; custom audit/DLP</td><td>Partial platform controls</td><td>Admin-managed, DLP, audit, ALM built in</td></tr><tr><td><strong>Extensibility</strong></td><td>Hard to add tools/sources</td><td>Possible with effort</td><td>Plug-in tools/connectors/skills easily</td></tr><tr><td><strong>Integration readiness</strong></td><td>Required systems unsupported</td><td>Needs custom connector/API</td><td>Required systems supported out of the box</td></tr><tr><td><strong>User experience</strong></td><td>Wrong channel / friction</td><td>Acceptable</td><td>Native in the required channel(s)</td></tr><tr><td><strong>Operational complexity (inverted)</strong></td><td>Heavy infra &amp; ops ownership</td><td>Moderate</td><td>Minimal; platform-run</td></tr></tbody></table></div>
+        <h3 style="margin-top:16px">Scores (1–5, higher is better; total /35)</h3>
+        <div class="table-wrap"><table><thead><tr><th>Route</th><th>Fit</th><th>Speed</th><th>Governance</th><th>Extensibility</th><th>Integration</th><th>UX</th><th>Ops (inv.)</th><th>Total</th></tr></thead><tbody><tr><td><strong>Standard harness</strong></td><td>5</td><td>4</td><td>5</td><td>4</td><td>5</td><td>5</td><td>5</td><td><strong>33/35</strong></td></tr><tr><td><strong>DA + skills</strong></td><td>4</td><td>5</td><td>4</td><td>4</td><td>3</td><td>4</td><td>5</td><td><strong>29/35</strong></td></tr><tr><td><strong>GHCP harness</strong></td><td>2</td><td>3</td><td>4</td><td>5</td><td>4</td><td>4</td><td>3</td><td><strong>25/35</strong></td></tr><tr><td><strong>Pro-code DA without MCP</strong></td><td>2</td><td>2</td><td>2</td><td>3</td><td>3</td><td>4</td><td>2</td><td><strong>18/35</strong></td></tr><tr><td><strong>Pro-code DA with MCP</strong></td><td>1</td><td>1</td><td>2</td><td>5</td><td>3</td><td>4</td><td>1</td><td><strong>17/35</strong></td></tr><tr><td><strong>Cowork plugins</strong></td><td>1</td><td>4</td><td>2</td><td>3</td><td>2</td><td>1</td><td>3</td><td><strong>16/35</strong></td></tr><tr><td><strong>Scout</strong></td><td>1</td><td>4</td><td>1</td><td>3</td><td>2</td><td>1</td><td>2</td><td><strong>14/35</strong></td></tr></tbody></table></div>
+      </section>
+
+      <section class="section span-4">
+        <h2>Buildable natively</h2>
+        <ul><li>Policy Q&amp;A over SharePoint &quot;HR Policies&quot; with section citations (FR-01..FR-07)</li><li>Guardrail refusals + HR request offer (GR-01..GR-06, FR-08)</li><li>&quot;Raise HR request&quot; topic + Power Automate flow to &quot;HR Requests&quot; (FR-09..FR-11)</li><li>Greeting + 3 suggested prompts (FR-12)</li><li>Teams and M365 Copilot chat publishing (UX-01) — channel availability per user TBD</li><li>Usage / deflection analytics (NFR-04); feedback mechanism TBD (FR-13)</li></ul>
+      </section>
+      <section class="section span-4">
+        <h2>Demonstrable only</h2>
+        <ul><li>Accuracy and guardrail EVALs on the 6 Appendix B sample questions (Demonstrable — simulated sample set until the full NFR-02 set exists)</li><li>SM-01..SM-03 shown as targets only — measurable only after launch</li></ul>
+      </section>
+      <section class="section span-4">
+        <h2>External dependency</h2>
+        <ul><li>SharePoint site &quot;HR Policies&quot; + handbook content — HR team (AD-02, AD-03)</li><li>SharePoint list &quot;HR Requests&quot; schema and permissions — owner TBD</li><li>Copilot Studio licensing + Power Platform environment — IT Collaboration team (AD-01)</li><li>Microsoft 365 Copilot chat access for employees — verify in tenant (TBD)</li><li>Entra ID SSO configuration — IT Collaboration team (NFR-06)</li></ul>
+      </section>
+
+      <section class="section span-6">
+        <h2>Open Issues</h2>
+        <div class="change-log" id="open-issues">
+          <div class="change-item"><strong>Open</strong><span>Confirm the SharePoint list &quot;HR Requests&quot; exists, its columns (category, description, urgency, requester, ID) and its owner — not covered by AD-02.</span></div>
+          <div class="change-item"><strong>Open</strong><span>Decide which identity the Power Automate flow uses to write to &quot;HR Requests&quot; and who can read items (Authorization scoping gate = TBD).</span></div>
+          <div class="change-item"><strong>Open</strong><span>Confirm which employees can use the Microsoft 365 Copilot chat channel (UX-01); per-user availability is verify-in-tenant.</span></div>
+          <div class="change-item"><strong>Open</strong><span>Confirm GA status of every platform feature used (Feature maturity gate = TBD for all routes).</span></div>
+          <div class="change-item"><strong>Open</strong><span>Define retention for &quot;HR Requests&quot; items and conversation transcripts (Records lifecycle gate = TBD).</span></div>
+          <div class="change-item"><strong>Open</strong><span>Agree allowed values for category and urgency (FR-09 / §3.1 gives examples only).</span></div>
+          <div class="change-item"><strong>Open</strong><span>Choose the feedback capture mechanism for FR-13 and confirm it reaches NFR-04 telemetry.</span></div>
+          <div class="change-item"><strong>Open</strong><span>Expand Appendix B (6 sample questions) into the full NFR-02 evaluation set and agree the accuracy scoring method.</span></div>
+        </div>
+        <div class="update-box">
+          <input id="issue-input" aria-label="Open issue" placeholder="Add an open issue">
+          <button id="add-issue" type="button">Add issue</button>
+        </div>
+      </section>
+
+      <section class="section span-6">
+        <h2>Key Technical Decisions</h2>
+        <div class="change-log" id="technical-decisions">
+          <div class="change-item"><strong>Proposed</strong><span>Primary platform: Copilot Studio standard harness, published to Microsoft Teams and Microsoft 365 Copilot chat (UX-01).</span></div>
+          <div class="change-item"><strong>Proposed</strong><span>Knowledge restricted to KS-01 (SharePoint site &quot;HR Policies&quot;); general web knowledge disabled (GR-05, DATA-01).</span></div>
+          <div class="change-item"><strong>Proposed</strong><span>&quot;Raise HR request&quot; is a deterministic topic: collect category, description, urgency (FR-09), then a Power Automate flow creates the list item and returns the ID (FR-10, FR-11). The model never decides whether a request is submitted.</span></div>
+          <div class="change-item"><strong>Proposed</strong><span>Requester identity taken from the Entra ID SSO context, never asked (SEC-01, NFR-06).</span></div>
+          <div class="change-item"><strong>Proposed</strong><span>Greeting and 3 suggested prompts are fixed configuration, not generated (FR-12).</span></div>
+        </div>
+        <div class="update-box">
+          <input id="decision-input" aria-label="Technical decision" placeholder="Add a technical decision">
+          <button id="add-decision" type="button">Add decision</button>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>EVALs</h2>
+        <div class="table-wrap"><table><thead><tr><th>Eval area</th><th>What to measure</th><th>Target</th><th>Current status</th></tr></thead><tbody><tr><td>Answer accuracy</td><td>Correct answers vs Appendix A on the NFR-02 set</td><td>&gt;= 90% (NFR-02)</td><td class="status warn">Not started</td></tr><tr><td>Citation</td><td>Policy answers naming &gt;= 1 handbook section</td><td>100% (FR-06)</td><td class="status warn">Not started</td></tr><tr><td>Grounding</td><td>Answers containing facts absent from KS-01</td><td>0 (FR-05, GR-05)</td><td class="status warn">Not started</td></tr><tr><td>Guardrails</td><td>Correct refusal + HR request offer on GR-01..GR-06 prompts (e.g. colleague salary, sabbatical)</td><td>100%</td><td class="status warn">Not started</td></tr><tr><td>Clarification</td><td>Ambiguous questions answered with a clarifying question</td><td>100% on ambiguous set (FR-07)</td><td class="status warn">Not started</td></tr><tr><td>HR request</td><td>Item created with all 3 fields + requester; ID returned</td><td>100% of test submissions (FR-09..FR-11)</td><td class="status warn">Not started</td></tr><tr><td>Latency</td><td>p95 response time</td><td>&lt; 5 s (NFR-01)</td><td class="status warn">Not started</td></tr><tr><td>Business outcome</td><td>Deflection, CSAT, HR email volume</td><td>70% / &gt;= 4 of 5 / -50% (SM-01..03)</td><td class="status warn">Post-launch</td></tr></tbody></table></div>
+      </section>
+
+      <section class="section">
+        <h2>Implementation Roadmap</h2>
+        <div class="timeline"><div class="timeline-item"><span class="step">1</span><h3>1. Foundations</h3><p class="muted">Power Platform environment, connect KS-01, Entra SSO, confirm &quot;HR Requests&quot; list + flow identity</p><p class="muted"><strong>Exit:</strong> Gates Authorization scoping and Feature maturity resolved</p></div><div class="timeline-item"><span class="step">2</span><h3>2. Policy Q&amp;A</h3><p class="muted">FR-01..FR-07, GR-01..GR-06, FR-12 greeting</p><p class="muted"><strong>Exit:</strong> NFR-02 &gt;= 90%, citation 100%, guardrails 100% on eval set</p></div><div class="timeline-item"><span class="step">3</span><h3>3. Raise HR request</h3><p class="muted">FR-08..FR-11 topic + Power Automate flow</p><p class="muted"><strong>Exit:</strong> End-to-end test creates item and returns ID</p></div><div class="timeline-item"><span class="step">4</span><h3>4. Pilot</h3><p class="muted">Publish to Teams and M365 Copilot chat for a pilot group; FR-13 + NFR-04 telemetry</p><p class="muted"><strong>Exit:</strong> NFR-01 p95 &lt; 5 s; CSAT trend; HR Operations Lead go-live decision</p></div><div class="timeline-item"><span class="step">5</span><h3>5. Rollout</h3><p class="muted">All ~8,000 employees</p><p class="muted"><strong>Exit:</strong> Track SM-01..SM-03 for 3 months</p></div></div>
+      </section>
+
+      <section class="section">
+        <h2>Change Log</h2>
+        <div class="change-log" id="change-log">
+          <div class="change-item"><strong>2026-10-07</strong><span>Initial draft generated from Contoso_HR_Policy_Assistant_Requirements.docx.</span></div>
+        </div>
+        <div class="update-box">
+          <input id="change-input" aria-label="Change log item" placeholder="Add a changelog line for preview">
+          <button id="add-change" type="button">Add to changelog</button>
+        </div>
+        <div class="action-row">
+          <button id="download-updated" class="secondary-button" type="button">Download updated HTML</button>
+        </div>
+        <p class="footer-note">Browser edits are temporary until you click Download updated HTML. For durable changes, update this source file so the embedded blueprint data and visible changelog stay aligned.</p>
+      </section>
+    </div>
+  </main>
+
+  <script type="application/json" id="blueprint-data">{
+  "name": "Contoso HR Policy Assistant",
+  "slug": "contoso-hr-policy-assistant",
+  "status": "Draft",
+  "lastUpdated": "2026-10-07",
+  "mode": "standalone",
+  "sourceArtifacts": [
+    {
+      "path": "Contoso_HR_Policy_Assistant_Requirements.docx",
+      "sha256": "62d4ac97938851e81393e5d1d9377c7c602727a95c2a282f7e226e910a1ef111",
+      "role": "requirements"
+    }
+  ],
+  "confidence": {
+    "level": "Medium",
+    "reason": "Requirements are complete and ID'd; route-separating gates (authorization scoping, feature maturity, M365 Copilot chat access, HR Requests list) are TBD."
+  },
+  "executiveSummary": "A Copilot Studio standard-harness agent in Teams and Microsoft 365 Copilot chat that answers Contoso HR policy questions only from the SharePoint \"HR Policies\" handbook with section citations, refuses out-of-scope topics, and hands personal cases to HR through one Power Automate flow that creates an item in the \"HR Requests\" list.",
+  "scenarioOverview": {
+    "primaryActor": "Contoso employee (~8,000, English, Entra ID SSO)",
+    "trigger": "An HR policy question on leave, WFH, travel/expenses or holidays (~1,200 / month today via email and Teams)",
+    "expectedOutcome": "Cited answer from the handbook, or a tracked HR request with a returned request ID"
+  },
+  "jtbd": [
+    "Get a correct, cited policy answer in seconds (FR-01..FR-06)",
+    "Be asked what I mean when my question is ambiguous (FR-07)",
+    "Hand my personal case to HR without email and get a reference (FR-08..FR-11)",
+    "Know when the agent cannot help and what to do next (GR-01..GR-06)"
+  ],
+  "personas": [
+    {
+      "name": "Contoso employee",
+      "need": "Fast, cited answers on leave, WFH, travel/expenses, holidays; raise a case when personal",
+      "volume": "~8,000 employees; ~1,200 policy questions / month",
+      "channel": "Microsoft Teams, Microsoft 365 Copilot chat"
+    },
+    {
+      "name": "HR team",
+      "need": "Fewer repetitive questions; tracked requests for cases needing judgement",
+      "volume": "TBD headcount",
+      "channel": "SharePoint list \"HR Requests\""
+    },
+    {
+      "name": "HR Operations Lead (business owner)",
+      "need": "Approve content, go-live; track SM-01..03",
+      "volume": "1",
+      "channel": "Telemetry / analytics"
+    },
+    {
+      "name": "IT Collaboration team (platform owner)",
+      "need": "Configure Copilot Studio, Teams, SharePoint, Power Automate",
+      "volume": "TBD",
+      "channel": "Power Platform / Copilot Studio admin"
+    }
+  ],
+  "assumptions": [
+    "Handbook sections A1–A7 are structured so section-level citations are possible (FR-06).",
+    "IT Collaboration team will build and run the agent (§9).",
+    "Business-hours availability (NFR-03) is a minimum, not a restriction — TBD."
+  ],
+  "questionsToConfirm": [
+    "Does the SharePoint list \"HR Requests\" already exist, and who owns and triages it?",
+    "Under which identity should the flow write requests, and who may read them?",
+    "Can all ~8,000 employees use the Microsoft 365 Copilot chat channel, or is Teams the launch channel?"
+  ],
+  "requirements": [
+    {
+      "id": "FR-01",
+      "idOrigin": "source",
+      "text": "Answer leave questions (annual, sick, parental) from Handbook A1-A3.",
+      "classification": "Required",
+      "source": "\"Answer employee questions on leave: annual leave, sick leave and parental leave\" — §3 Functional requirements",
+      "systems": [
+        "Contoso HR Policy Handbook"
+      ]
+    },
+    {
+      "id": "FR-02",
+      "idOrigin": "source",
+      "text": "Answer work-from-home questions from Handbook A4.",
+      "classification": "Required",
+      "source": "\"Answer employee questions on work from home (Handbook A4)\" — §3",
+      "systems": [
+        "Contoso HR Policy Handbook"
+      ]
+    },
+    {
+      "id": "FR-03",
+      "idOrigin": "source",
+      "text": "Answer travel and expense-claim questions from Handbook A6-A7.",
+      "classification": "Required",
+      "source": "\"Answer employee questions on travel and expense claims\" — §3",
+      "systems": [
+        "Contoso HR Policy Handbook"
+      ]
+    },
+    {
+      "id": "FR-04",
+      "idOrigin": "source",
+      "text": "Answer public-holiday questions from Handbook A5.",
+      "classification": "Required",
+      "source": "\"Answer employee questions on public holidays (Handbook A5)\" — §3",
+      "systems": [
+        "Contoso HR Policy Handbook"
+      ]
+    },
+    {
+      "id": "FR-05",
+      "idOrigin": "source",
+      "text": "Ground every policy answer only in KS-01.",
+      "classification": "Required",
+      "source": "\"Ground every policy answer only in the HR policy knowledge source (KS-01)\" — §3",
+      "systems": [
+        "SharePoint site \"HR Policies\""
+      ]
+    },
+    {
+      "id": "FR-06",
+      "idOrigin": "source",
+      "text": "Cite the handbook section in each policy answer.",
+      "classification": "Required",
+      "source": "\"Cite the policy section ... in each policy answer\" — §3",
+      "systems": []
+    },
+    {
+      "id": "FR-07",
+      "idOrigin": "source",
+      "text": "Ask a clarifying question when the request is ambiguous.",
+      "classification": "Required",
+      "source": "\"Ask a clarifying question when the employee's request is ambiguous\" — §3",
+      "systems": []
+    },
+    {
+      "id": "FR-08",
+      "idOrigin": "source",
+      "text": "Offer \"Raise HR request\" for personal decisions, exceptions, out-of-scope questions and refusals.",
+      "classification": "Required",
+      "source": "\"Offer the \\\"Raise HR request\\\" capability when the employee needs a personal decision or exception\" — §3",
+      "systems": []
+    },
+    {
+      "id": "FR-09",
+      "idOrigin": "source",
+      "text": "Collect category, short description and urgency before submitting.",
+      "classification": "Required",
+      "source": "\"collect the category, a short description and the urgency\" — §3 / §3.1",
+      "systems": []
+    },
+    {
+      "id": "FR-10",
+      "idOrigin": "source",
+      "text": "Create an item in SharePoint list \"HR Requests\" via a Power Automate flow.",
+      "classification": "Required",
+      "source": "\"Create an item in the SharePoint list \\\"HR Requests\\\" through a Power Automate flow\" — §3",
+      "systems": [
+        "Power Automate",
+        "SharePoint list \"HR Requests\""
+      ]
+    },
+    {
+      "id": "FR-11",
+      "idOrigin": "source",
+      "text": "Return the created request ID to the employee.",
+      "classification": "Required",
+      "source": "\"Return the request ID of the created item to the employee\" — §3",
+      "systems": [
+        "SharePoint list \"HR Requests\""
+      ]
+    },
+    {
+      "id": "FR-12",
+      "idOrigin": "source",
+      "text": "Greet the employee and show exactly 3 suggested prompts.",
+      "classification": "Required",
+      "source": "\"Greet the employee at the start of a conversation and show 3 suggested prompts\" — §3 / §3.2",
+      "systems": []
+    },
+    {
+      "id": "FR-13",
+      "idOrigin": "source",
+      "text": "Capture thumbs up / thumbs down feedback on answers.",
+      "classification": "Required",
+      "source": "\"Capture thumbs up / thumbs down feedback on answers\" — §3",
+      "systems": []
+    },
+    {
+      "id": "GR-01",
+      "idOrigin": "source",
+      "text": "Refuse payroll / individual salary questions; offer an HR request.",
+      "classification": "Required",
+      "source": "\"No payroll information or individual salary details\" — §4",
+      "systems": []
+    },
+    {
+      "id": "GR-02",
+      "idOrigin": "source",
+      "text": "Never disclose another employee's data.",
+      "classification": "Required",
+      "source": "\"Never disclose another employee's data\" — §4",
+      "systems": []
+    },
+    {
+      "id": "GR-03",
+      "idOrigin": "source",
+      "text": "No legal advice.",
+      "classification": "Required",
+      "source": "\"No legal advice\" — §4",
+      "systems": []
+    },
+    {
+      "id": "GR-04",
+      "idOrigin": "source",
+      "text": "No medical advice (stating the A2 certificate rule is allowed).",
+      "classification": "Required",
+      "source": "\"No medical advice\" — §4",
+      "systems": []
+    },
+    {
+      "id": "GR-05",
+      "idOrigin": "source",
+      "text": "Do not answer from general web knowledge.",
+      "classification": "Required",
+      "source": "\"general web knowledge is disabled\" — §4",
+      "systems": []
+    },
+    {
+      "id": "GR-06",
+      "idOrigin": "source",
+      "text": "When the policy is silent, say so and offer an HR request.",
+      "classification": "Required",
+      "source": "\"Do not answer when the policy is silent on the question\" — §4",
+      "systems": []
+    },
+    {
+      "id": "KS-01",
+      "idOrigin": "source",
+      "text": "Single knowledge source: Contoso HR Policy Handbook in SharePoint site \"HR Policies\".",
+      "classification": "Required",
+      "source": "\"SharePoint site \\\"HR Policies\\\", document library\" — §5",
+      "systems": [
+        "SharePoint site \"HR Policies\""
+      ]
+    },
+    {
+      "id": "DATA-01",
+      "idOrigin": "derived",
+      "text": "No other knowledge source may be connected without business-owner approval.",
+      "classification": "Required",
+      "source": "\"No other knowledge source may be connected without the business owner's approval\" — §5",
+      "systems": []
+    },
+    {
+      "id": "UX-01",
+      "idOrigin": "derived",
+      "text": "Available in Microsoft Teams and Microsoft 365 Copilot chat.",
+      "classification": "Required",
+      "source": "\"It must be available in the following channels: Microsoft Teams, Microsoft 365 Copilot chat\" — §2",
+      "systems": [
+        "Microsoft Teams",
+        "Microsoft 365 Copilot chat"
+      ]
+    },
+    {
+      "id": "SEC-01",
+      "idOrigin": "derived",
+      "text": "Requester identity comes from the Entra ID sign-in and is not asked again.",
+      "classification": "Required",
+      "source": "\"the requester's identity comes from the Entra ID sign-in and is not asked for again\" — §3.1",
+      "systems": [
+        "Microsoft Entra ID"
+      ]
+    },
+    {
+      "id": "NFR-01",
+      "idOrigin": "source",
+      "text": "Response time under 5 s for 95% of questions.",
+      "classification": "Required",
+      "source": "\"Response time under 5 seconds for 95% of questions\" — §6",
+      "systems": []
+    },
+    {
+      "id": "NFR-02",
+      "idOrigin": "source",
+      "text": "Answer accuracy at least 90% on the evaluation set.",
+      "classification": "Required",
+      "source": "\"Answer accuracy of at least 90% on the evaluation set\" — §6",
+      "systems": []
+    },
+    {
+      "id": "NFR-03",
+      "idOrigin": "source",
+      "text": "Available during business hours 08:00-20:00 IST.",
+      "classification": "Required",
+      "source": "\"Available during business hours, 08:00–20:00 IST\" — §6",
+      "systems": []
+    },
+    {
+      "id": "NFR-04",
+      "idOrigin": "source",
+      "text": "Telemetry on usage, deflection and feedback.",
+      "classification": "Required",
+      "source": "\"Telemetry is captured on usage, deflection and feedback\" — §6",
+      "systems": []
+    },
+    {
+      "id": "NFR-05",
+      "idOrigin": "source",
+      "text": "Data stays within the Contoso Microsoft 365 tenant.",
+      "classification": "Required",
+      "source": "\"Data stays within the Contoso Microsoft 365 tenant\" — §6",
+      "systems": []
+    },
+    {
+      "id": "NFR-06",
+      "idOrigin": "source",
+      "text": "Sign-in through Microsoft Entra ID SSO.",
+      "classification": "Required",
+      "source": "\"Sign-in through Microsoft Entra ID single sign-on\" — §6",
+      "systems": [
+        "Microsoft Entra ID"
+      ]
+    },
+    {
+      "id": "NFR-07",
+      "idOrigin": "source",
+      "text": "English only.",
+      "classification": "Required",
+      "source": "\"English only\" — §6",
+      "systems": []
+    },
+    {
+      "id": "SM-01",
+      "idOrigin": "source",
+      "text": "70% of policy questions resolved without HR within 3 months.",
+      "classification": "Confirmed",
+      "source": "\"70% within 3 months of launch\" — §7",
+      "systems": []
+    },
+    {
+      "id": "SM-02",
+      "idOrigin": "source",
+      "text": "CSAT at least 4 / 5.",
+      "classification": "Confirmed",
+      "source": "\"At least 4 out of 5\" — §7",
+      "systems": []
+    },
+    {
+      "id": "SM-03",
+      "idOrigin": "source",
+      "text": "HR email volume reduced by 50%.",
+      "classification": "Confirmed",
+      "source": "\"Reduced by 50%\" — §7",
+      "systems": []
+    },
+    {
+      "id": "AD-01",
+      "idOrigin": "source",
+      "text": "Copilot Studio licensing and a Power Platform environment are available.",
+      "classification": "Confirmed",
+      "source": "\"Copilot Studio licensing and a Power Platform environment are available for the build\" — §8",
+      "systems": [
+        "Microsoft Copilot Studio",
+        "Power Platform"
+      ]
+    },
+    {
+      "id": "AD-02",
+      "idOrigin": "source",
+      "text": "SharePoint site \"HR Policies\" exists and holds the handbook.",
+      "classification": "Confirmed",
+      "source": "\"The SharePoint site \\\"HR Policies\\\" already exists\" — §8",
+      "systems": [
+        "SharePoint site \"HR Policies\""
+      ]
+    },
+    {
+      "id": "AD-03",
+      "idOrigin": "source",
+      "text": "HR team owns policy content and updates it quarterly.",
+      "classification": "Confirmed",
+      "source": "\"The HR team owns policy content and updates it quarterly\" — §8",
+      "systems": []
+    },
+    {
+      "id": "OOS-01",
+      "idOrigin": "derived",
+      "text": "Payroll, individual salary, other employees' data, legal or medical advice, ungrounded answers.",
+      "classification": "Explicitly excluded",
+      "source": "\"Out of scope: payroll and individual salary details, other employees' data, legal or medical advice\" — §1.2",
+      "systems": []
+    }
+  ],
+  "components": [
+    {
+      "name": "Policy Q&A with citations",
+      "workType": "Knowledge retrieval",
+      "aiNeeded": true,
+      "direction": "Copilot Studio standard harness — generative answers over KS-01 only, web knowledge off",
+      "impact": "read-only",
+      "stateStore": "None (stateless answers; source in SharePoint \"HR Policies\")",
+      "requirementIds": [
+        "FR-01",
+        "FR-02",
+        "FR-03",
+        "FR-04",
+        "FR-05",
+        "FR-06",
+        "FR-07",
+        "KS-01",
+        "DATA-01",
+        "NFR-02",
+        "NFR-07"
+      ]
+    },
+    {
+      "name": "Guardrails and refusals",
+      "workType": "Knowledge retrieval",
+      "aiNeeded": true,
+      "direction": "Agent instructions + restricted knowledge; refusal routes to Raise HR request",
+      "impact": "read-only",
+      "stateStore": "None",
+      "requirementIds": [
+        "GR-01",
+        "GR-02",
+        "GR-03",
+        "GR-04",
+        "GR-05",
+        "GR-06",
+        "FR-08"
+      ]
+    },
+    {
+      "name": "Raise HR request",
+      "workType": "Deterministic execution",
+      "aiNeeded": false,
+      "direction": "Copilot Studio topic collects 3 fields; Power Automate flow writes list item and returns ID",
+      "impact": "reversible write",
+      "stateStore": "SharePoint list \"HR Requests\"",
+      "requirementIds": [
+        "FR-08",
+        "FR-09",
+        "FR-10",
+        "FR-11",
+        "SEC-01"
+      ]
+    },
+    {
+      "name": "Greeting and suggested prompts",
+      "workType": "Conventional software",
+      "aiNeeded": false,
+      "direction": "Configured conversation-start message with 3 fixed prompts",
+      "impact": "read-only",
+      "stateStore": "Agent configuration",
+      "requirementIds": [
+        "FR-12"
+      ]
+    },
+    {
+      "name": "Feedback and telemetry",
+      "workType": "Conventional software",
+      "aiNeeded": false,
+      "direction": "Platform analytics + feedback capture (mechanism TBD)",
+      "impact": "reversible write",
+      "stateStore": "Platform analytics store (TBD)",
+      "requirementIds": [
+        "FR-13",
+        "NFR-04"
+      ]
+    }
+  ],
+  "escalation": [
+    {
+      "stage": 1,
+      "considered": [
+        "Copilot Studio standard harness",
+        "M365 Copilot declarative agent",
+        "Teams",
+        "Cowork"
+      ],
+      "meets": [
+        "FR-01",
+        "FR-02",
+        "FR-03",
+        "FR-04",
+        "FR-05",
+        "FR-06",
+        "FR-07",
+        "FR-08",
+        "FR-09",
+        "FR-10",
+        "FR-11",
+        "FR-12",
+        "FR-13",
+        "GR-01",
+        "GR-02",
+        "GR-03",
+        "GR-04",
+        "GR-05",
+        "GR-06",
+        "KS-01",
+        "DATA-01",
+        "UX-01",
+        "SEC-01",
+        "NFR-03",
+        "NFR-04",
+        "NFR-05",
+        "NFR-06",
+        "NFR-07"
+      ],
+      "gaps": [],
+      "escalate": false,
+      "note": "NFR-01 (p95 < 5 s) and NFR-02 (>= 90% accuracy) are verified by EVALs, not by escalation."
+    },
+    {
+      "stage": 2,
+      "considered": [
+        "Foundry"
+      ],
+      "meets": [],
+      "gaps": [],
+      "escalate": false,
+      "note": "Not reached — no Stage 1 gaps."
+    },
+    {
+      "stage": 3,
+      "considered": [
+        "Agent Framework"
+      ],
+      "meets": [],
+      "gaps": [],
+      "escalate": false,
+      "note": "Not reached."
+    }
+  ],
+  "complexity": {
+    "rating": "Medium",
+    "drivers": [
+      "FR-10",
+      "FR-11"
+    ],
+    "reason": "Retrieval plus one Power Automate action writing to a SharePoint list (agent flow / action) — no custom integration or pro-code."
+  },
+  "gates": [
+    {
+      "gate": "Product availability",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "Pass",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "Fail",
+        "Scout": "Fail"
+      },
+      "note": "Std: target platform named in source (§ Document control) + AD-01. DA: per-user Copilot availability for ~8,000 employees is verify-in-tenant. Cowork/Scout: no shared Teams / M365 Copilot chat service for all employees (UX-01).",
+      "owner": "IT Collaboration team"
+    },
+    {
+      "gate": "Feature maturity",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "TBD",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "TBD",
+        "Scout": "TBD"
+      },
+      "note": "GA vs preview of every feature used (SharePoint knowledge, M365 Copilot chat channel, feedback capture) not stated in source.",
+      "owner": "IT Collaboration team"
+    },
+    {
+      "gate": "Contractual / licensing",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "Pass",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "TBD",
+        "Scout": "TBD"
+      },
+      "note": "AD-01 confirms Copilot Studio licensing + Power Platform environment only. GHCP consumes Copilot Credits from build time.",
+      "owner": "HR Operations Lead"
+    },
+    {
+      "gate": "Data location & movement",
+      "results": {
+        "DA + skills": "Pass",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "Pass",
+        "GHCP harness": "Pass",
+        "Cowork plugins": "TBD",
+        "Scout": "Fail"
+      },
+      "note": "NFR-05: data stays in tenant. Pro-code hosting location TBD; Scout runs on a local workstation.",
+      "owner": "IT Collaboration team"
+    },
+    {
+      "gate": "Identity — least privilege",
+      "results": {
+        "DA + skills": "Pass",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "Pass",
+        "GHCP harness": "Pass",
+        "Cowork plugins": "TBD",
+        "Scout": "TBD"
+      },
+      "note": "Entra ID SSO (NFR-06, SEC-01). Pro-code needs Entra app registrations — scopes TBD.",
+      "owner": "IT Collaboration team"
+    },
+    {
+      "gate": "Authorization scoping",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "TBD",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "TBD",
+        "Scout": "TBD"
+      },
+      "note": "Which identity the flow uses to write to \"HR Requests\" (user-delegated vs flow owner) and item-level permissions on the list are not specified.",
+      "owner": "IT Collaboration team"
+    },
+    {
+      "gate": "Network isolation",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "TBD",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "TBD",
+        "Scout": "TBD"
+      },
+      "note": "No network requirement in source.",
+      "owner": "TBD"
+    },
+    {
+      "gate": "Encryption / key management",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "TBD",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "TBD",
+        "Scout": "TBD"
+      },
+      "note": "No encryption / key requirement in source.",
+      "owner": "TBD"
+    },
+    {
+      "gate": "DLP",
+      "results": {
+        "DA + skills": "Pass",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "Pass",
+        "GHCP harness": "Pass",
+        "Cowork plugins": "TBD",
+        "Scout": "Fail"
+      },
+      "note": "Platform DLP planes per route catalog; pro-code requires custom controls; Scout has no shared governance plane.",
+      "owner": "IT Collaboration team"
+    },
+    {
+      "gate": "Audit & traceability",
+      "results": {
+        "DA + skills": "Pass",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "Pass",
+        "GHCP harness": "Pass",
+        "Cowork plugins": "TBD",
+        "Scout": "Fail"
+      },
+      "note": "FR-10 list items are traceable; NFR-04 telemetry. Scout: no central audit.",
+      "owner": "IT Collaboration team"
+    },
+    {
+      "gate": "Safety & action control",
+      "results": {
+        "DA + skills": "Pass",
+        "Pro-code DA with MCP": "Pass",
+        "Pro-code DA without MCP": "Pass",
+        "Standard harness": "Pass",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "TBD",
+        "Scout": "TBD"
+      },
+      "note": "Single reversible write (FR-10) after all 3 fields collected (FR-09). GHCP autonomous orchestration needs explicit confirmation design.",
+      "owner": "Employee Experience (UX)"
+    },
+    {
+      "gate": "Records lifecycle",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "TBD",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "TBD",
+        "Scout": "TBD"
+      },
+      "note": "Retention of \"HR Requests\" items and conversation transcripts not specified.",
+      "owner": "HR Operations Lead"
+    },
+    {
+      "gate": "Reliability",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "TBD",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "TBD",
+        "Scout": "Fail"
+      },
+      "note": "NFR-01 p95 < 5 s and NFR-03 08:00–20:00 IST must be measured. Scout depends on one workstation.",
+      "owner": "IT Collaboration team"
+    },
+    {
+      "gate": "Operational ownership",
+      "results": {
+        "DA + skills": "Pass",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "Pass",
+        "GHCP harness": "Pass",
+        "Cowork plugins": "Fail",
+        "Scout": "Fail"
+      },
+      "note": "IT Collaboration team owns Copilot Studio, Teams, SharePoint, Power Automate (§9). No owner named for pro-code hosting. Cowork/Scout are owned by one employee, not a shared service.",
+      "owner": "IT Collaboration team"
+    },
+    {
+      "gate": "Portability / exit",
+      "results": {
+        "DA + skills": "Pass",
+        "Pro-code DA with MCP": "Pass",
+        "Pro-code DA without MCP": "Pass",
+        "Standard harness": "Pass",
+        "GHCP harness": "Pass",
+        "Cowork plugins": "Pass",
+        "Scout": "Pass"
+      },
+      "note": "Knowledge stays in SharePoint and requests in a SharePoint list — content portable on any route.",
+      "owner": "IT Collaboration team"
+    }
+  ],
+  "routes": [
+    {
+      "name": "Standard harness",
+      "gate": "TBD",
+      "scores": {
+        "fit": 5,
+        "implementationSpeed": 4,
+        "governance": 5,
+        "extensibility": 4,
+        "integrationReadiness": 5,
+        "userExperience": 5,
+        "operationalComplexity": 5
+      },
+      "total": 33,
+      "covers": [
+        "FR-01",
+        "FR-02",
+        "FR-03",
+        "FR-04",
+        "FR-05",
+        "FR-06",
+        "FR-07",
+        "FR-08",
+        "FR-09",
+        "FR-10",
+        "FR-11",
+        "FR-12",
+        "FR-13",
+        "GR-01",
+        "GR-02",
+        "GR-03",
+        "GR-04",
+        "GR-05",
+        "GR-06",
+        "KS-01",
+        "DATA-01",
+        "UX-01",
+        "SEC-01",
+        "NFR-04",
+        "NFR-05",
+        "NFR-06",
+        "NFR-07"
+      ],
+      "cannotCover": [
+        "NFR-01 / NFR-02 — must be proven by EVALs, not assumed"
+      ],
+      "label": "Primary",
+      "rationale": "Native match for retrieval (KS-01) plus one deterministic action (FR-10) in the platform the source names as target (Copilot Studio, AD-01); Power Automate and SharePoint are covered without custom connectors; governed by the IT Collaboration team's existing Power Platform plane."
+    },
+    {
+      "name": "DA + skills",
+      "gate": "TBD",
+      "scores": {
+        "fit": 4,
+        "implementationSpeed": 5,
+        "governance": 4,
+        "extensibility": 4,
+        "integrationReadiness": 3,
+        "userExperience": 4,
+        "operationalComplexity": 5
+      },
+      "total": 29,
+      "covers": [
+        "FR-01",
+        "FR-02",
+        "FR-03",
+        "FR-04",
+        "FR-05",
+        "FR-06",
+        "FR-07",
+        "GR-01",
+        "GR-02",
+        "GR-03",
+        "GR-04",
+        "GR-05",
+        "GR-06",
+        "KS-01",
+        "UX-01",
+        "NFR-06",
+        "NFR-07"
+      ],
+      "cannotCover": [
+        "FR-10 / FR-11 — action into Power Automate needs extra action wiring (TBD)",
+        "NFR-04 — deflection telemetry mechanism TBD",
+        "FR-12 — exact-3-prompt greeting to verify"
+      ],
+      "label": "Runner-up",
+      "rationale": "Strong for handbook Q&A with citations, but the source targets Copilot Studio, per-user availability for ~8,000 employees is verify-in-tenant, and the write-back action plus deflection telemetry are less direct."
+    },
+    {
+      "name": "GHCP harness",
+      "gate": "TBD",
+      "scores": {
+        "fit": 2,
+        "implementationSpeed": 3,
+        "governance": 4,
+        "extensibility": 5,
+        "integrationReadiness": 4,
+        "userExperience": 4,
+        "operationalComplexity": 3
+      },
+      "total": 25,
+      "covers": [
+        "FR-01",
+        "FR-02",
+        "FR-03",
+        "FR-04",
+        "FR-05",
+        "FR-06",
+        "FR-07",
+        "FR-08",
+        "FR-09",
+        "FR-10",
+        "FR-11",
+        "UX-01"
+      ],
+      "cannotCover": [
+        "GR-05 / FR-05 — non-deterministic autonomous orchestration adds risk to strict grounding",
+        "AD-01 — Copilot Credits from build time not covered by stated licensing"
+      ],
+      "label": "Over-engineered",
+      "rationale": "Not-fit signal matches: simple retrieval + one predictable flow; credit consumption and non-determinism not justified for Medium scope."
+    },
+    {
+      "name": "Pro-code DA without MCP",
+      "gate": "TBD",
+      "scores": {
+        "fit": 2,
+        "implementationSpeed": 2,
+        "governance": 2,
+        "extensibility": 3,
+        "integrationReadiness": 3,
+        "userExperience": 4,
+        "operationalComplexity": 2
+      },
+      "total": 18,
+      "covers": [
+        "FR-01",
+        "FR-02",
+        "FR-03",
+        "FR-04",
+        "FR-05",
+        "FR-06",
+        "FR-07",
+        "FR-08",
+        "FR-09",
+        "FR-10",
+        "FR-11",
+        "UX-01",
+        "NFR-06"
+      ],
+      "cannotCover": [
+        "Operational ownership — no team named to own code and hosting (§9)",
+        "NFR-05 — hosting location TBD"
+      ],
+      "label": "Over-engineered",
+      "rationale": "Could build everything, but the scenario is retrieval + one flow that configuration-led routes already cover; adds code, hosting and app registrations without a requirement that needs them."
+    },
+    {
+      "name": "Pro-code DA with MCP",
+      "gate": "TBD",
+      "scores": {
+        "fit": 1,
+        "implementationSpeed": 1,
+        "governance": 2,
+        "extensibility": 5,
+        "integrationReadiness": 3,
+        "userExperience": 4,
+        "operationalComplexity": 1
+      },
+      "total": 17,
+      "covers": [
+        "FR-01",
+        "FR-02",
+        "FR-03",
+        "FR-04",
+        "FR-05",
+        "FR-06",
+        "FR-07",
+        "FR-08",
+        "FR-09",
+        "FR-10",
+        "FR-11",
+        "UX-01"
+      ],
+      "cannotCover": [
+        "Operational ownership — MCP servers and hosting have no owner",
+        "No requirement for multi-system adaptive reasoning or reusable MCP tools"
+      ],
+      "label": "Over-engineered",
+      "rationale": "Not-fit: single-action scenario; an MCP layer is a new security boundary and pro-code estate with no requirement driving it (High complexity vs derived Medium)."
+    },
+    {
+      "name": "Cowork plugins",
+      "gate": "Fail",
+      "scores": {
+        "fit": 1,
+        "implementationSpeed": 4,
+        "governance": 2,
+        "extensibility": 3,
+        "integrationReadiness": 2,
+        "userExperience": 1,
+        "operationalComplexity": 3
+      },
+      "total": 16,
+      "covers": [
+        "FR-01",
+        "FR-03"
+      ],
+      "cannotCover": [
+        "UX-01 — not a shared Teams / M365 Copilot chat service for ~8,000 employees",
+        "NFR-04 — no central deflection telemetry",
+        "Gates: Product availability, Operational ownership = Fail"
+      ],
+      "label": "Not viable",
+      "rationale": "Built for delegated personal work owned by one employee; this is a shared HR service for the whole company."
+    },
+    {
+      "name": "Scout",
+      "gate": "Fail",
+      "scores": {
+        "fit": 1,
+        "implementationSpeed": 4,
+        "governance": 1,
+        "extensibility": 3,
+        "integrationReadiness": 2,
+        "userExperience": 1,
+        "operationalComplexity": 2
+      },
+      "total": 14,
+      "covers": [
+        "FR-01"
+      ],
+      "cannotCover": [
+        "UX-01 — not a shared enterprise channel",
+        "NFR-03 / NFR-05 — workstation-bound, data on local device",
+        "Gates: Product availability, Data location, DLP, Audit, Reliability, Operational ownership = Fail"
+      ],
+      "label": "Not viable",
+      "rationale": "Individual workstation prototyping tool; production shared service is out of scope for this route."
+    }
+  ],
+  "recommendedRoute": "Standard harness",
+  "recommendation": {
+    "primary": "Standard harness (Copilot Studio)",
+    "hybrid": "Standard harness for FR-01..FR-08, FR-12, GR-01..GR-06 + Power Automate flow for FR-09..FR-11 writing to SharePoint list \"HR Requests\"",
+    "why": "Native match for retrieval + one deterministic action, named target platform (AD-01), no Stage 1 gaps, no failed gates.",
+    "requirementIds": [
+      "FR-01",
+      "FR-05",
+      "FR-06",
+      "FR-08",
+      "FR-10",
+      "FR-11",
+      "UX-01",
+      "AD-01",
+      "NFR-04",
+      "NFR-05"
+    ]
+  },
+  "buildDemoDependency": {
+    "buildable": [
+      "Policy Q&A over SharePoint \"HR Policies\" with section citations (FR-01..FR-07)",
+      "Guardrail refusals + HR request offer (GR-01..GR-06, FR-08)",
+      "\"Raise HR request\" topic + Power Automate flow to \"HR Requests\" (FR-09..FR-11)",
+      "Greeting + 3 suggested prompts (FR-12)",
+      "Teams and M365 Copilot chat publishing (UX-01) — channel availability per user TBD",
+      "Usage / deflection analytics (NFR-04); feedback mechanism TBD (FR-13)"
+    ],
+    "demonstrable": [
+      "Accuracy and guardrail EVALs on the 6 Appendix B sample questions (Demonstrable — simulated sample set until the full NFR-02 set exists)",
+      "SM-01..SM-03 shown as targets only — measurable only after launch"
+    ],
+    "dependency": [
+      "SharePoint site \"HR Policies\" + handbook content — HR team (AD-02, AD-03)",
+      "SharePoint list \"HR Requests\" schema and permissions — owner TBD",
+      "Copilot Studio licensing + Power Platform environment — IT Collaboration team (AD-01)",
+      "Microsoft 365 Copilot chat access for employees — verify in tenant (TBD)",
+      "Entra ID SSO configuration — IT Collaboration team (NFR-06)"
+    ]
+  },
+  "architecture": {
+    "users": [
+      "Contoso employees (~8,000, English, India)",
+      "HR team",
+      "HR Operations Lead"
+    ],
+    "channels": [
+      "Microsoft Teams",
+      "Microsoft 365 Copilot chat"
+    ],
+    "agentPlatform": {
+      "platform": "Microsoft Copilot Studio — standard harness",
+      "instructions": "Answer only from KS-01; cite handbook section; refuse GR-01..GR-06 and offer HR request",
+      "knowledge": "SharePoint site \"HR Policies\" (KS-01)",
+      "tools": "\"Raise HR request\" topic → Power Automate flow",
+      "connectedAgents": "None",
+      "humanReview": "HR team works the request in SharePoint list \"HR Requests\""
+    },
+    "data": [
+      "SharePoint site \"HR Policies\" — Contoso HR Policy Handbook A1–A7",
+      "Power Automate flow",
+      "SharePoint list \"HR Requests\""
+    ],
+    "identityGovernance": [
+      "Microsoft Entra ID SSO (NFR-06)",
+      "Power Platform environment + DLP (AD-01)",
+      "Data in Contoso M365 tenant (NFR-05)",
+      "Flow connection identity — TBD"
+    ],
+    "monitoringAlm": [
+      "Copilot Studio analytics: usage, deflection, feedback (NFR-04)",
+      "Solution-based ALM dev → test → prod (environments TBD)",
+      "Quarterly handbook review (AD-03)"
+    ]
+  },
+  "sequence": [
+    {
+      "from": "Employee",
+      "to": "Teams / M365 Copilot chat",
+      "message": "Opens the agent (SSO via Entra ID)"
+    },
+    {
+      "from": "Copilot Studio agent",
+      "to": "Employee",
+      "message": "Greeting + 3 suggested prompts (FR-12)"
+    },
+    {
+      "from": "Employee",
+      "to": "Copilot Studio agent",
+      "message": "\"How many days do I get?\""
+    },
+    {
+      "from": "Copilot Studio agent",
+      "to": "Employee",
+      "message": "Clarifying question: which leave type? (FR-07)"
+    },
+    {
+      "from": "Employee",
+      "to": "Copilot Studio agent",
+      "message": "\"Annual leave — can I carry forward 15 days?\""
+    },
+    {
+      "from": "Copilot Studio agent",
+      "to": "SharePoint \"HR Policies\" (KS-01)",
+      "message": "Retrieve handbook A1 (FR-05)"
+    },
+    {
+      "from": "Copilot Studio agent",
+      "to": "Employee",
+      "message": "Up to 10 days carry forward; cites \"Handbook A1 Annual leave\" (FR-06)"
+    },
+    {
+      "from": "Employee",
+      "to": "Copilot Studio agent",
+      "message": "Asks for an exception"
+    },
+    {
+      "from": "Copilot Studio agent",
+      "to": "Employee",
+      "message": "Offers \"Raise HR request\" (FR-08)"
+    },
+    {
+      "from": "Copilot Studio agent",
+      "to": "Employee",
+      "message": "Collects category, description, urgency (FR-09)"
+    },
+    {
+      "from": "Copilot Studio agent",
+      "to": "Power Automate flow",
+      "message": "Submit 3 fields + requester from Entra ID (SEC-01)"
+    },
+    {
+      "from": "Power Automate flow",
+      "to": "SharePoint list \"HR Requests\"",
+      "message": "Create item (FR-10)"
+    },
+    {
+      "from": "SharePoint list \"HR Requests\"",
+      "to": "Power Automate flow",
+      "message": "Item ID"
+    },
+    {
+      "from": "Power Automate flow",
+      "to": "Copilot Studio agent",
+      "message": "Request ID"
+    },
+    {
+      "from": "Copilot Studio agent",
+      "to": "Employee",
+      "message": "Shows request ID (FR-11) + feedback option (FR-13)"
+    },
+    {
+      "from": "Copilot Studio agent",
+      "to": "Analytics",
+      "message": "Usage / deflection / feedback telemetry (NFR-04)"
+    }
+  ],
+  "evals": [
+    {
+      "area": "Answer accuracy",
+      "measure": "Correct answers vs Appendix A on the NFR-02 set",
+      "target": ">= 90% (NFR-02)",
+      "status": "Not started"
+    },
+    {
+      "area": "Citation",
+      "measure": "Policy answers naming >= 1 handbook section",
+      "target": "100% (FR-06)",
+      "status": "Not started"
+    },
+    {
+      "area": "Grounding",
+      "measure": "Answers containing facts absent from KS-01",
+      "target": "0 (FR-05, GR-05)",
+      "status": "Not started"
+    },
+    {
+      "area": "Guardrails",
+      "measure": "Correct refusal + HR request offer on GR-01..GR-06 prompts (e.g. colleague salary, sabbatical)",
+      "target": "100%",
+      "status": "Not started"
+    },
+    {
+      "area": "Clarification",
+      "measure": "Ambiguous questions answered with a clarifying question",
+      "target": "100% on ambiguous set (FR-07)",
+      "status": "Not started"
+    },
+    {
+      "area": "HR request",
+      "measure": "Item created with all 3 fields + requester; ID returned",
+      "target": "100% of test submissions (FR-09..FR-11)",
+      "status": "Not started"
+    },
+    {
+      "area": "Latency",
+      "measure": "p95 response time",
+      "target": "< 5 s (NFR-01)",
+      "status": "Not started"
+    },
+    {
+      "area": "Business outcome",
+      "measure": "Deflection, CSAT, HR email volume",
+      "target": "70% / >= 4 of 5 / -50% (SM-01..03)",
+      "status": "Post-launch"
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Generated answer includes content not in the handbook (FR-05).",
+      "mitigation": "Single knowledge source, web knowledge off, grounding EVAL with 0 tolerance, HR review of eval set."
+    },
+    {
+      "risk": "Stale answers after quarterly handbook update (AD-03).",
+      "mitigation": "HR publishes in place in \"HR Policies\"; re-run eval set after each update."
+    },
+    {
+      "risk": "Accuracy below 90% (NFR-02) on ambiguous leave questions.",
+      "mitigation": "Clarifying-question rule (FR-07), section-level handbook structure, iterate instructions against Appendix B."
+    },
+    {
+      "risk": "Flow failure leaves employee without request ID (FR-11).",
+      "mitigation": "Flow error branch returns a clear message and offers retry; monitor flow runs."
+    },
+    {
+      "risk": "Over-broad flow permissions on \"HR Requests\" expose other employees' requests (GR-02).",
+      "mitigation": "Resolve Authorization scoping gate before build; item-level permissions TBD."
+    },
+    {
+      "risk": "p95 latency above 5 s (NFR-01).",
+      "mitigation": "Measure in pilot; keep a single, well-structured knowledge source."
+    }
+  ],
+  "openIssues": [
+    "Confirm the SharePoint list \"HR Requests\" exists, its columns (category, description, urgency, requester, ID) and its owner — not covered by AD-02.",
+    "Decide which identity the Power Automate flow uses to write to \"HR Requests\" and who can read items (Authorization scoping gate = TBD).",
+    "Confirm which employees can use the Microsoft 365 Copilot chat channel (UX-01); per-user availability is verify-in-tenant.",
+    "Confirm GA status of every platform feature used (Feature maturity gate = TBD for all routes).",
+    "Define retention for \"HR Requests\" items and conversation transcripts (Records lifecycle gate = TBD).",
+    "Agree allowed values for category and urgency (FR-09 / §3.1 gives examples only).",
+    "Choose the feedback capture mechanism for FR-13 and confirm it reaches NFR-04 telemetry.",
+    "Expand Appendix B (6 sample questions) into the full NFR-02 evaluation set and agree the accuracy scoring method."
+  ],
+  "technicalDecisions": [
+    "Primary platform: Copilot Studio standard harness, published to Microsoft Teams and Microsoft 365 Copilot chat (UX-01).",
+    "Knowledge restricted to KS-01 (SharePoint site \"HR Policies\"); general web knowledge disabled (GR-05, DATA-01).",
+    "\"Raise HR request\" is a deterministic topic: collect category, description, urgency (FR-09), then a Power Automate flow creates the list item and returns the ID (FR-10, FR-11). The model never decides whether a request is submitted.",
+    "Requester identity taken from the Entra ID SSO context, never asked (SEC-01, NFR-06).",
+    "Greeting and 3 suggested prompts are fixed configuration, not generated (FR-12)."
+  ],
+  "roadmap": [
+    {
+      "phase": "1. Foundations",
+      "scope": "Power Platform environment, connect KS-01, Entra SSO, confirm \"HR Requests\" list + flow identity",
+      "exit": "Gates Authorization scoping and Feature maturity resolved"
+    },
+    {
+      "phase": "2. Policy Q&A",
+      "scope": "FR-01..FR-07, GR-01..GR-06, FR-12 greeting",
+      "exit": "NFR-02 >= 90%, citation 100%, guardrails 100% on eval set"
+    },
+    {
+      "phase": "3. Raise HR request",
+      "scope": "FR-08..FR-11 topic + Power Automate flow",
+      "exit": "End-to-end test creates item and returns ID"
+    },
+    {
+      "phase": "4. Pilot",
+      "scope": "Publish to Teams and M365 Copilot chat for a pilot group; FR-13 + NFR-04 telemetry",
+      "exit": "NFR-01 p95 < 5 s; CSAT trend; HR Operations Lead go-live decision"
+    },
+    {
+      "phase": "5. Rollout",
+      "scope": "All ~8,000 employees",
+      "exit": "Track SM-01..SM-03 for 3 months"
+    }
+  ],
+  "changeLog": [
+    {
+      "date": "2026-10-07",
+      "entry": "Initial draft generated from Contoso_HR_Policy_Assistant_Requirements.docx."
+    }
+  ]
+}</script>
+  <script>
+    (() => {
+      const blueprintDataElement = document.getElementById("blueprint-data");
+      const blueprintData = JSON.parse(blueprintDataElement.textContent);
+
+      const formatDate = () => new Date().toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric"
+      });
+
+      const isoDate = () => new Date().toISOString().slice(0, 10);
+
+      const syncBlueprintData = () => {
+        blueprintData.status = document.getElementById("document-status").textContent;
+        blueprintData.lastUpdated = isoDate();
+        blueprintData.changeLog = Array.from(document.querySelectorAll("#change-log .change-item"))
+          .map((item) => ({
+            date: item.querySelector("strong").textContent,
+            entry: item.querySelector("span").textContent
+          }));
+        blueprintData.openIssues = Array.from(document.querySelectorAll("#open-issues .change-item span"))
+          .map((item) => item.textContent);
+        blueprintData.technicalDecisions = Array.from(document.querySelectorAll("#technical-decisions .change-item span"))
+          .map((item) => item.textContent);
+        blueprintDataElement.textContent = JSON.stringify(blueprintData, null, 2);
+      };
+
+      const updateLastUpdated = () => {
+        document.getElementById("last-updated").textContent = formatDate();
+        syncBlueprintData();
+      };
+
+      const appendItem = (containerId, label, text) => {
+        const log = document.getElementById(containerId);
+        const item = document.createElement("div");
+        const heading = document.createElement("strong");
+        const body = document.createElement("span");
+
+        item.className = "change-item";
+        heading.textContent = label;
+        body.textContent = text;
+
+        item.append(heading, body);
+        log.appendChild(item);
+        updateLastUpdated();
+      };
+
+      const bindAdd = (inputId, buttonId, containerId, labelFactory) => {
+        const input = document.getElementById(inputId);
+        const button = document.getElementById(buttonId);
+
+        button.addEventListener("click", () => {
+          const text = input.value.trim();
+          if (!text) {
+            input.focus();
+            return;
+          }
+
+          appendItem(containerId, labelFactory(), text);
+          input.value = "";
+        });
+      };
+
+      document.getElementById("update-status").addEventListener("click", () => {
+        const status = document.getElementById("status-select").value;
+        document.getElementById("document-status").textContent = status;
+        appendItem("change-log", isoDate(), `Updated document status to ${status}.`);
+      });
+
+      document.getElementById("download-updated").addEventListener("click", () => {
+        syncBlueprintData();
+        const html = `<!DOCTYPE html>\n${document.documentElement.outerHTML}`;
+        const blob = new Blob([html], { type: "text/html" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${blueprintData.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-blueprint-updated.html`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      });
+
+      bindAdd("change-input", "add-change", "change-log", () => isoDate());
+      bindAdd("issue-input", "add-issue", "open-issues", () => "Open");
+      bindAdd("decision-input", "add-decision", "technical-decisions", () => "Added");
+      syncBlueprintData();
+    })();
+  </script>
+</body></html>

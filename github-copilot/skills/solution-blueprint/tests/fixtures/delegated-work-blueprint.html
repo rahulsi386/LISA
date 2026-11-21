@@ -1,0 +1,1600 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My weekly customer-follow-up assistant — Solution Blueprint</title>
+  <script>
+    (() => {
+      const param = new URLSearchParams(window.location.search).get("scoutTheme");
+      const theme =
+        param || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --cp-bg: #f7f4ef;
+      --cp-bg-elevated: #fcfbf8;
+      --cp-surface: #ffffff;
+      --cp-surface-soft: #f5f5f5;
+      --cp-border: #dedede;
+      --cp-border-strong: #919191;
+      --cp-text: #242424;
+      --cp-text-muted: #5c5c5c;
+      --cp-text-soft: #6f6f6f;
+      --cp-accent: #b11f4b;
+      --cp-accent-hover: #9a1a41;
+      --cp-accent-soft: rgba(177, 31, 75, 0.08);
+      --cp-accent-fg: #ffffff;
+      --cp-success: #16a34a;
+      --cp-danger: #dc2626;
+      --cp-warning: #f59e0b;
+      --cp-link: #0078d4;
+      --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+      --cp-overlay: rgba(255, 255, 255, 0.8);
+      --cp-panel: rgba(255, 255, 255, 0.86);
+      --cp-panel-strong: rgba(255, 255, 255, 0.96);
+      --cp-sheen: rgba(255, 255, 255, 0.55);
+      --cp-highlight: rgba(177, 31, 75, 0.12);
+    }
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --cp-bg: #3d3b3a;
+      --cp-bg-elevated: #343231;
+      --cp-surface: #292929;
+      --cp-surface-soft: #2e2e2e;
+      --cp-border: #474747;
+      --cp-border-strong: #5f5f5f;
+      --cp-text: #dedede;
+      --cp-text-muted: #919191;
+      --cp-text-soft: #b0b0b0;
+      --cp-accent: #fd8ea1;
+      --cp-accent-hover: #fb7b91;
+      --cp-accent-soft: rgba(253, 142, 161, 0.14);
+      --cp-accent-fg: #1a1a1a;
+      --cp-success: #4ade80;
+      --cp-danger: #f87171;
+      --cp-warning: #fbbf24;
+      --cp-link: #4da6ff;
+      --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+      --cp-overlay: rgba(41, 41, 41, 0.88);
+      --cp-panel: rgba(41, 41, 41, 0.72);
+      --cp-panel-strong: rgba(41, 41, 41, 0.96);
+      --cp-sheen: rgba(255, 255, 255, 0.04);
+      --cp-highlight: rgba(253, 142, 161, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--cp-bg);
+      color: var(--cp-text);
+      font-family: "Segoe UI", Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.5;
+    }
+
+    .page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+    }
+
+    .hero {
+      background: var(--cp-panel-strong);
+      border: 1px solid var(--cp-border);
+      border-radius: 16px;
+      box-shadow: var(--cp-shadow);
+      padding: 32px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: var(--cp-accent-soft);
+      pointer-events: none;
+    }
+
+    .hero-content {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(0, 1.8fr) minmax(260px, 1fr);
+      gap: 28px;
+      align-items: stretch;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      font-size: clamp(2rem, 5vw, 4rem);
+      line-height: 1;
+      margin-bottom: 16px;
+      letter-spacing: -0.04em;
+    }
+
+    h2 {
+      font-size: 1.45rem;
+      margin-bottom: 16px;
+      letter-spacing: -0.02em;
+    }
+
+    h3 {
+      font-size: 1rem;
+      margin-bottom: 8px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 16px;
+      color: var(--cp-accent);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.78rem;
+    }
+
+    .summary {
+      color: var(--cp-text-muted);
+      font-size: 1.06rem;
+      max-width: 780px;
+      margin-bottom: 0;
+    }
+
+    .meta-panel,
+    .card,
+    .section,
+    .route-card,
+    .timeline-item {
+      background: var(--cp-surface);
+      border: 1px solid var(--cp-border);
+      border-radius: 16px;
+    }
+
+    .meta-panel {
+      padding: 20px;
+    }
+
+    .meta-row {
+      border-bottom: 1px solid var(--cp-border);
+      padding: 10px 0;
+    }
+
+    .meta-row:last-child {
+      border-bottom: 0;
+    }
+
+    .label {
+      color: var(--cp-text-muted);
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .value {
+      display: block;
+      font-weight: 650;
+      margin-top: 4px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .section {
+      grid-column: span 12;
+      padding: 24px;
+    }
+
+    .span-4 {
+      grid-column: span 4;
+    }
+
+    .span-6 {
+      grid-column: span 6;
+    }
+
+    .span-8 {
+      grid-column: span 8;
+    }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    .card {
+      padding: 18px;
+    }
+
+    .kpi {
+      font-size: 2rem;
+      font-weight: 750;
+      color: var(--cp-accent);
+      letter-spacing: -0.04em;
+    }
+
+    .muted {
+      color: var(--cp-text-muted);
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .pill {
+      border: 1px solid var(--cp-border);
+      border-radius: 999px;
+      background: var(--cp-surface-soft);
+      color: var(--cp-text);
+      padding: 6px 10px;
+      font-size: 0.86rem;
+      font-weight: 600;
+    }
+
+    .recommendation {
+      background: var(--cp-accent-soft);
+      border-color: var(--cp-accent);
+    }
+
+    .recommendation h2 {
+      color: var(--cp-accent);
+    }
+
+    .route-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .route-card {
+      padding: 16px;
+    }
+
+    .route-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .score {
+      border-radius: 999px;
+      background: var(--cp-accent-soft);
+      color: var(--cp-accent);
+      padding: 4px 8px;
+      font-weight: 700;
+      white-space: nowrap;
+      font-size: 0.85rem;
+    }
+
+    .bar {
+      height: 8px;
+      background: var(--cp-surface-soft);
+      border: 1px solid var(--cp-border);
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 10px 0;
+    }
+
+    .bar span {
+      display: block;
+      height: 100%;
+      background: var(--cp-accent);
+      border-radius: inherit;
+    }
+
+    ul {
+      margin: 10px 0 0;
+      padding-left: 18px;
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    .timeline {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .timeline-item {
+      padding: 16px;
+    }
+
+    .step {
+      display: inline-flex;
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      align-items: center;
+      justify-content: center;
+      background: var(--cp-accent);
+      color: var(--cp-accent-fg);
+      font-weight: 800;
+      margin-bottom: 10px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: 0.625rem;
+      border: 1px solid var(--cp-border);
+    }
+
+    th,
+    td {
+      text-align: left;
+      border-bottom: 1px solid var(--cp-border);
+      padding: 12px;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--cp-surface-soft);
+      color: var(--cp-text);
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .status {
+      font-weight: 700;
+    }
+
+    .status.good {
+      color: var(--cp-success);
+    }
+
+    .status.warn {
+      color: var(--cp-warning);
+    }
+
+    .status.risk {
+      color: var(--cp-danger);
+    }
+
+    .change-log {
+      display: grid;
+      gap: 10px;
+    }
+
+    .change-item {
+      display: grid;
+      grid-template-columns: 150px 1fr;
+      gap: 12px;
+      background: var(--cp-surface-soft);
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      padding: 12px;
+    }
+
+    .update-box {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .action-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    input,
+    select,
+    textarea,
+    button {
+      font: inherit;
+      border-radius: 0.625rem;
+    }
+
+    input,
+    select,
+    textarea {
+      min-width: 0;
+      background: var(--cp-surface);
+      border: 1px solid var(--cp-border-strong);
+      color: var(--cp-text);
+      padding: 10px 12px;
+    }
+
+    textarea {
+      min-height: 76px;
+      resize: vertical;
+    }
+
+    .status-editor {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .two-field {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+    }
+
+    button {
+      border: 1px solid var(--cp-accent);
+      background: var(--cp-accent);
+      color: var(--cp-accent-fg);
+      font-weight: 700;
+      padding: 10px 14px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: var(--cp-accent-hover);
+    }
+
+    .secondary-button {
+      background: var(--cp-surface);
+      color: var(--cp-accent);
+    }
+
+    .secondary-button:hover {
+      background: var(--cp-accent-soft);
+    }
+
+    .footer-note {
+      margin-top: 20px;
+      color: var(--cp-text-muted);
+      font-size: 0.9rem;
+    }
+
+    @media (max-width: 860px) {
+      .hero-content,
+      .route-grid,
+      .timeline,
+      .kpi-grid,
+      .two-field,
+      .action-row,
+      .update-box {
+        grid-template-columns: 1fr;
+      }
+
+      .span-4,
+      .span-6,
+      .span-8 {
+        grid-column: span 12;
+      }
+
+      .change-item {
+        grid-template-columns: 1fr;
+      }
+    }
+  
+    .table-wrap { overflow-x: auto; }
+    tr.muted td { color: var(--cp-text-muted); opacity: .7; }
+    .gate-pass { color: var(--cp-success); font-weight: 700; }
+    .gate-fail { color: var(--cp-danger); font-weight: 700; }
+    .gate-tbd, .gate-exception { color: var(--cp-warning); font-weight: 700; }
+    .arch { display: grid; grid-template-columns: 1fr 180px; gap: 10px; }
+    .arch-layers { display: grid; gap: 8px; }
+    .arch-box { border: 1px solid var(--cp-border); border-radius: 10px; padding: 10px 12px; background: var(--cp-surface-soft); }
+    .arch-box h3 { margin: 0 0 4px; font-size: 0.95rem; }
+    .arch-rail { display: grid; gap: 8px; }
+    .route-card .ids { font-size: 0.85rem; }
+    .route-card.primary { border-color: var(--cp-accent); box-shadow: 0 0 0 2px var(--cp-accent-soft); }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div class="hero-content">
+        <div>
+          <div class="eyebrow">Solution Blueprint Draft</div>
+          <h1>My weekly customer-follow-up assistant</h1>
+          <p class="summary">A personal Friday assistant for one PM that reads the week&#x27;s own meetings and email, drafts a follow-up per customer conversation plus a weekly status note, and saves them to OneDrive for review. Recommended route: Cowork plugins, Medium complexity, Stage 1 only.</p>
+          <div class="pill-row"><span class="pill">Delegated personal work</span><span class="pill">Single user</span><span class="pill">Draft-only, human review</span><span class="pill">Friday routine</span><span class="pill">Stage 1 — no escalation</span></div>
+        </div>
+        <aside class="meta-panel">
+          <div class="meta-row"><span class="label">Document status</span><span class="value" id="document-status">Draft</span>
+            <div class="status-editor"><select id="status-select" aria-label="Document status"><option selected="">Draft</option><option>In review</option><option>Approved</option><option>Blocked</option><option>Archived</option></select><button id="update-status" type="button">Update status</button></div></div>
+          <div class="meta-row"><span class="label">Recommended route</span><span class="value">Cowork plugins (31/35)</span></div>
+          <div class="meta-row"><span class="label">Complexity</span><span class="value">Medium (drivers: FR-01 schedule, FR-05 OneDrive write)</span></div>
+          <div class="meta-row"><span class="label">Confidence</span><span class="value">Medium — Requirements are clear and single-user, but Cowork availability, transcript access and the customer rule are unconfirmed (gates TBD).</span></div>
+          <div class="meta-row"><span class="label">Last updated</span><span class="value" id="last-updated">Oct 7, 2026</span></div>
+        </aside>
+      </div>
+    </section>
+    <div class="grid">
+<section class="section "><h2>Blueprint Snapshot</h2><div class="kpi-grid"><div class="card"><div class="kpi">10</div><div class="muted">In-scope requirements</div></div><div class="card"><div class="kpi">7</div><div class="muted">Solution routes evaluated</div></div><div class="card"><div class="kpi">3</div><div class="muted">Open questions before build</div></div><div class="card"><div class="kpi">Medium</div><div class="muted">Complexity — Cowork plugins recommended</div></div></div></section>
+<section class="section "><h2>Executive Summary</h2><p>A personal Friday assistant for one PM that reads the week&#x27;s own meetings and email, drafts a follow-up per customer conversation plus a weekly status note, and saves them to OneDrive for review. Recommended route: Cowork plugins, Medium complexity, Stage 1 only.</p><p>The dominant work type is <strong>Delegated personal work</strong>: the PM who asks is the PM who consumes the result (SEC-01, UX-01), reading only their own data (DATA-01, DATA-02). Selection, collection and saving are deterministic and do not need an LLM; only drafting (FR-03, FR-04) uses AI. All in-scope IDs are met in Stage 1, so no Foundry or pro-code escalation is justified.</p></section>
+<section class="section span-8 recommendation"><h2>First-Draft Recommendation</h2><p>Primary route: <strong>Cowork plugins</strong> (31/35). Dominant work type is Delegated personal work for one user (SEC-01, UX-01); Stage 1 meets all in-scope IDs; no route has a failed gate; Cowork scores 31/35.</p><p><strong>Hybrid composition:</strong> Cowork skill for drafting (FR-03, FR-04) + plugins/tools for own mail, calendar and OneDrive (DATA-01, DATA-02, FR-05) + deterministic customer-domain rule (FR-02); no Copilot Studio, Foundry or pro-code component.</p><p><strong>Fallback:</strong> DA + skills (27/35) run manually each Friday if a scheduled personal routine is not available. Standard harness is not recommended: the work is one person's delegated drafting, not a shared predictable conversation.</p></section>
+<section class="section span-4"><h2>Questions to Confirm</h2><ul><li>How should a &#x27;customer conversation&#x27; be identified — external email domains, a list of accounts, or meeting tags?</li><li>Can the assistant read Teams meeting transcripts, or only calendar invites and email threads?</li><li>Which OneDrive folder and format do you want (one file per follow-up, or one weekly document)?</li></ul></section>
+<section class="section span-6"><h2>Scenario Overview</h2><div class="change-log"><div class="change-item"><strong>Primary actor</strong><span>PM (single user)</span></div><div class="change-item"><strong>Trigger</strong><span>Every Friday (FR-01)</span></div><div class="change-item"><strong>Expected outcome</strong><span>Follow-up drafts + weekly status note in OneDrive, nothing sent (FR-03, FR-04, FR-05, GR-01)</span></div></div></section>
+<section class="section span-6"><h2>Key JTBDs Covered</h2><div class="change-log"><div class="change-item"><strong>Recall</strong><span>gather every customer conversation from my week</span></div><div class="change-item"><strong>Follow up</strong><span>draft a tailored follow-up for each</span></div><div class="change-item"><strong>Report</strong><span>draft my weekly status note</span></div><div class="change-item"><strong>Control</strong><span>review everything before it goes out</span></div></div></section>
+<section class="section span-6"><h2>Personas / Primary Users</h2><div class="table-wrap"><table><thead><tr><th>Persona</th><th>Need</th><th>Volume</th><th>Channel</th></tr></thead><tbody><tr><td>PM (owner and only user)</td><td>Weekly follow-ups and status without manual recall</td><td>1 user, 1 run per week</td><td>Cowork + OneDrive</td></tr></tbody></table></div></section>
+<section class="section span-6"><h2>Business Problem and Opportunity</h2><p>Each Friday the PM must recall every customer conversation of the week, write follow-ups and compile a status note by hand. Items get missed and the routine consumes time. Opportunity: draft everything automatically from the PM's own week, keeping the PM in control of what is sent (GR-01).</p><ul><li>Fewer missed customer follow-ups (FR-02, FR-03)</li><li>Status note ready for review each Friday (FR-04)</li><li>Zero unreviewed outbound messages (GR-01)</li></ul></section>
+<section class="section "><h2>In-Scope and Out-of-Scope Capabilities</h2><div class="kpi-grid" style="grid-template-columns:1fr 1fr"><div class="card"><h3>In scope</h3><ul><li>FR-01 — Run automatically every Friday for the past week (Mon–Fri).</li><li>DATA-01 — Read the user&#x27;s own meetings from the week (calendar events; transcripts/notes only if available).</li><li>DATA-02 — Read the user&#x27;s own emails from the week.</li><li>FR-02 — Identify each customer conversation in the week&#x27;s meetings and emails.</li><li>FR-03 — Draft one follow-up email per customer conversation.</li><li>FR-04 — Draft one weekly status note summarising the week.</li><li>FR-05 — Save all drafts in the user&#x27;s OneDrive.</li><li>GR-01 — Nothing is sent; the user reviews every draft before anything goes out.</li><li>SEC-01 — Single user: only the requesting PM uses and consumes the output; access is the user&#x27;s own delegated data.</li><li>UX-01 — Primary user is a PM delegating a personal routine; output consumed as files for review.</li></ul></div><div class="card"><h3>Out of scope</h3><ul><li>FR-06 — Send the follow-up emails automatically. (Explicitly excluded)</li><li>DATA-03 — Use Teams chats or CRM records as additional sources. (Not evidenced)</li><li>FR-07 — Share drafts or the status note with others / multiple users. (Explicitly excluded)</li></ul></div></div></section>
+<section class="section "><h2>Requirement Summary</h2><p>10 in-scope requirements (FR-01..FR-05, DATA-01, DATA-02, GR-01, SEC-01, UX-01) and 3 out-of-scope rows (FR-06, FR-07, DATA-03). All IDs are derived from the chat request (no source IDs existed); out-of-scope rows do not drive gates, scores or complexity.</p><h3>Assumptions</h3><ul><li>Week = Monday 00:00 to Friday run time in the user&#x27;s time zone.</li><li>Customer = any meeting attendee or email participant outside the user&#x27;s tenant domains (TBD rule).</li><li>Drafts are saved as editable documents in OneDrive; nothing is created in Outlook Drafts unless the user later asks.</li><li>Cowork scheduled personal routine availability is assumed but unconfirmed (verify in tenant).</li></ul></section>
+<section class="section "><h2>Requirement Ledger</h2><div class="table-wrap"><table><thead><tr><th>ID</th><th>Requirement</th><th>Classification</th><th>Source quote / locator</th><th>Systems</th></tr></thead><tbody><tr><td>FR-01</td><td>Run automatically every Friday for the past week (Mon–Fri).</td><td>Required</td><td>“every Friday I want an assistant” — User request (chat, 2026-10-07)</td><td>Schedule (host scheduler TBD)</td></tr><tr><td>DATA-01</td><td>Read the user&#x27;s own meetings from the week (calendar events; transcripts/notes only if available).</td><td>Required</td><td>“reads my own meetings ... from the week” — User request (chat, 2026-10-07)</td><td>Outlook calendar, Teams meeting transcripts (TBD)</td></tr><tr><td>DATA-02</td><td>Read the user&#x27;s own emails from the week.</td><td>Required</td><td>“reads my own ... emails from the week” — User request (chat, 2026-10-07)</td><td>Outlook mailbox</td></tr><tr><td>FR-02</td><td>Identify each customer conversation in the week&#x27;s meetings and emails.</td><td>Required</td><td>“for each customer conversation” — User request (chat, 2026-10-07)</td><td>Outlook calendar, Outlook mailbox</td></tr><tr><td>FR-03</td><td>Draft one follow-up email per customer conversation.</td><td>Required</td><td>“drafts follow-up emails for each customer conversation” — User request (chat, 2026-10-07)</td><td>—</td></tr><tr><td>FR-04</td><td>Draft one weekly status note summarising the week.</td><td>Required</td><td>“and a weekly status note” — User request (chat, 2026-10-07)</td><td>—</td></tr><tr><td>FR-05</td><td>Save all drafts in the user&#x27;s OneDrive.</td><td>Required</td><td>“saves them in my OneDrive” — User request (chat, 2026-10-07)</td><td>OneDrive (user&#x27;s own)</td></tr><tr><td>GR-01</td><td>Nothing is sent; the user reviews every draft before anything goes out.</td><td>Required</td><td>“for my review before anything goes out” — User request (chat, 2026-10-07)</td><td>—</td></tr><tr><td>SEC-01</td><td>Single user: only the requesting PM uses and consumes the output; access is the user&#x27;s own delegated data.</td><td>Required</td><td>“Only I will use it” — User request (chat, 2026-10-07)</td><td>—</td></tr><tr><td>UX-01</td><td>Primary user is a PM delegating a personal routine; output consumed as files for review.</td><td>Confirmed</td><td>“I&#x27;m a PM” — User request (chat, 2026-10-07)</td><td>OneDrive</td></tr><tr class="muted"><td>FR-06</td><td>Send the follow-up emails automatically.</td><td>Explicitly excluded</td><td>“before anything goes out” — User request (chat, 2026-10-07) (sending stays a manual user step)</td><td>Outlook mailbox</td></tr><tr class="muted"><td>DATA-03</td><td>Use Teams chats or CRM records as additional sources.</td><td>Not evidenced</td><td>Not evidenced</td><td>—</td></tr><tr class="muted"><td>FR-07</td><td>Share drafts or the status note with others / multiple users.</td><td>Explicitly excluded</td><td>“Only I will use it” — User request (chat, 2026-10-07)</td><td>—</td></tr></tbody></table></div></section>
+<section class="section span-6"><h2>Current State / Trigger Context</h2><p>Today the PM manually reviews the week's calendar and inbox on Friday, writes follow-ups one by one and assembles a status note. Trigger: every Friday (FR-01).</p></section>
+<section class="section span-6"><h2>Target Experience / Future State</h2><p>On Friday the PM opens a dated OneDrive folder containing one follow-up draft per customer conversation and one weekly status note, each citing the meeting or email it came from. The PM edits and sends from Outlook; the assistant never sends (GR-01).</p></section>
+<section class="section "><h2>Core User Journeys</h2><div class="timeline"><div class="timeline-item"><span class="step">1</span><h3>Collect</h3><p class="muted">Gather this week&#x27;s meetings and email (DATA-01, DATA-02).</p></div><div class="timeline-item"><span class="step">2</span><h3>Select</h3><p class="muted">Keep customer conversations via the domain rule (FR-02).</p></div><div class="timeline-item"><span class="step">3</span><h3>Draft</h3><p class="muted">Write one follow-up per conversation and a status note (FR-03, FR-04).</p></div><div class="timeline-item"><span class="step">4</span><h3>Review</h3><p class="muted">Save to OneDrive; PM reviews and sends manually (FR-05, GR-01).</p></div></div></section>
+<section class="section span-6"><h2>Data Sources and Grounding Sources</h2><div class="table-wrap"><table><thead><tr><th>Source</th><th>Use</th><th>IDs</th></tr></thead><tbody><tr><td>Outlook calendar (own)</td><td>Meetings of the week, attendees</td><td>DATA-01, FR-02</td></tr><tr><td>Outlook mailbox (own)</td><td>Customer email threads of the week</td><td>DATA-02, FR-02</td></tr><tr><td>Teams meeting transcripts</td><td>Richer follow-up content — TBD availability</td><td>DATA-01</td></tr><tr><td>OneDrive (own)</td><td>Output folder; customer-domain rule list (TBD)</td><td>FR-05</td></tr></tbody></table></div></section>
+<section class="section span-6"><h2>Integrations and Dependencies</h2><div class="table-wrap"><table><thead><tr><th>Integration</th><th>Identity / authZ</th><th>Data flow</th><th>Failure behaviour</th></tr></thead><tbody><tr><td>Calendar read</td><td>User-delegated</td><td>Tenant → assistant (read-only)</td><td>Skip run, notify PM</td></tr><tr><td>Mail read</td><td>User-delegated</td><td>Tenant → assistant (read-only)</td><td>Skip run, notify PM</td></tr><tr><td>OneDrive write</td><td>User-delegated, one folder</td><td>Assistant → own OneDrive</td><td>Retry once, then notify PM</td></tr><tr><td>Schedule</td><td>Host scheduler (verify in tenant)</td><td>—</td><td>PM runs manually</td></tr></tbody></table></div></section>
+<section class="section "><h2>Security, Privacy, Compliance, and Governance</h2><ul><li>User-delegated access to own data only (SEC-01); no app-wide mailbox permissions.</li><li>No send permission — the assistant cannot email anyone (GR-01).</li><li>Drafts stay in the user&#x27;s tenant OneDrive; customer content is not sent to external services.</li><li>Each plugin/tool (calendar, mail, OneDrive) is a security boundary: identity, scope and failure behaviour listed under Integrations.</li><li>Tenant controls, DLP and audit for Cowork: verify in tenant (gates TBD).</li></ul></section>
+<section class="section "><h2>Component Work Types</h2><div class="table-wrap"><table><thead><tr><th>Component</th><th>Work type</th><th>AI needed?</th><th>Default direction</th><th>Autonomy / impact</th><th>State store</th><th>Requirement IDs</th></tr></thead><tbody><tr><td>Friday weekly trigger</td><td>Conventional software</td><td>No</td><td>Personal scheduled routine in the chosen host (time-based trigger, no LLM)</td><td>read-only</td><td>Host schedule definition</td><td>FR-01</td></tr><tr><td>Week collection (meetings + mail)</td><td>Conventional software</td><td>No</td><td>Date-range query of the user&#x27;s own calendar and mailbox with delegated permissions</td><td>read-only</td><td>None (transient)</td><td>DATA-01, DATA-02</td></tr><tr><td>Customer-conversation filter</td><td>Conventional software</td><td>No</td><td>Deterministic rule: external attendee/recipient domain not in the user&#x27;s tenant domain list (rule TBD); AI may only suggest, never decide inclusion</td><td>read-only</td><td>Rule list in the user&#x27;s OneDrive (TBD)</td><td>FR-02</td></tr><tr><td>Follow-up drafting</td><td>Delegated personal work</td><td>Yes</td><td>Cowork skill that drafts one follow-up per conversation from the collected context</td><td>reversible write</td><td>OneDrive file</td><td>FR-03, GR-01</td></tr><tr><td>Weekly status note</td><td>Delegated personal work</td><td>Yes</td><td>Cowork skill that summarises the week into one status note</td><td>reversible write</td><td>OneDrive file</td><td>FR-04, GR-01</td></tr><tr><td>Save to OneDrive for review</td><td>Conventional software</td><td>No</td><td>File write to a fixed folder in the user&#x27;s OneDrive (e.g. /Weekly follow-ups/&lt;yyyy-mm-dd&gt;/); no send tool granted</td><td>reversible write</td><td>OneDrive folder</td><td>FR-05, GR-01, SEC-01</td></tr></tbody></table></div></section>
+<section class="section "><h2>Architecture / Implementation Approach</h2><div class="arch"><div class="arch-layers">
+<div class="arch-box"><h3>1 · Users</h3>PM — single owner and consumer (1 user)</div>
+<div class="arch-box"><h3>2 · Channels</h3>Cowork personal assistant · OneDrive for review</div>
+<div class="arch-box"><h3>3 · Agent platform — Cowork</h3>Instructions: weekly follow-up skill · Orchestration: Friday routine (verify in tenant) · Tools: read calendar, read mail, write OneDrive · Connected agents: none · Human review: PM in OneDrive</div>
+<div class="arch-box"><h3>4 · Data / connectors</h3>Outlook calendar · Outlook mailbox · Teams transcripts (TBD) · OneDrive review folder · Customer-domain rule (TBD)</div>
+</div><div class="arch-rail"><div class="arch-box"><h3>Identity, security &amp; governance</h3>Entra ID delegated · No Mail.Send · Tenant Cowork controls (verify in tenant) · OneDrive retention</div><div class="arch-box"><h3>Monitoring &amp; ALM</h3>Run history (TBD) · Skill versioning · Weekly EVAL checklist</div></div></div>
+<h3>Primary journey sequence</h3><ol><li>Schedule → Cowork assistant: Friday trigger fires (FR-01)</li><li>Cowork assistant → Outlook calendar: List this week&#x27;s meetings (DATA-01)</li><li>Cowork assistant → Outlook mailbox: List this week&#x27;s sent/received email (DATA-02)</li><li>Cowork assistant → Customer rule: Filter to external customer conversations (FR-02)</li><li>Cowork assistant → Follow-up skill: Draft one follow-up per conversation (FR-03)</li><li>Cowork assistant → Status-note skill: Draft weekly status note (FR-04)</li><li>Cowork assistant → OneDrive: Save drafts to the review folder (FR-05)</li><li>Cowork assistant → PM: Notify: drafts ready for review (GR-01)</li><li>PM → OneDrive: Review and edit drafts</li><li>PM → Outlook mailbox: PM sends approved follow-ups manually (outside the assistant)</li></ol>
+<h3>Staged escalation</h3><div class="table-wrap"><table><thead><tr><th>Stage</th><th>Considered</th><th>Meets</th><th>Gaps</th><th>Escalate?</th></tr></thead><tbody><tr><td>1</td><td>Cowork, M365 Copilot Chat / DA, Copilot Studio harnesses, Teams</td><td>All in-scope IDs</td><td>None</td><td>No</td></tr><tr><td>2</td><td>Foundry</td><td>—</td><td>—</td><td>No (no Stage 1 gaps)</td></tr><tr><td>3</td><td>Agent Framework</td><td>—</td><td>—</td><td>No</td></tr></tbody></table></div></section>
+<section class="section "><h2>Risks and Mitigations</h2><div class="table-wrap"><table><thead><tr><th>Risk</th><th>Mitigation</th></tr></thead><tbody><tr><td>Mis-classifying internal threads as customer conversations</td><td>Deterministic domain rule + PM review; tune rule list (FR-02)</td></tr><tr><td>Hallucinated commitments in follow-ups</td><td>Cite source meeting/email in each draft; PM reviews before sending (GR-01)</td></tr><tr><td>Accidental send</td><td>No send permission granted; drafts are files, not queued mail</td></tr><tr><td>Missing meeting content when no transcript exists</td><td>Fall back to invite + email thread; flag &#x27;low context&#x27; in draft (DATA-01)</td></tr><tr><td>Route availability unconfirmed in tenant</td><td>Gate TBD tracked as open issue; fallback DA + skills run manually each Friday</td></tr></tbody></table></div></section>
+<section class="section "><h2>Mandatory Gate Results</h2><p class="muted">No route fails a gate. TBD gates lower confidence and are tracked as open issues; verify-in-tenant items are never marked Pass.</p><div class="table-wrap"><table><thead><tr><th>Gate</th><th>DA + skills</th><th>Pro-code DA with MCP</th><th>Pro-code DA without MCP</th><th>Standard harness</th><th>GHCP harness</th><th>Cowork plugins</th><th>Scout</th><th>Note</th></tr></thead><tbody><tr><td>Product availability</td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td>Cowork, Scout, GHCP harness and per-user Copilot are verify-in-tenant; no source confirms availability for this user.</td></tr><tr><td>Feature maturity</td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td>GA vs preview not stated in the source for any route; preview needs a named risk owner.</td></tr><tr><td>Contractual / licensing</td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td>No licensing facts in source; GHCP harness consumes Copilot Credits from build time.</td></tr><tr><td>Data location &amp; movement</td><td><span class="gate-pass">Pass</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-tbd">TBD</span></td><td>Configured M365 routes keep mail/calendar/drafts in the tenant; pro-code hosting location and Scout&#x27;s local workstation copies are TBD.</td></tr><tr><td>Identity — least privilege</td><td><span class="gate-pass">Pass</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-tbd">TBD</span></td><td>Read mail + calendar, write one OneDrive folder; no Mail.Send. Pro-code app registrations and Scout MCP credentials need definition.</td></tr><tr><td>Authorization scoping</td><td><span class="gate-pass">Pass</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-tbd">TBD</span></td><td>User-delegated access to the user&#x27;s own data (SEC-01). Standard harness flow connection identity (maker vs user) TBD.</td></tr><tr><td>Network isolation</td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td>No requirement stated in source.</td></tr><tr><td>Encryption / key management</td><td><span class="gate-pass">Pass</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-tbd">TBD</span></td><td>Platform default encryption for M365 data; custom hosting/workstation storage TBD.</td></tr><tr><td>DLP</td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td>Power Platform DLP applies to Standard harness; DLP coverage for other surfaces is verify-in-tenant.</td></tr><tr><td>Audit &amp; traceability</td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td>Drafts are files with version history; agent-run audit for Cowork/DA/Scout is verify-in-tenant.</td></tr><tr><td>Safety &amp; action control</td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td>Design rule GR-01: no send tool granted; output is drafts only, user sends manually. Reversible writes only.</td></tr><tr><td>Records lifecycle</td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-tbd">TBD</span></td><td>Drafts follow the user&#x27;s OneDrive retention; Scout local copies TBD.</td></tr><tr><td>Reliability</td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td>A missed Friday run is low impact; failure notification behaviour TBD per route.</td></tr><tr><td>Operational ownership</td><td><span class="gate-pass">Pass</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-tbd">TBD</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td>Owned by the PM (single user); pro-code needs a hosting/patching owner.</td></tr><tr><td>Portability / exit</td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td><span class="gate-pass">Pass</span></td><td>Outputs are plain files in OneDrive; method can be re-expressed as instructions in another route.</td></tr></tbody></table></div></section>
+<section class="section "><h2>Solution Route Analysis</h2><div class="route-grid"><article class="route-card"><div class="route-head"><h3>DA + skills</h3><span class="score">27/35 · Runner-up</span></div><div class="bar"><span style="width: 77%"></span></div><p class="muted">Good grounding on the user&#x27;s M365 mail and calendar and good governance, but it is a chat agent the PM must invoke each Friday and file save is an extra action.</p><p class="ids"><strong>Gate:</strong> TBD · <strong>Covers:</strong> DATA-01, DATA-02, FR-02, FR-03, FR-04, GR-01, SEC-01, UX-01<br><strong>Cannot cover:</strong> FR-01 (declarative agent is user-initiated in chat; unattended Friday run not native); FR-05 (saving files needs an added bounded action — TBD)</p></article><article class="route-card"><div class="route-head"><h3>Pro-code DA with MCP</h3><span class="score">17/35 · Over-engineered for current scope</span></div><div class="bar"><span style="width: 49%"></span></div><p class="muted">Could cover all IDs, but needs owned code, hosting, Entra app registrations and MCP servers for a single-user, Stage 1-solvable routine (High complexity vs derived Medium).</p><p class="ids"><strong>Gate:</strong> TBD · <strong>Covers:</strong> FR-01, DATA-01, DATA-02, FR-02, FR-03, FR-04, FR-05, GR-01, SEC-01, UX-01<br><strong>Cannot cover:</strong> —</p></article><article class="route-card"><div class="route-head"><h3>Pro-code DA without MCP</h3><span class="score">16/35 · Over-engineered for current scope</span></div><div class="bar"><span style="width: 46%"></span></div><p class="muted">Same pro-code ownership burden with direct Graph calls; no custom UI or protocol requirement justifies it.</p><p class="ids"><strong>Gate:</strong> TBD · <strong>Covers:</strong> FR-01, DATA-01, DATA-02, FR-02, FR-03, FR-04, FR-05, GR-01, SEC-01, UX-01<br><strong>Cannot cover:</strong> —</p></article><article class="route-card"><div class="route-head"><h3>Standard harness</h3><span class="score">23/35 · Not recommended</span></div><div class="bar"><span style="width: 66%"></span></div><p class="muted">Not-fit signals match: the work is personal delegated drafting for one user (&quot;only I&quot;, &quot;my review&quot;), not a predictable multi-user conversation. Flows could cover the schedule and file save, but the route adds environment/ALM overhead for one person.</p><p class="ids"><strong>Gate:</strong> TBD · <strong>Covers:</strong> FR-01, DATA-01, DATA-02, FR-02, FR-05, GR-01<br><strong>Cannot cover:</strong> FR-03, FR-04 (heavy document drafting is a not-fit signal); SEC-01, UX-01 (built for shared/high-volume conversations, not one person&#x27;s delegated work)</p></article><article class="route-card"><div class="route-head"><h3>GHCP harness</h3><span class="score">25/35 · Over-engineered for current scope</span></div><div class="bar"><span style="width: 71%"></span></div><p class="muted">Can do everything (document generation, skills, MCP), but plan-and-execute reasoning is not needed for a fixed weekly routine and Copilot Credits are consumed from build time for a one-person task.</p><p class="ids"><strong>Gate:</strong> TBD · <strong>Covers:</strong> FR-01, DATA-01, DATA-02, FR-02, FR-03, FR-04, FR-05, GR-01, SEC-01, UX-01<br><strong>Cannot cover:</strong> —</p></article><article class="route-card primary"><div class="route-head"><h3>Cowork plugins</h3><span class="score">31/35 · Primary</span></div><div class="bar"><span style="width: 89%"></span></div><p class="muted">Native match to the dominant Delegated personal work components: the person who asks is the person who consumes the drafts (SEC-01, UX-01); reads own mail/meetings (DATA-01/02), drafts for review (FR-03/04, GR-01), saves to OneDrive (FR-05) and supports a personal Friday routine (FR-01). Tenant enablement is verify-in-tenant, so its gate is TBD, not Pass.</p><p class="ids"><strong>Gate:</strong> TBD · <strong>Covers:</strong> FR-01, DATA-01, DATA-02, FR-02, FR-03, FR-04, FR-05, GR-01, SEC-01, UX-01<br><strong>Cannot cover:</strong> —</p></article><article class="route-card"><div class="route-head"><h3>Scout</h3><span class="score">25/35 · Alternative (desktop)</span></div><div class="bar"><span style="width: 71%"></span></div><p class="muted">Fits a single power user, but runs on one workstation, depends on local MCP access to M365 data, and has no shared governance plane. Viable as a prototype; MCP-ready design advised if chosen.</p><p class="ids"><strong>Gate:</strong> TBD · <strong>Covers:</strong> FR-01, FR-03, FR-04, GR-01, SEC-01, UX-01<br><strong>Cannot cover:</strong> DATA-01, DATA-02, FR-05 (needs MCP/connector access to M365 mail, calendar and OneDrive from the workstation — TBD)</p></article></div><p><strong>Ranking:</strong> Cowork plugins 31/35 &gt; DA + skills 27/35 &gt; Scout 25/35 &gt; GHCP harness 25/35 &gt; Standard harness 23/35 &gt; Pro-code DA with MCP 17/35 &gt; Pro-code DA without MCP 16/35 (Scout ahead of GHCP harness on tie-break toward lower complexity).</p></section>
+<section class="section "><h2>Route Scoring Rubric</h2><div class="table-wrap"><table><thead><tr><th>Criterion</th><th>1</th><th>3</th><th>5</th></tr></thead><tbody><tr><td>Fit</td><td>Misaligned with dominant work type</td><td>Partial; needs workarounds</td><td>Native match</td></tr><tr><td>Implementation speed</td><td>Months of pro-code</td><td>Weeks</td><td>Days; configuration-led</td></tr><tr><td>Governance</td><td>Ad-hoc</td><td>Partial platform controls</td><td>Admin-managed, DLP, audit, ALM</td></tr><tr><td>Extensibility</td><td>Hard to add tools</td><td>Possible with effort</td><td>Plug-in tools easily</td></tr><tr><td>Integration readiness</td><td>Systems unsupported</td><td>Custom connector/API</td><td>Out of the box</td></tr><tr><td>User experience</td><td>Wrong channel</td><td>Acceptable</td><td>Native in required channel</td></tr><tr><td>Operational complexity (inverted)</td><td>Heavy infra &amp; ops</td><td>Moderate</td><td>Minimal; platform-run</td></tr></tbody></table></div><h3>Scores</h3><div class="table-wrap"><table><thead><tr><th>Route</th><th>Fit</th><th>Speed</th><th>Governance</th><th>Extensibility</th><th>Integration</th><th>UX</th><th>Ops (inv.)</th><th>Total</th></tr></thead><tbody><tr><td>Cowork plugins</td><td>5</td><td>5</td><td>3</td><td>4</td><td>4</td><td>5</td><td>5</td><td>31/35</td></tr><tr><td>DA + skills</td><td>3</td><td>4</td><td>4</td><td>4</td><td>4</td><td>3</td><td>5</td><td>27/35</td></tr><tr><td>Scout</td><td>4</td><td>4</td><td>2</td><td>4</td><td>3</td><td>4</td><td>4</td><td>25/35</td></tr><tr><td>GHCP harness</td><td>3</td><td>3</td><td>4</td><td>5</td><td>4</td><td>3</td><td>3</td><td>25/35</td></tr><tr><td>Standard harness</td><td>2</td><td>3</td><td>5</td><td>4</td><td>4</td><td>2</td><td>3</td><td>23/35</td></tr><tr><td>Pro-code DA with MCP</td><td>2</td><td>1</td><td>2</td><td>5</td><td>3</td><td>3</td><td>1</td><td>17/35</td></tr><tr><td>Pro-code DA without MCP</td><td>2</td><td>2</td><td>2</td><td>2</td><td>3</td><td>3</td><td>2</td><td>16/35</td></tr></tbody></table></div></section>
+<section class="section span-4"><h2>Build vs Demonstrate vs Dependency — Buildable natively</h2><ul><li>Follow-up and status-note drafting skills (FR-03, FR-04)</li><li>OneDrive save to review folder (FR-05)</li><li>Week collection from own mail/calendar (DATA-01, DATA-02) — subject to tenant availability</li></ul></section>
+<section class="section span-4"><h2>Demonstrable only</h2><ul><li>Customer rule on a sample week before the domain list is confirmed — Demonstrable (simulated) (FR-02)</li><li>Transcript-based follow-ups if transcripts are not yet accessible — Demonstrable (simulated) (DATA-01)</li></ul></section>
+<section class="section span-4"><h2>External dependency</h2><ul><li>Tenant enablement of Cowork and scheduled personal routines — External dependency, owner: tenant admin (TBD) (FR-01)</li><li>Meeting transcript availability — External dependency, owner TBD (DATA-01)</li></ul></section>
+<section class="section span-6"><h2>Open Issues</h2><div class="change-log" id="open-issues"><div class="change-item"><strong>Open</strong><span>Gate TBD — Product availability: confirm Cowork (and its scheduled-run capability) is enabled for this user in the tenant (verify in tenant).</span></div><div class="change-item"><strong>Open</strong><span>Gate TBD — Feature maturity / licensing: confirm GA vs preview status and licensing for the chosen route; name a risk owner if preview.</span></div><div class="change-item"><strong>Open</strong><span>Define the customer-conversation rule (FR-02): which external domains count as customers, and whether internal-only meetings are excluded.</span></div><div class="change-item"><strong>Open</strong><span>Confirm whether meeting transcripts/recordings are available to read (DATA-01) or drafts rely on calendar details and email threads only.</span></div><div class="change-item"><strong>Open</strong><span>Confirm the OneDrive folder and file format for drafts (FR-05): one file per follow-up vs one weekly document.</span></div><div class="change-item"><strong>Open</strong><span>Audit &amp; traceability for Cowork runs is verify-in-tenant; confirm what run history is retained.</span></div></div><div class="update-box"><input id="issue-input" aria-label="Open issue" placeholder="Add an open issue"><button id="add-issue" type="button">Add issue</button></div></section>
+<section class="section span-6"><h2>Key Technical Decisions</h2><div class="change-log" id="technical-decisions"><div class="change-item"><strong>Proposed</strong><span>Primary route: Cowork plugins — single-user delegated personal work (SEC-01, UX-01).</span></div><div class="change-item"><strong>Proposed</strong><span>No send capability: the assistant never holds a mail-send permission; the PM sends manually (GR-01).</span></div><div class="change-item"><strong>Proposed</strong><span>Customer selection is a deterministic domain rule, not an LLM judgment (FR-02) — separates reasoning from control.</span></div><div class="change-item"><strong>Proposed</strong><span>Stay at Stage 1: no Foundry or Agent Framework escalation (all in-scope IDs met).</span></div></div><div class="update-box"><input id="decision-input" aria-label="Technical decision" placeholder="Add a technical decision"><button id="add-decision" type="button">Add decision</button></div></section>
+<section class="section "><h2>EVALs</h2><div class="table-wrap"><table><thead><tr><th>Eval area</th><th>What to measure</th><th>Target</th><th>Current status</th></tr></thead><tbody><tr><td>Coverage</td><td>Share of the week&#x27;s customer conversations that get a draft</td><td>≥ 95% vs PM&#x27;s manual list</td><td>Not started</td></tr><tr><td>Precision</td><td>Drafts created for non-customer/internal items</td><td>≤ 1 per week</td><td>Not started</td></tr><tr><td>Draft quality</td><td>PM edits needed before sending (1–5 rating)</td><td>Median ≥ 4</td><td>Not started</td></tr><tr><td>Safety</td><td>Emails sent by the assistant</td><td>0 (hard requirement GR-01)</td><td>Not started</td></tr><tr><td>Reliability</td><td>Friday runs completed and saved</td><td>≥ 4 of 4 weeks in pilot</td><td>Not started</td></tr></tbody></table></div></section>
+<section class="section "><h2>Implementation Roadmap</h2><div class="timeline"><div class="timeline-item"><span class="step">1</span><h3>Phase 0 — Confirm</h3><p class="muted">Answer 3 questions; confirm Cowork availability and scheduled run — Exit: Gates Product availability / licensing resolved</p></div><div class="timeline-item"><span class="step">2</span><h3>Phase 1 — Manual run</h3><p class="muted">Run the skill on demand for one week of data; PM reviews drafts — Exit: EVALs Coverage and Draft quality measured once</p></div><div class="timeline-item"><span class="step">3</span><h3>Phase 2 — Friday schedule</h3><p class="muted">Enable the Friday routine and OneDrive save — Exit: 4 consecutive Friday runs with 0 sends</p></div><div class="timeline-item"><span class="step">4</span><h3>Phase 3 — Tune</h3><p class="muted">Refine customer rule and draft templates — Exit: EVAL targets met</p></div></div></section>
+<section class="section "><h2>Change Log</h2><div class="change-log" id="change-log"><div class="change-item"><strong>2026-10-07</strong><span>Initial draft generated from the user&#x27;s chat request (standalone derivation, Steps A–I).</span></div><div class="change-item"><strong>2026-10-07</strong><span>Self-check pass 1 completed; results recorded in Open Issues where unresolved.</span></div></div><div class="update-box"><input id="change-input" aria-label="Change log item" placeholder="Add a changelog line for preview"><button id="add-change" type="button">Add to changelog</button></div><div class="action-row"><button id="download-updated" class="secondary-button" type="button">Download updated HTML</button></div><p class="footer-note">Browser edits are temporary until you download the updated HTML. For durable changes, update this source file so the embedded blueprint data and visible changelog stay aligned.</p></section>
+    </div>
+  </main>
+
+  <script type="application/json" id="blueprint-data">{
+  "name": "My weekly customer-follow-up assistant",
+  "slug": "weekly-customer-follow-up-assistant",
+  "status": "Draft",
+  "lastUpdated": "2026-10-07",
+  "mode": "standalone",
+  "sourceArtifacts": [
+    {
+      "path": "User request (chat, 2026-10-07)",
+      "sha256": "",
+      "role": "requirements"
+    }
+  ],
+  "confidence": {
+    "level": "Medium",
+    "reason": "Requirements are clear and single-user, but Cowork availability, transcript access and the customer rule are unconfirmed (gates TBD)."
+  },
+  "executiveSummary": "A personal Friday assistant for one PM that reads the week's own meetings and email, drafts a follow-up per customer conversation plus a weekly status note, and saves them to OneDrive for review. Recommended route: Cowork plugins, Medium complexity, Stage 1 only.",
+  "scenarioOverview": {
+    "primaryActor": "PM (single user)",
+    "trigger": "Every Friday (FR-01)",
+    "expectedOutcome": "Follow-up drafts + weekly status note in OneDrive, nothing sent (FR-03, FR-04, FR-05, GR-01)"
+  },
+  "jtbd": [
+    "Recall: gather every customer conversation from my week",
+    "Follow up: draft a tailored follow-up for each",
+    "Report: draft my weekly status note",
+    "Control: review everything before it goes out"
+  ],
+  "personas": [
+    {
+      "name": "PM (owner and only user)",
+      "need": "Weekly follow-ups and status without manual recall",
+      "volume": "1 user, 1 run per week",
+      "channel": "Cowork + OneDrive"
+    }
+  ],
+  "assumptions": [
+    "Week = Monday 00:00 to Friday run time in the user's time zone.",
+    "Customer = any meeting attendee or email participant outside the user's tenant domains (TBD rule).",
+    "Drafts are saved as editable documents in OneDrive; nothing is created in Outlook Drafts unless the user later asks.",
+    "Cowork scheduled personal routine availability is assumed but unconfirmed (verify in tenant)."
+  ],
+  "questionsToConfirm": [
+    "How should a 'customer conversation' be identified — external email domains, a list of accounts, or meeting tags?",
+    "Can the assistant read Teams meeting transcripts, or only calendar invites and email threads?",
+    "Which OneDrive folder and format do you want (one file per follow-up, or one weekly document)?"
+  ],
+  "requirements": [
+    {
+      "id": "FR-01",
+      "idOrigin": "derived",
+      "text": "Run automatically every Friday for the past week (Mon–Fri).",
+      "classification": "Required",
+      "source": "“every Friday I want an assistant” — User request (chat, 2026-10-07)",
+      "systems": [
+        "Schedule (host scheduler TBD)"
+      ]
+    },
+    {
+      "id": "DATA-01",
+      "idOrigin": "derived",
+      "text": "Read the user's own meetings from the week (calendar events; transcripts/notes only if available).",
+      "classification": "Required",
+      "source": "“reads my own meetings ... from the week” — User request (chat, 2026-10-07)",
+      "systems": [
+        "Outlook calendar",
+        "Teams meeting transcripts (TBD)"
+      ]
+    },
+    {
+      "id": "DATA-02",
+      "idOrigin": "derived",
+      "text": "Read the user's own emails from the week.",
+      "classification": "Required",
+      "source": "“reads my own ... emails from the week” — User request (chat, 2026-10-07)",
+      "systems": [
+        "Outlook mailbox"
+      ]
+    },
+    {
+      "id": "FR-02",
+      "idOrigin": "derived",
+      "text": "Identify each customer conversation in the week's meetings and emails.",
+      "classification": "Required",
+      "source": "“for each customer conversation” — User request (chat, 2026-10-07)",
+      "systems": [
+        "Outlook calendar",
+        "Outlook mailbox"
+      ]
+    },
+    {
+      "id": "FR-03",
+      "idOrigin": "derived",
+      "text": "Draft one follow-up email per customer conversation.",
+      "classification": "Required",
+      "source": "“drafts follow-up emails for each customer conversation” — User request (chat, 2026-10-07)",
+      "systems": []
+    },
+    {
+      "id": "FR-04",
+      "idOrigin": "derived",
+      "text": "Draft one weekly status note summarising the week.",
+      "classification": "Required",
+      "source": "“and a weekly status note” — User request (chat, 2026-10-07)",
+      "systems": []
+    },
+    {
+      "id": "FR-05",
+      "idOrigin": "derived",
+      "text": "Save all drafts in the user's OneDrive.",
+      "classification": "Required",
+      "source": "“saves them in my OneDrive” — User request (chat, 2026-10-07)",
+      "systems": [
+        "OneDrive (user's own)"
+      ]
+    },
+    {
+      "id": "GR-01",
+      "idOrigin": "derived",
+      "text": "Nothing is sent; the user reviews every draft before anything goes out.",
+      "classification": "Required",
+      "source": "“for my review before anything goes out” — User request (chat, 2026-10-07)",
+      "systems": []
+    },
+    {
+      "id": "SEC-01",
+      "idOrigin": "derived",
+      "text": "Single user: only the requesting PM uses and consumes the output; access is the user's own delegated data.",
+      "classification": "Required",
+      "source": "“Only I will use it” — User request (chat, 2026-10-07)",
+      "systems": []
+    },
+    {
+      "id": "UX-01",
+      "idOrigin": "derived",
+      "text": "Primary user is a PM delegating a personal routine; output consumed as files for review.",
+      "classification": "Confirmed",
+      "source": "“I'm a PM” — User request (chat, 2026-10-07)",
+      "systems": [
+        "OneDrive"
+      ]
+    },
+    {
+      "id": "FR-06",
+      "idOrigin": "derived",
+      "text": "Send the follow-up emails automatically.",
+      "classification": "Explicitly excluded",
+      "source": "“before anything goes out” — User request (chat, 2026-10-07) (sending stays a manual user step)",
+      "systems": [
+        "Outlook mailbox"
+      ]
+    },
+    {
+      "id": "DATA-03",
+      "idOrigin": "derived",
+      "text": "Use Teams chats or CRM records as additional sources.",
+      "classification": "Not evidenced",
+      "source": "Not evidenced",
+      "systems": []
+    },
+    {
+      "id": "FR-07",
+      "idOrigin": "derived",
+      "text": "Share drafts or the status note with others / multiple users.",
+      "classification": "Explicitly excluded",
+      "source": "“Only I will use it” — User request (chat, 2026-10-07)",
+      "systems": []
+    }
+  ],
+  "components": [
+    {
+      "name": "Friday weekly trigger",
+      "workType": "Conventional software",
+      "aiNeeded": false,
+      "direction": "Personal scheduled routine in the chosen host (time-based trigger, no LLM)",
+      "impact": "read-only",
+      "stateStore": "Host schedule definition",
+      "requirementIds": [
+        "FR-01"
+      ]
+    },
+    {
+      "name": "Week collection (meetings + mail)",
+      "workType": "Conventional software",
+      "aiNeeded": false,
+      "direction": "Date-range query of the user's own calendar and mailbox with delegated permissions",
+      "impact": "read-only",
+      "stateStore": "None (transient)",
+      "requirementIds": [
+        "DATA-01",
+        "DATA-02"
+      ]
+    },
+    {
+      "name": "Customer-conversation filter",
+      "workType": "Conventional software",
+      "aiNeeded": false,
+      "direction": "Deterministic rule: external attendee/recipient domain not in the user's tenant domain list (rule TBD); AI may only suggest, never decide inclusion",
+      "impact": "read-only",
+      "stateStore": "Rule list in the user's OneDrive (TBD)",
+      "requirementIds": [
+        "FR-02"
+      ]
+    },
+    {
+      "name": "Follow-up drafting",
+      "workType": "Delegated personal work",
+      "aiNeeded": true,
+      "direction": "Cowork skill that drafts one follow-up per conversation from the collected context",
+      "impact": "reversible write",
+      "stateStore": "OneDrive file",
+      "requirementIds": [
+        "FR-03",
+        "GR-01"
+      ]
+    },
+    {
+      "name": "Weekly status note",
+      "workType": "Delegated personal work",
+      "aiNeeded": true,
+      "direction": "Cowork skill that summarises the week into one status note",
+      "impact": "reversible write",
+      "stateStore": "OneDrive file",
+      "requirementIds": [
+        "FR-04",
+        "GR-01"
+      ]
+    },
+    {
+      "name": "Save to OneDrive for review",
+      "workType": "Conventional software",
+      "aiNeeded": false,
+      "direction": "File write to a fixed folder in the user's OneDrive (e.g. /Weekly follow-ups/<yyyy-mm-dd>/); no send tool granted",
+      "impact": "reversible write",
+      "stateStore": "OneDrive folder",
+      "requirementIds": [
+        "FR-05",
+        "GR-01",
+        "SEC-01"
+      ]
+    }
+  ],
+  "escalation": [
+    {
+      "stage": 1,
+      "considered": [
+        "Cowork",
+        "M365 Copilot Chat / Declarative Agents",
+        "Copilot Studio harnesses",
+        "Teams"
+      ],
+      "meets": [
+        "FR-01",
+        "DATA-01",
+        "DATA-02",
+        "FR-02",
+        "FR-03",
+        "FR-04",
+        "FR-05",
+        "GR-01",
+        "SEC-01",
+        "UX-01"
+      ],
+      "gaps": [],
+      "escalate": false
+    },
+    {
+      "stage": 2,
+      "considered": [
+        "Foundry"
+      ],
+      "meets": [],
+      "gaps": [],
+      "escalate": false
+    },
+    {
+      "stage": 3,
+      "considered": [
+        "Agent Framework"
+      ],
+      "meets": [],
+      "gaps": [],
+      "escalate": false
+    }
+  ],
+  "complexity": {
+    "rating": "Medium",
+    "drivers": [
+      "FR-01 (scheduled run)",
+      "FR-05 (write action to OneDrive)"
+    ],
+    "note": "Would be Low if drafts were returned in chat only; reversible write + schedule make it Medium."
+  },
+  "gates": [
+    {
+      "gate": "Product availability",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "TBD",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "TBD",
+        "Scout": "TBD"
+      },
+      "note": "Cowork, Scout, GHCP harness and per-user Copilot are verify-in-tenant; no source confirms availability for this user.",
+      "owner": "TBD (tenant admin)"
+    },
+    {
+      "gate": "Feature maturity",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "TBD",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "TBD",
+        "Scout": "TBD"
+      },
+      "note": "GA vs preview not stated in the source for any route; preview needs a named risk owner.",
+      "owner": "TBD"
+    },
+    {
+      "gate": "Contractual / licensing",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "TBD",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "TBD",
+        "Scout": "TBD"
+      },
+      "note": "No licensing facts in source; GHCP harness consumes Copilot Credits from build time.",
+      "owner": "TBD"
+    },
+    {
+      "gate": "Data location & movement",
+      "results": {
+        "DA + skills": "Pass",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "Pass",
+        "GHCP harness": "Pass",
+        "Cowork plugins": "Pass",
+        "Scout": "TBD"
+      },
+      "note": "Configured M365 routes keep mail/calendar/drafts in the tenant; pro-code hosting location and Scout's local workstation copies are TBD.",
+      "owner": ""
+    },
+    {
+      "gate": "Identity — least privilege",
+      "results": {
+        "DA + skills": "Pass",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "Pass",
+        "GHCP harness": "Pass",
+        "Cowork plugins": "Pass",
+        "Scout": "TBD"
+      },
+      "note": "Read mail + calendar, write one OneDrive folder; no Mail.Send. Pro-code app registrations and Scout MCP credentials need definition.",
+      "owner": ""
+    },
+    {
+      "gate": "Authorization scoping",
+      "results": {
+        "DA + skills": "Pass",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "TBD",
+        "GHCP harness": "Pass",
+        "Cowork plugins": "Pass",
+        "Scout": "TBD"
+      },
+      "note": "User-delegated access to the user's own data (SEC-01). Standard harness flow connection identity (maker vs user) TBD.",
+      "owner": ""
+    },
+    {
+      "gate": "Network isolation",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "TBD",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "TBD",
+        "Scout": "TBD"
+      },
+      "note": "No requirement stated in source.",
+      "owner": "TBD"
+    },
+    {
+      "gate": "Encryption / key management",
+      "results": {
+        "DA + skills": "Pass",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "Pass",
+        "GHCP harness": "Pass",
+        "Cowork plugins": "Pass",
+        "Scout": "TBD"
+      },
+      "note": "Platform default encryption for M365 data; custom hosting/workstation storage TBD.",
+      "owner": ""
+    },
+    {
+      "gate": "DLP",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "Pass",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "TBD",
+        "Scout": "TBD"
+      },
+      "note": "Power Platform DLP applies to Standard harness; DLP coverage for other surfaces is verify-in-tenant.",
+      "owner": "TBD"
+    },
+    {
+      "gate": "Audit & traceability",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "Pass",
+        "GHCP harness": "Pass",
+        "Cowork plugins": "TBD",
+        "Scout": "TBD"
+      },
+      "note": "Drafts are files with version history; agent-run audit for Cowork/DA/Scout is verify-in-tenant.",
+      "owner": ""
+    },
+    {
+      "gate": "Safety & action control",
+      "results": {
+        "DA + skills": "Pass",
+        "Pro-code DA with MCP": "Pass",
+        "Pro-code DA without MCP": "Pass",
+        "Standard harness": "Pass",
+        "GHCP harness": "Pass",
+        "Cowork plugins": "Pass",
+        "Scout": "Pass"
+      },
+      "note": "Design rule GR-01: no send tool granted; output is drafts only, user sends manually. Reversible writes only.",
+      "owner": "PM (user)"
+    },
+    {
+      "gate": "Records lifecycle",
+      "results": {
+        "DA + skills": "Pass",
+        "Pro-code DA with MCP": "Pass",
+        "Pro-code DA without MCP": "Pass",
+        "Standard harness": "Pass",
+        "GHCP harness": "Pass",
+        "Cowork plugins": "Pass",
+        "Scout": "TBD"
+      },
+      "note": "Drafts follow the user's OneDrive retention; Scout local copies TBD.",
+      "owner": ""
+    },
+    {
+      "gate": "Reliability",
+      "results": {
+        "DA + skills": "TBD",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "TBD",
+        "GHCP harness": "TBD",
+        "Cowork plugins": "TBD",
+        "Scout": "TBD"
+      },
+      "note": "A missed Friday run is low impact; failure notification behaviour TBD per route.",
+      "owner": ""
+    },
+    {
+      "gate": "Operational ownership",
+      "results": {
+        "DA + skills": "Pass",
+        "Pro-code DA with MCP": "TBD",
+        "Pro-code DA without MCP": "TBD",
+        "Standard harness": "Pass",
+        "GHCP harness": "Pass",
+        "Cowork plugins": "Pass",
+        "Scout": "Pass"
+      },
+      "note": "Owned by the PM (single user); pro-code needs a hosting/patching owner.",
+      "owner": ""
+    },
+    {
+      "gate": "Portability / exit",
+      "results": {
+        "DA + skills": "Pass",
+        "Pro-code DA with MCP": "Pass",
+        "Pro-code DA without MCP": "Pass",
+        "Standard harness": "Pass",
+        "GHCP harness": "Pass",
+        "Cowork plugins": "Pass",
+        "Scout": "Pass"
+      },
+      "note": "Outputs are plain files in OneDrive; method can be re-expressed as instructions in another route.",
+      "owner": ""
+    }
+  ],
+  "routes": [
+    {
+      "name": "DA + skills",
+      "gate": "TBD",
+      "scores": {
+        "fit": 3,
+        "implementationSpeed": 4,
+        "governance": 4,
+        "extensibility": 4,
+        "integrationReadiness": 4,
+        "userExperience": 3,
+        "operationalComplexity": 5
+      },
+      "total": 27,
+      "covers": [
+        "DATA-01",
+        "DATA-02",
+        "FR-02",
+        "FR-03",
+        "FR-04",
+        "GR-01",
+        "SEC-01",
+        "UX-01"
+      ],
+      "cannotCover": [
+        "FR-01 (declarative agent is user-initiated in chat; unattended Friday run not native)",
+        "FR-05 (saving files needs an added bounded action — TBD)"
+      ],
+      "label": "Runner-up",
+      "rationale": "Good grounding on the user's M365 mail and calendar and good governance, but it is a chat agent the PM must invoke each Friday and file save is an extra action."
+    },
+    {
+      "name": "Pro-code DA with MCP",
+      "gate": "TBD",
+      "scores": {
+        "fit": 2,
+        "implementationSpeed": 1,
+        "governance": 2,
+        "extensibility": 5,
+        "integrationReadiness": 3,
+        "userExperience": 3,
+        "operationalComplexity": 1
+      },
+      "total": 17,
+      "covers": [
+        "FR-01",
+        "DATA-01",
+        "DATA-02",
+        "FR-02",
+        "FR-03",
+        "FR-04",
+        "FR-05",
+        "GR-01",
+        "SEC-01",
+        "UX-01"
+      ],
+      "cannotCover": [],
+      "label": "Over-engineered for current scope",
+      "rationale": "Could cover all IDs, but needs owned code, hosting, Entra app registrations and MCP servers for a single-user, Stage 1-solvable routine (High complexity vs derived Medium)."
+    },
+    {
+      "name": "Pro-code DA without MCP",
+      "gate": "TBD",
+      "scores": {
+        "fit": 2,
+        "implementationSpeed": 2,
+        "governance": 2,
+        "extensibility": 2,
+        "integrationReadiness": 3,
+        "userExperience": 3,
+        "operationalComplexity": 2
+      },
+      "total": 16,
+      "covers": [
+        "FR-01",
+        "DATA-01",
+        "DATA-02",
+        "FR-02",
+        "FR-03",
+        "FR-04",
+        "FR-05",
+        "GR-01",
+        "SEC-01",
+        "UX-01"
+      ],
+      "cannotCover": [],
+      "label": "Over-engineered for current scope",
+      "rationale": "Same pro-code ownership burden with direct Graph calls; no custom UI or protocol requirement justifies it."
+    },
+    {
+      "name": "Standard harness",
+      "gate": "TBD",
+      "scores": {
+        "fit": 2,
+        "implementationSpeed": 3,
+        "governance": 5,
+        "extensibility": 4,
+        "integrationReadiness": 4,
+        "userExperience": 2,
+        "operationalComplexity": 3
+      },
+      "total": 23,
+      "covers": [
+        "FR-01",
+        "DATA-01",
+        "DATA-02",
+        "FR-02",
+        "FR-05",
+        "GR-01"
+      ],
+      "cannotCover": [
+        "FR-03, FR-04 (heavy document drafting is a not-fit signal)",
+        "SEC-01, UX-01 (built for shared/high-volume conversations, not one person's delegated work)"
+      ],
+      "label": "Not recommended",
+      "rationale": "Not-fit signals match: the work is personal delegated drafting for one user (\"only I\", \"my review\"), not a predictable multi-user conversation. Flows could cover the schedule and file save, but the route adds environment/ALM overhead for one person."
+    },
+    {
+      "name": "GHCP harness",
+      "gate": "TBD",
+      "scores": {
+        "fit": 3,
+        "implementationSpeed": 3,
+        "governance": 4,
+        "extensibility": 5,
+        "integrationReadiness": 4,
+        "userExperience": 3,
+        "operationalComplexity": 3
+      },
+      "total": 25,
+      "covers": [
+        "FR-01",
+        "DATA-01",
+        "DATA-02",
+        "FR-02",
+        "FR-03",
+        "FR-04",
+        "FR-05",
+        "GR-01",
+        "SEC-01",
+        "UX-01"
+      ],
+      "cannotCover": [],
+      "label": "Over-engineered for current scope",
+      "rationale": "Can do everything (document generation, skills, MCP), but plan-and-execute reasoning is not needed for a fixed weekly routine and Copilot Credits are consumed from build time for a one-person task."
+    },
+    {
+      "name": "Cowork plugins",
+      "gate": "TBD",
+      "scores": {
+        "fit": 5,
+        "implementationSpeed": 5,
+        "governance": 3,
+        "extensibility": 4,
+        "integrationReadiness": 4,
+        "userExperience": 5,
+        "operationalComplexity": 5
+      },
+      "total": 31,
+      "covers": [
+        "FR-01",
+        "DATA-01",
+        "DATA-02",
+        "FR-02",
+        "FR-03",
+        "FR-04",
+        "FR-05",
+        "GR-01",
+        "SEC-01",
+        "UX-01"
+      ],
+      "cannotCover": [],
+      "label": "Primary",
+      "rationale": "Native match to the dominant Delegated personal work components: the person who asks is the person who consumes the drafts (SEC-01, UX-01); reads own mail/meetings (DATA-01/02), drafts for review (FR-03/04, GR-01), saves to OneDrive (FR-05) and supports a personal Friday routine (FR-01). Tenant enablement is verify-in-tenant, so its gate is TBD, not Pass."
+    },
+    {
+      "name": "Scout",
+      "gate": "TBD",
+      "scores": {
+        "fit": 4,
+        "implementationSpeed": 4,
+        "governance": 2,
+        "extensibility": 4,
+        "integrationReadiness": 3,
+        "userExperience": 4,
+        "operationalComplexity": 4
+      },
+      "total": 25,
+      "covers": [
+        "FR-01",
+        "FR-03",
+        "FR-04",
+        "GR-01",
+        "SEC-01",
+        "UX-01"
+      ],
+      "cannotCover": [
+        "DATA-01, DATA-02, FR-05 (needs MCP/connector access to M365 mail, calendar and OneDrive from the workstation — TBD)"
+      ],
+      "label": "Alternative (desktop)",
+      "rationale": "Fits a single power user, but runs on one workstation, depends on local MCP access to M365 data, and has no shared governance plane. Viable as a prototype; MCP-ready design advised if chosen."
+    }
+  ],
+  "recommendedRoute": "Cowork plugins",
+  "recommendation": {
+    "primary": "Cowork plugins",
+    "hybrid": "Cowork skill for drafting (FR-03, FR-04) + plugins/tools for own mail, calendar and OneDrive (DATA-01, DATA-02, FR-05) + deterministic customer-domain rule (FR-02); no Copilot Studio, Foundry or pro-code component.",
+    "why": "Dominant work type is Delegated personal work for one user (SEC-01, UX-01); Stage 1 meets all in-scope IDs; no route has a failed gate; Cowork scores 31/35.",
+    "requirementIds": [
+      "FR-01",
+      "DATA-01",
+      "DATA-02",
+      "FR-02",
+      "FR-03",
+      "FR-04",
+      "FR-05",
+      "GR-01",
+      "SEC-01",
+      "UX-01"
+    ]
+  },
+  "buildDemoDependency": {
+    "buildable": [
+      "Follow-up and status-note drafting skills (FR-03, FR-04)",
+      "OneDrive save to review folder (FR-05)",
+      "Week collection from own mail/calendar (DATA-01, DATA-02) — subject to tenant availability"
+    ],
+    "demonstrable": [
+      "Customer rule on a sample week before the domain list is confirmed — Demonstrable (simulated) (FR-02)",
+      "Transcript-based follow-ups if transcripts are not yet accessible — Demonstrable (simulated) (DATA-01)"
+    ],
+    "dependency": [
+      "Tenant enablement of Cowork and scheduled personal routines — External dependency, owner: tenant admin (TBD) (FR-01)",
+      "Meeting transcript availability — External dependency, owner TBD (DATA-01)"
+    ]
+  },
+  "architecture": {
+    "users": [
+      "PM (1 user, owner and consumer)"
+    ],
+    "channels": [
+      "Cowork (personal assistant)",
+      "OneDrive (review of drafts)"
+    ],
+    "agentPlatform": {
+      "instructions": "Weekly follow-up method as a Cowork skill",
+      "orchestration": "Friday scheduled routine (verify in tenant)",
+      "knowledge": "User's own week of meetings and email",
+      "tools": [
+        "Read calendar",
+        "Read mail",
+        "Write OneDrive file"
+      ],
+      "connectedAgents": [],
+      "humanReview": "PM reviews all drafts in OneDrive; sends manually"
+    },
+    "data": [
+      "Outlook calendar (own)",
+      "Outlook mailbox (own)",
+      "Teams meeting transcripts (TBD)",
+      "OneDrive review folder (own)"
+    ],
+    "identityGovernance": [
+      "Entra ID user-delegated access",
+      "No Mail.Send permission",
+      "Tenant controls for Cowork — verify in tenant",
+      "OneDrive retention"
+    ],
+    "monitoringAlm": [
+      "Run history (TBD)",
+      "Skill versioning in user's skill store",
+      "EVAL checklist per pilot week"
+    ]
+  },
+  "sequence": [
+    {
+      "from": "Schedule",
+      "to": "Cowork assistant",
+      "message": "Friday trigger fires (FR-01)"
+    },
+    {
+      "from": "Cowork assistant",
+      "to": "Outlook calendar",
+      "message": "List this week's meetings (DATA-01)"
+    },
+    {
+      "from": "Cowork assistant",
+      "to": "Outlook mailbox",
+      "message": "List this week's sent/received email (DATA-02)"
+    },
+    {
+      "from": "Cowork assistant",
+      "to": "Customer rule",
+      "message": "Filter to external customer conversations (FR-02)"
+    },
+    {
+      "from": "Cowork assistant",
+      "to": "Follow-up skill",
+      "message": "Draft one follow-up per conversation (FR-03)"
+    },
+    {
+      "from": "Cowork assistant",
+      "to": "Status-note skill",
+      "message": "Draft weekly status note (FR-04)"
+    },
+    {
+      "from": "Cowork assistant",
+      "to": "OneDrive",
+      "message": "Save drafts to the review folder (FR-05)"
+    },
+    {
+      "from": "Cowork assistant",
+      "to": "PM",
+      "message": "Notify: drafts ready for review (GR-01)"
+    },
+    {
+      "from": "PM",
+      "to": "OneDrive",
+      "message": "Review and edit drafts"
+    },
+    {
+      "from": "PM",
+      "to": "Outlook mailbox",
+      "message": "PM sends approved follow-ups manually (outside the assistant)"
+    }
+  ],
+  "evals": [
+    {
+      "area": "Coverage",
+      "measure": "Share of the week's customer conversations that get a draft",
+      "target": "≥ 95% vs PM's manual list",
+      "status": "Not started"
+    },
+    {
+      "area": "Precision",
+      "measure": "Drafts created for non-customer/internal items",
+      "target": "≤ 1 per week",
+      "status": "Not started"
+    },
+    {
+      "area": "Draft quality",
+      "measure": "PM edits needed before sending (1–5 rating)",
+      "target": "Median ≥ 4",
+      "status": "Not started"
+    },
+    {
+      "area": "Safety",
+      "measure": "Emails sent by the assistant",
+      "target": "0 (hard requirement GR-01)",
+      "status": "Not started"
+    },
+    {
+      "area": "Reliability",
+      "measure": "Friday runs completed and saved",
+      "target": "≥ 4 of 4 weeks in pilot",
+      "status": "Not started"
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Mis-classifying internal threads as customer conversations",
+      "mitigation": "Deterministic domain rule + PM review; tune rule list (FR-02)"
+    },
+    {
+      "risk": "Hallucinated commitments in follow-ups",
+      "mitigation": "Cite source meeting/email in each draft; PM reviews before sending (GR-01)"
+    },
+    {
+      "risk": "Accidental send",
+      "mitigation": "No send permission granted; drafts are files, not queued mail"
+    },
+    {
+      "risk": "Missing meeting content when no transcript exists",
+      "mitigation": "Fall back to invite + email thread; flag 'low context' in draft (DATA-01)"
+    },
+    {
+      "risk": "Route availability unconfirmed in tenant",
+      "mitigation": "Gate TBD tracked as open issue; fallback DA + skills run manually each Friday"
+    }
+  ],
+  "openIssues": [
+    "Gate TBD — Product availability: confirm Cowork (and its scheduled-run capability) is enabled for this user in the tenant (verify in tenant).",
+    "Gate TBD — Feature maturity / licensing: confirm GA vs preview status and licensing for the chosen route; name a risk owner if preview.",
+    "Define the customer-conversation rule (FR-02): which external domains count as customers, and whether internal-only meetings are excluded.",
+    "Confirm whether meeting transcripts/recordings are available to read (DATA-01) or drafts rely on calendar details and email threads only.",
+    "Confirm the OneDrive folder and file format for drafts (FR-05): one file per follow-up vs one weekly document.",
+    "Audit & traceability for Cowork runs is verify-in-tenant; confirm what run history is retained."
+  ],
+  "technicalDecisions": [
+    "Primary route: Cowork plugins — single-user delegated personal work (SEC-01, UX-01).",
+    "No send capability: the assistant never holds a mail-send permission; the PM sends manually (GR-01).",
+    "Customer selection is a deterministic domain rule, not an LLM judgment (FR-02) — separates reasoning from control.",
+    "Stay at Stage 1: no Foundry or Agent Framework escalation (all in-scope IDs met)."
+  ],
+  "roadmap": [
+    {
+      "phase": "Phase 0 — Confirm",
+      "scope": "Answer 3 questions; confirm Cowork availability and scheduled run",
+      "exit": "Gates Product availability / licensing resolved"
+    },
+    {
+      "phase": "Phase 1 — Manual run",
+      "scope": "Run the skill on demand for one week of data; PM reviews drafts",
+      "exit": "EVALs Coverage and Draft quality measured once"
+    },
+    {
+      "phase": "Phase 2 — Friday schedule",
+      "scope": "Enable the Friday routine and OneDrive save",
+      "exit": "4 consecutive Friday runs with 0 sends"
+    },
+    {
+      "phase": "Phase 3 — Tune",
+      "scope": "Refine customer rule and draft templates",
+      "exit": "EVAL targets met"
+    }
+  ],
+  "changeLog": [
+    {
+      "date": "2026-10-07",
+      "entry": "Initial draft generated from the user's chat request (standalone derivation, Steps A–I)."
+    },
+    {
+      "date": "2026-10-07",
+      "entry": "Self-check pass 1 completed; results recorded in Open Issues where unresolved."
+    }
+  ]
+}</script>
+  <script>
+    (() => {
+      const blueprintDataElement = document.getElementById("blueprint-data");
+      const blueprintData = JSON.parse(blueprintDataElement.textContent);
+
+      const formatDate = () => new Date().toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric"
+      });
+
+      const isoDate = () => new Date().toISOString().slice(0, 10);
+
+      const syncBlueprintData = () => {
+        blueprintData.status = document.getElementById("document-status").textContent;
+        blueprintData.lastUpdated = isoDate();
+        blueprintData.changeLog = Array.from(document.querySelectorAll("#change-log .change-item"))
+          .map((item) => ({
+            date: item.querySelector("strong").textContent,
+            entry: item.querySelector("span").textContent
+          }));
+        blueprintData.openIssues = Array.from(document.querySelectorAll("#open-issues .change-item span"))
+          .map((item) => item.textContent);
+        blueprintData.technicalDecisions = Array.from(document.querySelectorAll("#technical-decisions .change-item span"))
+          .map((item) => item.textContent);
+        blueprintDataElement.textContent = JSON.stringify(blueprintData, null, 2);
+      };
+
+      const updateLastUpdated = () => {
+        document.getElementById("last-updated").textContent = formatDate();
+        syncBlueprintData();
+      };
+
+      const appendItem = (containerId, label, text) => {
+        const log = document.getElementById(containerId);
+        const item = document.createElement("div");
+        const heading = document.createElement("strong");
+        const body = document.createElement("span");
+
+        item.className = "change-item";
+        heading.textContent = label;
+        body.textContent = text;
+
+        item.append(heading, body);
+        log.appendChild(item);
+        updateLastUpdated();
+      };
+
+      const bindAdd = (inputId, buttonId, containerId, labelFactory) => {
+        const input = document.getElementById(inputId);
+        const button = document.getElementById(buttonId);
+
+        button.addEventListener("click", () => {
+          const text = input.value.trim();
+          if (!text) {
+            input.focus();
+            return;
+          }
+
+          appendItem(containerId, labelFactory(), text);
+          input.value = "";
+        });
+      };
+
+      document.getElementById("update-status").addEventListener("click", () => {
+        const status = document.getElementById("status-select").value;
+        document.getElementById("document-status").textContent = status;
+        appendItem("change-log", isoDate(), `Updated document status to ${status}.`);
+      });
+
+      document.getElementById("download-updated").addEventListener("click", () => {
+        syncBlueprintData();
+        const html = `<!DOCTYPE html>\n${document.documentElement.outerHTML}`;
+        const blob = new Blob([html], { type: "text/html" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${blueprintData.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-blueprint-updated.html`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      });
+
+      bindAdd("change-input", "add-change", "change-log", () => isoDate());
+      bindAdd("issue-input", "add-issue", "open-issues", () => "Open");
+      bindAdd("decision-input", "add-decision", "technical-decisions", () => "Added");
+      syncBlueprintData();
+    })();
+  </script>
+
+
+</body></html>
