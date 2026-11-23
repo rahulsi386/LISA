@@ -69,7 +69,20 @@ Then:
 1. Review the project's `lisa-config.json` and complete its tenant values. For manual setup, copy
   the root template only if the project does not already have a config.
 2. Put customer source material in `requirements/` and source-grounded tests in `evalData/`.
-3. Authenticate PAC CLI and your browser to the same tenant.
+3. Check that Windows and PAC CLI are using the work account for your target tenant. If Copilot
+   Studio prompts you to sign in during the run, use that same account.
+   - **Windows:** Open **Settings → Accounts → Access work or school** and look for your account
+     from the target tenant. If it is missing, choose **Connect** and follow your organization's device policy.
+   - **PAC CLI:** Run `pac auth list` to check the active account and `pac env who` to compare the
+     environment URL with `copilotStudio.envUrl` in `lisa-config.json`. If both match, continue to
+     step 4. If another profile matches, use `pac auth select --index <index>`. If none matches,
+     sign in from PowerShell in the project folder:
+
+     ```powershell
+     $config = Get-Content .\lisa-config.json -Raw | ConvertFrom-Json
+     pac auth create --environment $config.copilotStudio.envUrl
+     pac env who
+     ```
 4. Start your host from the project folder and invoke `/cad-orchestrator`.
 
 ## Repository layout
