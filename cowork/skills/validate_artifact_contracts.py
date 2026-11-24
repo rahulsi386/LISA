@@ -32,19 +32,26 @@ def load_object(path: Path) -> dict[str, Any]:
 def validate_contract(skill_root: Path) -> dict[str, Any]:
     contract_path = skill_root / "resources" / "artifact-contract.json"
     contract = load_object(contract_path)
-    try:
-        import jsonschema
+    # In the uploadable plugin the helpers live alongside the skill's runner.
+    packaged = ROOT == skill_root.resolve() / "scripts"
+    skill_name = skill_root.name.removeprefix("lisa-") if packaged else skill_root.name
+    if skill_name in {"requirement-analyzer", "complexity-classifier"}:
+        from design_validation import validate_schema
 
-        jsonschema.Draft202012Validator(load_object(SCHEMA_PATH)).validate(contract)
-    except ImportError as exc:
-        raise ContractError("jsonschema is required to validate artifact contracts") from exc
-    except jsonschema.ValidationError as exc:
-        location = ".".join(str(item) for item in exc.absolute_path) or "<root>"
-        raise ContractError(
-            f"{skill_root.name} contract error at {location}: {exc.message}"
-        ) from exc
+        validate_schema(load_object(SCHEMA_PATH), contract, f"{skill_root.name} contract error", ContractError)
+    else:
+        try:
+            import jsonschema
+            jsonschema.Draft202012Validator(load_object(SCHEMA_PATH)).validate(contract)
+        except ImportError as exc:
+            raise ContractError("jsonschema is required to validate artifact contracts") from exc
+        except jsonschema.ValidationError as exc:
+            location = ".".join(str(item) for item in exc.absolute_path) or "<root>"
+            raise ContractError(
+                f"{skill_root.name} contract error at {location}: {exc.message}"
+            ) from exc
 
-    if contract["skill"] != skill_root.name:
+    if contract["skill"] != skill_name:
         raise ContractError(
             f"Contract skill {contract['skill']!r} does not match {skill_root.name!r}"
         )

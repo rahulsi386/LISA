@@ -22,7 +22,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+SKILL_ROOT = Path(__file__).resolve().parents[1]
+PACKAGED = SKILL_ROOT.name == "lisa-complexity-classifier"
+HELPERS = SKILL_ROOT / "scripts" if PACKAGED else SKILL_ROOT.parent
+sys.path.insert(0, str(HELPERS))
+from design_validation import validate_schema
 from validate_artifact_contracts import canonical_stage_root, validate_contract
 from lisa_path_resolver import LisaConfigError, resolve_lisa_config
 from analysis_handoff import (
@@ -36,7 +40,6 @@ from review_batches import ReviewBatchError, write_review_batches
 VERSION = "3.0.0"
 CACHE_VERSION = "5"
 MODEL_SCHEMA_VERSION = "4.0"
-SKILL_ROOT = Path(__file__).resolve().parents[1]
 RESOURCES = SKILL_ROOT / "resources"
 ARTIFACT_CONTRACT = validate_contract(SKILL_ROOT)
 REFERENCE_MANIFEST_PATH = RESOURCES / "reference-manifest.json"
@@ -46,7 +49,7 @@ OUTPUT_SCHEMA_PATH = RESOURCES / "classification-output.schema.json"
 ASSESSMENT_SCHEMA_PATH = RESOURCES / "research-assessment.schema.json"
 CLASSIFICATION_MANIFEST_SCHEMA_PATH = RESOURCES / "classification-manifest.schema.json"
 TEMPLATE_PATH = RESOURCES / "classification.template.md"
-PLATFORM_DECISION_PATH = SKILL_ROOT.parent / "Platform-Decision.md"
+PLATFORM_DECISION_PATH = (RESOURCES if PACKAGED else HELPERS) / "Platform-Decision.md"
 COMPLETION_CONTRACT_PATH = RESOURCES / "completion-contract.json"
 REVIEW_BATCH_MAX_BYTES = 16384
 
@@ -1112,6 +1115,8 @@ def _model_template(
         "research_register": {
             "mcp_usage": [
                 {"server": server, "status": "used", "detail": "Record the queries performed."}
+                if not PACKAGED or server == "ms-learn-mcp"
+                else {"server": server, "status": "unavailable", "detail": "Not configured in the Lisa plugin."}
                 for server in MCP_SERVERS
             ],
             "sources": [],
@@ -1361,19 +1366,7 @@ def _model_template(
 def _validate_against_schema(
     value: dict[str, Any], schema_path: Path, label: str
 ) -> None:
-    try:
-        import jsonschema
-    except ImportError as exc:
-        raise ClassifierError(
-            "jsonschema is required; install the local-skills requirements.txt"
-        ) from exc
-    try:
-        jsonschema.Draft202012Validator(_json_load(schema_path)).validate(value)
-    except jsonschema.ValidationError as exc:
-        location = ".".join(str(item) for item in exc.absolute_path) or "<root>"
-        raise ClassifierError(
-            f"{label} schema error at {location}: {exc.message}"
-        ) from exc
+    validate_schema(_json_load(schema_path), value, f"{label} schema error", ClassifierError)
 
 
 def _schema_validate(model: dict[str, Any]) -> None:
@@ -1469,19 +1462,22 @@ def _cache_key(
 def _resource_hashes() -> dict[str, str]:
     return {
         "script": _sha256_file(Path(__file__).resolve()),
-        "runner": _sha256_file(SKILL_ROOT / "scripts" / "Invoke-ComplexityClassifier.ps1"),
+        "runner": _sha256_file(Path(__file__) if PACKAGED else SKILL_ROOT / "scripts" / "Invoke-ComplexityClassifier.ps1"),
         "reference_manifest": _sha256_file(REFERENCE_MANIFEST_PATH),
         "rules": _sha256_file(RULES_PATH),
         "model_schema": _sha256_file(MODEL_SCHEMA_PATH),
         "output_schema": _sha256_file(OUTPUT_SCHEMA_PATH),
         "classification_manifest_schema": _sha256_file(CLASSIFICATION_MANIFEST_SCHEMA_PATH),
         "artifact_contract": _sha256_file(RESOURCES / "artifact-contract.json"),
-        "artifact_contract_schema": _sha256_file(SKILL_ROOT.parent / "artifact-contract.schema.json"),
-        "artifact_contract_validator": _sha256_file(SKILL_ROOT.parent / "validate_artifact_contracts.py"),
-        "path_resolver": _sha256_file(SKILL_ROOT.parent / "lisa_path_resolver.py"),
-        "analysis_handoff": _sha256_file(SKILL_ROOT.parent / "analysis_handoff.py"),
-        "review_batches": _sha256_file(SKILL_ROOT.parent / "review_batches.py"),
+        "artifact_contract_schema": _sha256_file(HELPERS / "artifact-contract.schema.json"),
+        "artifact_contract_validator": _sha256_file(HELPERS / "validate_artifact_contracts.py"),
+        "design_validation": _sha256_file(HELPERS / "design_validation.py"),
+        "design_validator_bundle": _sha256_file(HELPERS / "design-validator.cjs"),
+        "path_resolver": _sha256_file(HELPERS / "lisa_path_resolver.py"),
+        "analysis_handoff": _sha256_file(HELPERS / "analysis_handoff.py"),
+        "review_batches": _sha256_file(HELPERS / "review_batches.py"),
         "skill_instructions": _sha256_file(SKILL_ROOT / "SKILL.md"),
+        **({"cowork_workflow": _sha256_file(SKILL_ROOT / "references" / "workflow.md")} if PACKAGED else {}),
         "design_guidance": _sha256_file(RESOURCES / "design-guidance.md"),
         "completion_contract": _sha256_file(COMPLETION_CONTRACT_PATH),
         "assessment_schema": _sha256_file(ASSESSMENT_SCHEMA_PATH),
@@ -3174,6 +3170,8 @@ def _validate_research(
         if source["confidentiality"] != expected:
             raise ClassifierError(f"{identifier}: {source_type} sources are {expected}")
     for server, item in usage.items():
+        if PACKAGED and server != "ms-learn-mcp" and item["status"] != "unavailable":
+            raise ClassifierError(f"{server} is not a connector in the Lisa plugin")
         count = sum(source["source_type"] == server for source in sources.values())
         if item["status"] == "used" and not count:
             raise ClassifierError(f"{server} is marked used but no register source cites it")
@@ -4896,20 +4894,7 @@ def _publish(args: argparse.Namespace) -> int:
         )
     score = _score_model(model, summary)
     output = _output_object(run, model, score, references, summary)
-    try:
-        import jsonschema
-        jsonschema.Draft202012Validator(
-            _json_load(OUTPUT_SCHEMA_PATH)
-        ).validate(output)
-    except ImportError as exc:
-        raise ClassifierError(
-            "jsonschema is required; install the local-skills requirements.txt"
-        ) from exc
-    except jsonschema.ValidationError as exc:
-        location = ".".join(str(item) for item in exc.absolute_path) or "<root>"
-        raise ClassifierError(
-            f"Classification output schema error at {location}: {exc.message}"
-        ) from exc
+    _validate_against_schema(output, OUTPUT_SCHEMA_PATH, "Classification output")
     markdown = _render_markdown(model, score, references, summary, output)
     markdown_path = Path(run["target_markdown_path"])
     json_path = Path(run["target_json_path"])

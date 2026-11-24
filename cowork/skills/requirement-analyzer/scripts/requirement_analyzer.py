@@ -29,7 +29,11 @@ from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+SKILL_ROOT = Path(__file__).resolve().parents[1]
+PACKAGED = SKILL_ROOT.name == "lisa-requirement-analyzer"
+HELPERS = SKILL_ROOT / "scripts" if PACKAGED else SKILL_ROOT.parent
+sys.path.insert(0, str(HELPERS))
+from design_validation import validate_schema
 from validate_artifact_contracts import canonical_stage_root, validate_contract
 from lisa_path_resolver import LisaConfigError, resolve_lisa_config
 from review_batches import ReviewBatchError, write_review_batches
@@ -55,7 +59,6 @@ MAX_OFFICE_UNCOMPRESSED_BYTES = 5 * 1024 * 1024 * 1024
 MAX_COMPRESSION_RATIO = 200
 MAX_OFFICE_COMPRESSION_RATIO = 2500
 MAX_EXTRACTED_TEXT_CHARS = 50 * 1024 * 1024
-SKILL_ROOT = Path(__file__).resolve().parents[1]
 RESOURCES = SKILL_ROOT / "resources"
 ARTIFACT_CONTRACT = validate_contract(SKILL_ROOT)
 SCHEMA_PATH = RESOURCES / "evidence-ledger.schema.json"
@@ -298,12 +301,14 @@ def _extractor_fingerprint() -> str:
             "packages": packages,
             "review_policy": REVIEW_POLICY_VERSION,
             "helper_sha256": {
-                name: _sha256_file(SKILL_ROOT.parent / name)
+                name: _sha256_file(HELPERS / name)
                 for name in (
                     "review_batches.py",
                     "analysis_handoff.py",
                     "lisa_path_resolver.py",
                     "validate_artifact_contracts.py",
+                    "design_validation.py",
+                    "design-validator.cjs",
                     "artifact-contract.schema.json",
                 )
             },
@@ -312,6 +317,7 @@ def _extractor_fingerprint() -> str:
                 path.name: _sha256_file(path)
                 for path in (SKILL_ROOT / "SKILL.md", SCHEMA_PATH, VOCABULARY_PATH, TEMPLATE_PATH)
             },
+            **({"cowork_workflow": _sha256_file(SKILL_ROOT / "references" / "workflow.md")} if PACKAGED else {}),
         }
     )
 
@@ -2195,22 +2201,8 @@ def _prepare(args: argparse.Namespace) -> int:
     return 0
 
 
-def _load_schema() -> dict[str, Any]:
-    return _json_load(SCHEMA_PATH)
-
-
 def _schema_validate(ledger: dict[str, Any]) -> None:
-    try:
-        import jsonschema
-    except ImportError as exc:
-        raise AnalyzerError(
-            "jsonschema is required; install the local-skills requirements.txt before validation"
-        ) from exc
-    try:
-        jsonschema.Draft202012Validator(_load_schema()).validate(ledger)
-    except jsonschema.ValidationError as exc:
-        path = ".".join(str(item) for item in exc.absolute_path) or "<root>"
-        raise AnalyzerError(f"Evidence ledger schema error at {path}: {exc.message}") from exc
+    validate_schema(_json_load(SCHEMA_PATH), ledger, "Evidence ledger schema error", AnalyzerError)
 
 
 def _normalized_statement(value: str) -> str:

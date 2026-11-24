@@ -91,16 +91,11 @@ class DesignHandoffTests(unittest.TestCase):
         classifier._validate_design_handoff(topology)
 
     def test_schema_accepts_explicit_modes_and_presentation(self):
-        import jsonschema
         schema = json.loads((ROOT / "resources" / "classification-model.schema.json").read_text())
-        jsonschema.Draft202012Validator.check_schema(schema)
-        definitions = schema["$defs"]
-        validator = jsonschema.Draft202012Validator({
-            "$defs": definitions, "$ref": "#/$defs/presentation"
-        })
-        validator.validate(self.topology()["presentation"])
-        with self.assertRaises(jsonschema.ValidationError):
-            validator.validate({"primary_path": ["agent", "agent"]})
+        presentation = {"$defs": schema["$defs"], "$ref": "#/$defs/presentation"}
+        classifier.validate_schema(presentation, self.topology()["presentation"], "presentation", classifier.ClassifierError)
+        with self.assertRaisesRegex(classifier.ClassifierError, "primary_path"):
+            classifier.validate_schema(presentation, {"primary_path": ["agent", "agent"]}, "presentation", classifier.ClassifierError)
 
     def test_unknown_capability_reference_is_not_silently_ignored(self):
         topology = self.topology()

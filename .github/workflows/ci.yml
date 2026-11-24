@@ -37,6 +37,8 @@ jobs:
         run: npm --prefix github-copilot/skills/solution-designer/renderer ci
       - name: Run plugin checks
         run: ./scripts/Test-LisaRepository.ps1 -Suite Plugin
+      - name: Check Cowork release ZIP and packaged handoff
+        run: python cowork/lisa/test_package.py
 
   gepa:
     name: GEPA Checks
