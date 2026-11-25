@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lisa:agency:gepa-eligibility:1.0",
+  "title": "LISA-owned GEPA eligibility decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "runId", "decidedAt", "harness", "sourceEvaluationRunId", "eligible", "reason", "detail"],
+  "properties": {
+    "schemaVersion": {"const": "1.0"},
+    "runId": {"type": "string", "pattern": "^OPT-[0-9]{8}-[0-9]{6}-[A-F0-9]{8}$"},
+    "decidedAt": {"type": "string", "format": "date-time"},
+    "harness": {"enum": ["GitHub Copilot", "Standard", "Copilot chat"]},
+    "sourceEvaluationRunId": {"type": "string", "pattern": "^EVAL-[0-9]{8}-[0-9]{6}-[A-F0-9]{8}$"},
+    "eligible": {"type": "boolean"},
+    "reason": {
+      "enum": ["eligible", "unsupported-harness", "engine-unavailable", "evaluation-unavailable",
+               "evaluation-ineligible", "no-instruction-finding", "dataset-too-small"]
+    },
+    "detail": {"type": "string", "minLength": 1}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"eligible": {"const": true}}},
+      "then": {"properties": {"reason": {"const": "eligible"}}},
+      "else": {"properties": {"reason": {"not": {"const": "eligible"}}}}
+    }
+  ]
+}

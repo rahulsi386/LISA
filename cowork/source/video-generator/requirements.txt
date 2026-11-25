@@ -1,0 +1,43 @@
+# video-generator: optional, explicit-only Agency skill; not a CAD dependency.
+# This is pip-compatible. Only uncommented lines are Python packages.
+# Install into the GENERATED project's isolated environment, not the plugin:
+#   python -m venv work/speech-env
+#   work/speech-env/Scripts/python.exe -m pip install -r requirements.txt
+edge-tts==7.2.7
+# edge-tts resolves its aiohttp/certifi/tabulate/typing-extensions dependencies.
+# No SAPI, moviepy, ffmpeg-python, imageio, or extra Python test framework needed.
+#
+# REQUIRED HOST / TOOLS (not pip packages):
+# - Windows 11; PowerShell 7+ (pwsh); Python 3.11+ with venv and pip.
+# - Agency 1.0+ for skill invocation; Copilot or Claude engine with local tools.
+# - Node.js 20+ (supported LTS recommended), npm; run npm ci in generated project.
+# - Pinned npm dependencies in resources/template/package.json + package-lock.json:
+#     @napi-rs/canvas==0.1.80 (native Windows canvas binaries)
+#     ffmpeg-static==5.2.0 (downloads platform FFmpeg executable on npm install)
+# - FFmpeg H.264/libx264 and AAC encoding via ffmpeg-static; no global FFmpeg needed.
+# - Windows fonts: Bahnschrift, Segoe UI, Segoe UI Bold, Consolas.
+#   Font paths default to WINDIR/Fonts; no external font download is performed.
+# - Recommended 4 GB available memory, 2 GB free disk per production folder.
+# - Optional current-screen capture: host Playwright/browser screenshot tools.
+#   Screenshots can instead be supplied by the user. No browser npm package needed.
+# - If custom UI icons are needed, use an approved existing icon library; the
+#   validated LISA-specific production used lucide-static==0.468.0. It is OPTIONAL,
+#   not imported by this generic template. Install and pin it in the generated
+#   package.json/package-lock.json only when that production uses it.
+#
+# NETWORK / SERVICES / PERMISSIONS:
+# - npm registry and ffmpeg-static binary-download host during npm ci.
+# - Approved PyPI index and native package wheels during pip installation.
+# - Microsoft Edge online speech endpoints at speech.platform.bing.com: HTTPS/WSS
+#   over port 443. edge-tts is a community client, not an Azure Speech SLA/API.
+# - Only approved nonsensitive narration text is sent to online speech. No Azure
+#   resources, API key, paid subscription, or tenant sign-in is required by default.
+# - Default voice en-US-AvaMultilingualNeural, rate +14%, pitch +0Hz; availability
+#   and service terms can change. Check applicable terms for external distribution.
+# - Restricted/confidential scripts need an approved provider or supplied WAVs;
+#   do not bypass TLS/proxies, embed secrets, clone voices, or silently use SAPI.
+# - Rendering/playback run locally after speech/assets are available.
+# - Rights to brand assets, screenshots, fonts and any third-party music are needed.
+#   Template music is synthesized locally. Review FFmpeg/native-package licenses
+#   before redistributing their binaries; do not ship node_modules with the video.
+# - No cloud build/evaluation/publication permissions are granted by this skill.

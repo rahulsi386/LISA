@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lisa:schemas:workflow-checkpoint:1.0",
+  "title": "LISA workflow checkpoint",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "workflowRunId",
+    "generation",
+    "configSha256",
+    "status",
+    "activeStage",
+    "activeStageRunId",
+    "activeCheckpoint",
+    "completedStages",
+    "updatedAt",
+    "integritySha256"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "1.0"},
+    "workflowRunId": {"pattern": "^WF-[0-9]{8}-[0-9]{6}-[A-F0-9]{8}$"},
+    "generation": {"type": "integer", "minimum": 1},
+    "configSha256": {"pattern": "^[a-f0-9]{64}$"},
+    "status": {
+      "enum": ["RUNNING", "WAITING", "RECONCILING", "COMPLETED", "BLOCKED", "FAILED", "CANCELLED"]
+    },
+    "activeStage": {
+      "type": ["string", "null"],
+      "enum": ["analysis", "classification", "design", "build", "evaluation", "optimization", "artifacts", "publication", "cleanup", null]
+    },
+    "activeStageRunId": {"type": ["string", "null"]},
+    "activeCheckpoint": {"type": ["string", "null"]},
+    "completedStages": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["stageRunId", "status", "completionMarker", "completionMarkerSha256", "completedAt"],
+        "properties": {
+          "stageRunId": {"type": "string", "minLength": 1},
+          "status": {"enum": ["COMMITTED", "BLOCKED"]},
+          "completionMarker": {"type": "string", "minLength": 1},
+          "completionMarkerSha256": {"pattern": "^[a-f0-9]{64}$"},
+          "completedAt": {"type": "string", "format": "date-time"}
+        }
+      }
+    },
+    "updatedAt": {"type": "string", "format": "date-time"},
+    "integritySha256": {"pattern": "^[a-f0-9]{64}$"}
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "lisa-cowork-validators",
+  "private": true,
+  "scripts": {
+    "bundle": "node bundle-validator.cjs"
+  },
+  "devDependencies": {
+    "ajv": "8.20.0",
+    "esbuild": "0.28.1"
+  }
+}

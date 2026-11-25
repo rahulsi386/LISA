@@ -1,0 +1,48 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.29/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.29",
+  "version": "0.2.3",
+  "id": "dfc936a2-aef5-4f05-834b-5f62f9d39f3c",
+  "developer": {
+    "name": "LISA",
+    "websiteUrl": "https://github.com/rahulsi386/LISA",
+    "privacyUrl": "https://github.com/rahulsi386/LISA/blob/main/cowork/PRIVACY.md",
+    "termsOfUseUrl": "https://github.com/rahulsi386/LISA/blob/main/LICENSE"
+  },
+  "name": {
+    "short": "Lisa",
+    "full": "Lisa for Microsoft Copilot Cowork"
+  },
+  "description": {
+    "short": "Analyze requirements and classify solution complexity with Microsoft Learn.",
+    "full": "Turn requirements from a selected OneDrive project into a traceable evidence ledger and a scored classification of solution complexity and platform fit. Review the outputs before moving on to design."
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "accentColor": "#175984",
+  "agentSkills": [
+    {
+      "folder": "./skills/lisa-requirement-analyzer"
+    },
+    {
+      "folder": "./skills/lisa-complexity-classifier"
+    }
+  ],
+  "agentConnectors": [
+    {
+      "id": "ms-learn-mcp",
+      "displayName": "Microsoft Learn",
+      "description": "Look up public Microsoft product documentation.",
+      "toolSource": {
+        "remoteMcpServer": {
+          "mcpServerUrl": "https://learn.microsoft.com/api/mcp",
+          "authorization": {
+            "type": "None"
+          }
+        }
+      }
+    }
+  ]
+}
