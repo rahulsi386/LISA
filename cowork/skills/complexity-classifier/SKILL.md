@@ -41,11 +41,52 @@ evidence.
 
 ## Prepare and trusted input
 
+Reserve the run directory first:
+
 ```powershell
-& "<skill-dir>\scripts\Invoke-ComplexityClassifier.ps1" prepare `
+& "<skill-dir>\scripts\Invoke-ComplexityClassifier.ps1" init-references `
   --config "<path-to>\lisa-config.json" `
   --local-time "<authoritative-current-datetime-with-offset>"
 ```
+
+Read `reference_manifest` (`resources\reference-manifest.json`). Process the **first real entry**
+before issuing the rest. Use the Microsoft Learn page-fetch action (`microsoft_docs_fetch`) advertised
+to the **agent** with that entry's exact public URL. Do not try connector aliases from Python or shell.
+Send no project data. An action response or a proxy by itself is not a saved page.
+
+Pass the **complete page body from that successful call** directly to the local runner. If the host
+returns or exports a Markdown file, use the path supplied by the host:
+
+```powershell
+& "<skill-dir>\scripts\Invoke-ComplexityClassifier.ps1" save-reference --run "<run_directory>" --id "<id>" --source-file "<returned-markdown-file>"
+```
+
+If the host exposes the returned text as a value instead, pass its UTF-8 bytes unchanged to the
+same command with `--stdin` instead of `--source-file`. Do not paste or regenerate the content from
+chat, serialize a tool envelope, write a preview or an error in place of the page, or look for a
+private journal. If neither file export nor direct text transfer is available, stop **before the
+remaining calls** and report the affected ID and that Cowork did not expose a transferable page body.
+
+`save-reference` reopens `references/<id>.md` and compares its hash with the supplied bytes. Exit
+code 0 and `status: saved` for the expected ID is success: keep that page and **continue immediately**
+with the remaining manifest entries using the same method, without an operator checkpoint or a second
+fetch of the first URL. Save each result as it arrives. Record individual fetch errors by ID, keep
+the successful files, and let ingestion report required blockers. Prefetch is not consultation:
+only the active stage's reference index is evidence for that stage.
+
+After processing the manifest, run ingestion and, on success, preparation in the same task:
+
+```powershell
+& "<skill-dir>\scripts\Invoke-ComplexityClassifier.ps1" ingest-references --run "<run_directory>"
+& "<skill-dir>\scripts\Invoke-ComplexityClassifier.ps1" prepare --config "<path-to>\lisa-config.json" --run "<run_directory>"
+```
+
+Stop on a required active-stage blocker. Fetch the affected pages again and repeat ingestion;
+do not edit the receipt or the HTTP cache. If an already-prepared run's active pages change, start a
+new run so its evidence stays consistent. `prepare` and `expand-research` use the ingested
+Markdown without network access. Only on a host with direct internet access, `prepare --config
+"<config>" --direct-download` starts a separate HTTP fallback run. Report the actual source;
+a direct download does not count as use of the connector.
 
 There is no `--input` or `--output` override. Configuration determines `<basePath>\output\analysis`
 and `<basePath>\output\classification`. The runner selects the newest matching timestamped ledger

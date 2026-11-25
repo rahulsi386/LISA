@@ -271,13 +271,17 @@ Run IDs match `CC-YYYYMMDD_HHMMSS[_mmm]-XXXXXXXX`; statuses are `prepared`, `res
 
 ### How it executes successfully
 
-1. **Prepare.** The wrapper forwards to Python and preserves its exit code.
+1. **Collect and ingest references before preparing.** Use `run_directory` from `init-references`. Start with the first manifest URL through the agent's Learn action. Use `save-reference` to persist its returned Markdown as `references/<id>.md`; after its `saved` receipt, continue without confirmation. If Cowork cannot transfer the body, stop after that one page. See the [classifier workflow](complexity-classifier/SKILL.md#prepare-and-trusted-input).
 
    ```powershell
-   & "<skill-dir>\scripts\Invoke-ComplexityClassifier.ps1" prepare --config "<CONFIG>" --local-time "<ISO-8601-with-offset>"
+   & "<skill-dir>\scripts\Invoke-ComplexityClassifier.ps1" init-references --config "<CONFIG>" --local-time "<ISO-8601-with-offset>"
+   # For each actual Markdown export, not a chat transcript:
+   & "<skill-dir>\scripts\Invoke-ComplexityClassifier.ps1" save-reference --run "<run_directory>" --id "<id>" --source-file "<returned-markdown-file>"
+   & "<skill-dir>\scripts\Invoke-ComplexityClassifier.ps1" ingest-references --run "<run_directory>"
+   & "<skill-dir>\scripts\Invoke-ComplexityClassifier.ps1" prepare --config "<CONFIG>" --run "<run_directory>"
    ```
 
-2. [`complexity_classifier.py`](complexity-classifier/scripts/complexity_classifier.py) resolves the latest Analysis JSON, creates run/cache paths, builds an evidence summary and model draft, refreshes allowed-tool references in parallel or validates a packaged offline reference set, and detects a validated-model cache hit.
+2. [`complexity_classifier.py`](complexity-classifier/scripts/complexity_classifier.py) resolves the latest Analysis JSON, verifies fresh connector pages for the active stage, builds an evidence summary and model draft, and detects a validated-model cache hit. Use `--direct-download` instead of `--run` only for HTTP fallback on an internet-connected host.
 3. Assess Copilot Studio/Microsoft 365 Copilot Chat/Teams and Cowork as applicable. If the allowed stage is not a full fit, persist a schema-valid assessment and expand **sequentially**:
 
    ```powershell

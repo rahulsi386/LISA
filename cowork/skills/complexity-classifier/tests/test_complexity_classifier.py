@@ -2685,6 +2685,63 @@ class ComplexityClassifierTests(unittest.TestCase):
             self.assertEqual("cached-after-error", stale["status"])
             self.assertEqual(cached["retrieved_at"], stale["retrieved_at"])
 
+    def test_connector_pages_block_on_missing_empty_stale_or_changed_content(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(classifier.urllib.request, "urlopen") as network:
+            root = Path(directory)
+            pages = root / "references"
+            pages.mkdir()
+            refs = json.loads(classifier.REFERENCE_MANIFEST_PATH.read_bytes())["references"]
+            first, second = refs[:2]
+            page = pages / (first["id"] + ".md")
+            other = pages / (second["id"] + ".md")
+            other.write_bytes(b" \n")
+            failed = self.run_cli("ingest-references", "--run", str(root), expected=2)
+            self.assertIn(first["id"] + ": missing page", failed["error"])
+            self.assertIn(second["id"] + ": empty page", failed["error"])
+
+            for ref in refs:
+                (pages / (ref["id"] + ".md")).write_bytes(b"# Saved page")
+            old = (datetime.now() - timedelta(days=2)).timestamp()
+            os.utime(page, (old, old))
+            self.run_cli("ingest-references", "--run", str(root))
+            other.write_bytes(b"# Different page")
+            with self.assertRaises(classifier.ClassifierError) as blocked:
+                classifier._refresh_references(root / "http-cache", "2026-09-08", False, "copilot", root)
+            self.assertIn(first["id"] + ": Fetch and ingest connector page again: saved page is outside", str(blocked.exception))
+            self.assertIn(second["id"] + ": Fetch and ingest connector page again: page or manifest changed", str(blocked.exception))
+            page.write_bytes(b"# Refetched")
+            (pages / "foundry-agent-service.md").unlink()
+            self.run_cli("ingest-references", "--run", str(root))
+            active = classifier._refresh_references(root / "http-cache", "2026-09-08", False, "copilot", root)
+            self.assertTrue(all(r["status"] == "connector-retrieved" for r in active))
+            with self.assertRaisesRegex(classifier.ClassifierError, "foundry-agent-service:.*missing page"):
+                classifier._refresh_references(root / "http-cache", "2026-09-08", False, "foundry", root)
+            network.assert_not_called()
+
+    def test_direct_download_preserves_http_provenance(self) -> None:
+        ref = json.loads(classifier.REFERENCE_MANIFEST_PATH.read_bytes())["references"][0]
+        payload = b"<p>Fixture</p>"
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(classifier.urllib.request, "urlopen") as http:
+            response = http.return_value.__enter__.return_value
+            response.headers.get_content_charset.return_value = "utf-8"
+            response.headers.get.side_effect = {"ETag": '"version"'}.get
+            response.read.return_value = payload
+            result = classifier._refresh_reference(ref, Path(directory), "2026-09-08", False, 24, False)
+            self.assertEqual(("retrieved", '"version"', hashlib.sha256(payload).hexdigest(), "Fixture"),
+                             (result["status"], result["etag"], result["content_sha256"], result["excerpt"]))
+            self.assertNotEqual("ms-learn-mcp", result.get("source"))
+
+    def test_direct_fallback_stops_queued_requests_when_network_is_unavailable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(
+            classifier.urllib.request, "urlopen", side_effect=TimeoutError,
+        ) as network:
+            with self.assertRaisesRegex(classifier.ClassifierError, "Required Microsoft references"):
+                classifier._refresh_references(Path(directory), "2026-09-08", False, "copilot")
+            self.assertGreater(network.call_count, 0)
+            self.assertLessEqual(network.call_count, 8)  # At most the already-started workers.
+            self.assertTrue(all(call.kwargs["timeout"] <= 2 for call in network.call_args_list))
+
     def test_prepare_seeds_research_plan_from_analysis(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             prepared, run = self.prepare(Path(directory))

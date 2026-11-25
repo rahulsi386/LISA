@@ -1,6 +1,6 @@
 # Lisa for Copilot Cowork
 
-**Release 1 (v0.2.1)** of Lisa includes `lisa-requirement-analyzer`, `lisa-complexity-classifier`, and the public Microsoft Learn connector. It writes reports to the attached project folder; it does not deploy or publish to the tenant. Future releases update this same plugin.
+**Release 1 (v0.2.3)** of Lisa includes `lisa-requirement-analyzer`, `lisa-complexity-classifier`, and the public Microsoft Learn connector. It writes reports to the attached project folder; it does not deploy or publish to the tenant. Future releases update this same plugin.
 
 [lisa/](lisa/) is the installable plugin project. Its [manifest](lisa/manifest.json) lists what ships. [skills/](skills/README.md) holds the full implementations, shared helpers and tests, including skills that are not in the ZIP.
 

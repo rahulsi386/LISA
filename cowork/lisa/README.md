@@ -39,6 +39,8 @@ Local package tests do not exercise Cowork, Microsoft Learn or OneDrive. Before 
 
 For the runtime check, run `python build.py --dev-runtime-check` and privately upload the temporary ZIP it prints **only in an isolated test environment**. Run `lisa-runtime-check` there to verify runtimes, outbound HTTPS, the connector and file persistence. It uses the same app identity: do not distribute this diagnostic build or upload it over a pilot installation. The skill is absent from the released manifest and `dist/lisa.zip`.
 
+For the Learn check, start with an empty classifier run and a validated sample analysis. Record how Cowork transfers the first fetch response to `save-reference` and the resulting ID, byte count and SHA-256. Then start a fresh task with the release ZIP: it must save all expected pages and reach `prepare` without an operator prompt, guessed tool aliases, or re-fetching the first page. A chat message saying the pages were fetched does not establish that handoff.
+
 1. Install `dist/lisa.zip` privately and verify the name **Lisa**, both skills, and Microsoft Learn with no sign-in.
 2. Repeat the walkthrough with **three authorized real requirement sets** on the pilot web and desktop clients. Start a fresh task for classification each time. Record the analysis and classification manifest paths and confirm all results persisted to OneDrive.
 3. In each classification result, verify `ms-learn-mcp` was used and `azure-mcp`, `ms-eng-hub-mcp`, and `ms-icm-mcp` are `unavailable`. An inaccessible project, unavailable required connector or incomplete publication is a blocked run, not a pass.

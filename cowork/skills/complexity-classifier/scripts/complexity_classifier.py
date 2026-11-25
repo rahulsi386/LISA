@@ -14,11 +14,12 @@ import os
 import re
 import sys
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -646,6 +647,7 @@ def _write_model_context(
             "stage": _reference_stage(reference_id),
             "required": reference["required"],
             "status": reference["status"],
+            **({"page_path": reference["page_path"]} if "page_path" in reference else {}),
             "path": str(entry_path.relative_to(root)),
             "format": entry_format,
         })
@@ -722,6 +724,9 @@ def _write_model_context(
     run["review_artifacts"] = {
         str(path.relative_to(root)): _sha256_file(path) for path in tracked
     }
+    run["review_artifacts"].update({
+        item["page_path"]: item["content_sha256"] for item in references if "page_path" in item
+    })
     run["input_size_counters"] = {
         "unit": "UTF-8 bytes, not tokenizer-dependent token estimates",
         "ledger_bytes": Path(run["input_path"]).stat().st_size,
@@ -776,6 +781,111 @@ def _strip_html_excerpt(content: str) -> str:
     return re.sub(r"\s+", " ", html.unescape(content)).strip()[:2000]
 
 
+def _connector_page(root: Path, reference: dict[str, Any]) -> Path:
+    reference_id = reference["id"]
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", reference_id):
+        raise ClassifierError(f"Unsafe reference ID: {reference_id}")
+    return _safe_write_path(root / f"{reference_id}.md", root)
+
+
+def _connector_record(page: Path, reference: dict[str, Any]) -> dict[str, Any]:
+    if not page.is_file():
+        raise ValueError("missing page")
+    with page.open("rb") as stream:
+        payload = stream.read()
+        saved_at = os.fstat(stream.fileno()).st_mtime
+    text = payload.decode("utf-8-sig").strip()
+    if not text:
+        raise ValueError("empty page")
+    return {
+        "status": "connector-retrieved",
+        "source": "ms-learn-mcp",
+        "manifest_fingerprint": _canonical_hash(reference),
+        "content_sha256": _sha256_bytes(payload),
+        "excerpt": text[:2000],
+        # Re-ingesting an unchanged file must not renew its freshness.
+        "retrieved_at": datetime.fromtimestamp(saved_at, timezone.utc).isoformat(),
+    }
+
+
+def _save_reference(args: argparse.Namespace) -> int:
+    run_dir = _absolute(Path(args.run))
+    _assert_no_link_components(run_dir)
+    if not (run_dir / "reference-request.json").is_file() or (run_dir / "run.json").exists():
+        raise ClassifierError("Expected an unprepared run directory from init-references")
+    ref = next((r for r in _json_load(REFERENCE_MANIFEST_PATH)["references"] if r["id"] == args.id), None)
+    if ref is None:
+        raise ClassifierError(f"Unknown manifest reference: {args.id}")
+    page = _connector_page(run_dir / "references", ref)
+    if args.source_file:
+        source = Path(args.source_file)
+        if not source.is_file():
+            raise ClassifierError(f"{args.id}: connector result file is unavailable: {source}")
+        payload = source.read_bytes()
+    else:
+        payload = sys.stdin.buffer.read()
+    try:
+        text = payload.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ClassifierError(f"{args.id}: expected UTF-8 page Markdown") from exc
+    body = text.removeprefix("\ufeff").strip()
+    if not body:
+        raise ClassifierError(f"{args.id}: empty connector result; no page saved")
+    if body.startswith("{"):
+        try:
+            envelope = json.loads(body)
+        except json.JSONDecodeError:
+            pass
+        else:
+            if isinstance(envelope, dict) and {"content", "error", "isError", "jsonrpc"} & envelope.keys():
+                raise ClassifierError(f"{args.id}: received a tool response instead of the Markdown page")
+    expected = _sha256_bytes(payload)
+    if page.exists():
+        if not page.is_file() or _sha256_file(page) != expected:
+            raise ClassifierError(f"{args.id}: existing page differs from this result; refusing to overwrite it")
+    else:
+        _atomic_write_text(page, text)
+    if _sha256_file(page) != expected:
+        raise ClassifierError(f"{args.id}: saved page does not match the connector result")
+    print(json.dumps({"status": "saved", "id": args.id, "bytes": len(payload), "sha256": expected}))
+    return 0
+
+
+def _ingest_references(args: argparse.Namespace) -> int:
+    run_dir = _absolute(Path(args.run))
+    root = run_dir / "references"
+    _assert_no_link_components(root)
+    if not root.is_dir():
+        raise ClassifierError("Missing references directory; run init-references first")
+    records = {}
+    failures = {}
+    blockers = []
+    for ref in _json_load(REFERENCE_MANIFEST_PATH)["references"]:
+        page = _connector_page(root, ref)
+        try:
+            records[ref["id"]] = _connector_record(page, ref)
+        except (OSError, ValueError) as exc:
+            failures[ref["id"]] = str(exc)
+            if ref.get("required") and _reference_stage(ref["id"]) == "copilot":
+                blockers.append(f"{ref['id']}: {exc}")
+    _atomic_write_json(_safe_write_path(run_dir / "connector-references.json", run_dir), records)
+    if blockers:
+        raise ClassifierError("Required connector pages could not be ingested: " + "; ".join(blockers))
+    print(json.dumps({"status": "ingested", "retrieved": len(records), "unavailable": failures}))
+    return 0
+
+
+def _fresh_record(cached: dict[str, Any], fingerprint: str, ttl_hours: float) -> bool:
+    if cached.get("manifest_fingerprint") != fingerprint or not cached.get("content_sha256"):
+        return False
+    try:
+        cached_at = datetime.fromisoformat(str(cached.get("retrieved_at", "")).replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    age = (datetime.now().astimezone() - cached_at.astimezone()).total_seconds()
+    return 0 <= age < ttl_hours * 3600
+
+
 def _refresh_reference(
     reference: dict[str, Any],
     cache_root: Path,
@@ -783,10 +893,27 @@ def _refresh_reference(
     offline: bool,
     ttl_hours: float,
     packaged_verified: bool,
+    connector_root: Path | None = None,
+    connector_entry: dict[str, Any] | None = None,
+    network_unavailable: threading.Event | None = None,
 ) -> dict[str, Any]:
+    manifest_fingerprint = _canonical_hash(reference)
+    if connector_root is not None:
+        page = _connector_page(connector_root, reference)
+        entry = connector_entry or {}
+        try:
+            record = _connector_record(page, reference)
+            if entry != record:
+                raise ValueError("page or manifest changed since ingestion, or receipt missing")
+            if not _fresh_record(record, manifest_fingerprint, ttl_hours):
+                raise ValueError("saved page is outside the freshness window")
+            return {**reference, **record, "reviewed_at": reviewed_at, "limitation": "",
+                    "page_path": f"references/{page.name}"}
+        except (OSError, ValueError) as exc:
+            return {**reference, "status": "failed", "reviewed_at": reviewed_at, "content_sha256": "",
+                    "excerpt": "", "limitation": f"Fetch and ingest connector page again: {exc}."}
     cache_path = _reference_cache_path(cache_root, reference["id"])
     cached = _json_load(cache_path) if cache_path.exists() else {}
-    manifest_fingerprint = _canonical_hash(reference)
     cache_compatible = (
         cached.get("manifest_fingerprint") == manifest_fingerprint
     )
@@ -815,26 +942,11 @@ def _refresh_reference(
             result["status"] = "failed"
             result["limitation"] = "No verified packaged or cached reference is available."
         return result
-    if (
-        cache_compatible
-        and cached.get("retrieved_at")
-        and cached.get("content_sha256")
-    ):
-        try:
-            cached_at = datetime.fromisoformat(
-                str(cached["retrieved_at"]).replace("Z", "+00:00")
-            )
-            if cached_at.tzinfo is None:
-                cached_at = cached_at.astimezone()
-            if (
-                datetime.now().astimezone() - cached_at
-            ).total_seconds() < ttl_hours * 3600:
-                result.update(cached)
-                result["reviewed_at"] = reviewed_at
-                result["status"] = "fresh-cache"
-                return result
-        except ValueError:
-            pass
+    if _fresh_record(cached, manifest_fingerprint, ttl_hours):
+        result.update(cached)
+        result["reviewed_at"] = reviewed_at
+        result["status"] = "fresh-cache"
+        return result
 
     parsed = urllib.parse.urlparse(reference["url"])
     if parsed.scheme != "https" or parsed.hostname != "learn.microsoft.com":
@@ -850,8 +962,12 @@ def _refresh_reference(
     if cache_compatible and cached.get("last_modified"):
         headers["If-Modified-Since"] = cached["last_modified"]
     request = urllib.request.Request(reference["url"], headers=headers)
+    connected = False
     try:
-        with urllib.request.urlopen(request, timeout=10) as response:
+        if network_unavailable is not None and network_unavailable.is_set():
+            raise ConnectionError("Microsoft Learn network unavailable")
+        with urllib.request.urlopen(request, timeout=2) as response:
+            connected = True
             payload = response.read(512 * 1024)
             text = payload.decode(
                 response.headers.get_content_charset() or "utf-8", errors="replace"
@@ -893,6 +1009,8 @@ def _refresh_reference(
             result["status"] = "failed"
             result["limitation"] = f"HTTP {exc.code} during retrieval."
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        if not connected and network_unavailable is not None:
+            network_unavailable.set()
         if cache_compatible:
             result["status"] = "cached-after-error"
             result["limitation"] = f"Refresh failed: {type(exc).__name__}."
@@ -917,7 +1035,8 @@ def _reference_stage(reference_id: str) -> str:
 
 
 def _refresh_references(
-    root: Path, reviewed_at: str, offline: bool, research_stage: str
+    root: Path, reviewed_at: str, offline: bool, research_stage: str,
+    connector_run: Path | None = None,
 ) -> list[dict[str, Any]]:
     manifest = _json_load(REFERENCE_MANIFEST_PATH)
     try:
@@ -941,6 +1060,9 @@ def _refresh_references(
         if RESEARCH_ORDER[_reference_stage(reference["id"])] <= maximum_stage
     ]
     root.mkdir(parents=True, exist_ok=True)
+    records = (_json_load(_safe_write_path(connector_run / "connector-references.json", connector_run))
+               if connector_run is not None else {})
+    network_unavailable = threading.Event()
     results: dict[str, dict[str, Any]] = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
         pending = {
@@ -952,6 +1074,9 @@ def _refresh_references(
                 offline,
                 ttl_hours,
                 packaged_verified,
+                connector_run / "references" if connector_run is not None else None,
+                records.get(reference["id"]),
+                network_unavailable,
             ): reference
             for reference in references
         }
@@ -977,12 +1102,12 @@ def _refresh_references(
         item
         for item in ordered
         if item.get("required")
-        and item["status"] == "failed"
+        and item["status"] in {"failed", "cached-after-error"}
     ]
     if failures:
         raise ClassifierError(
             "Required Microsoft references could not be reviewed: "
-            + ", ".join(item["id"] for item in failures)
+            + "; ".join(f"{item['id']}: {item['limitation']}" for item in failures)
         )
     return ordered
 
@@ -1434,6 +1559,7 @@ def _cache_key(
         {
             "id": item["id"],
             "url": item["url"],
+            "source": item.get("source", ""),
             "etag": item.get("etag", ""),
             "last_modified": item.get("last_modified", ""),
             "content_sha256": item.get("content_sha256", ""),
@@ -1502,7 +1628,7 @@ def _validation_summary(
             item["id"] for item in references
             if item["status"] in {
                 "retrieved", "not-modified", "fresh-cache", "cached-after-error",
-                "packaged-verified",
+                "packaged-verified", "connector-retrieved",
             } and item.get("content_sha256")
         ],
     }
@@ -1628,11 +1754,38 @@ def _prepare(args: argparse.Namespace) -> int:
             "classification must be a direct child of tempOutputPath"
         )
 
-    timestamp = _timestamp_for_output(classification_root, started_at)
     input_hash = handoff["ledger_sha256"]
-    run_id = f"CC-{timestamp}-{input_hash[:8].upper()}"
     internal = classification_root / ".complexity-classifier"
-    run_dir = internal / "runs" / run_id
+    runs = internal / "runs"
+    if args.run:
+        run_dir = _safe_write_path(_absolute(Path(args.run)), runs)
+        if run_dir.parent != runs or (run_dir / "run.json").exists():
+            raise ClassifierError("Expected an unprepared classifier run directory from init-references")
+        request = _json_load(_safe_write_path(run_dir / "reference-request.json", run_dir))
+        if (not isinstance(request.get("started_at_local"), str) or not request["started_at_local"]
+                or not isinstance(request.get("timestamp"), str)
+                or not isinstance(request.get("started_epoch"), (int, float))):
+            raise ClassifierError("Invalid reference reservation; run init-references again")
+        started_at = _authoritative_local_time(request["started_at_local"])
+        timestamp = request["timestamp"]
+        if (not re.fullmatch(started_at.strftime("%Y%m%d_%H%M%S") + r"(?:_[0-9]{3})?", timestamp)
+                or run_dir.name != f"CC-{timestamp}-{input_hash[:8].upper()}"
+                or request.get("analysis_handoff") != handoff):
+            raise ClassifierError("Reserved run does not match the validated analysis; run init-references again")
+        started_epoch = request["started_epoch"]
+    else:
+        timestamp = _timestamp_for_output(classification_root, started_at)
+        run_dir = runs / f"CC-{timestamp}-{input_hash[:8].upper()}"
+    run_id = run_dir.name
+    if args.command == "init-references":
+        _safe_write_path(run_dir, classification_root).mkdir(parents=True, exist_ok=False)
+        (run_dir / "references").mkdir()
+        _atomic_write_json(run_dir / "reference-request.json", {
+            "timestamp": timestamp, "started_at_local": started_at.isoformat(), "started_epoch": started_epoch,
+            "analysis_handoff": handoff,
+        })
+        print(json.dumps({"run_directory": str(run_dir), "reference_manifest": str(REFERENCE_MANIFEST_PATH)}))
+        return 0
     reference_cache = internal / "reference-cache"
     model_cache_root = internal / "classification-cache" / f"v{CACHE_VERSION}"
     for directory in (run_dir, reference_cache, model_cache_root):
@@ -1647,6 +1800,7 @@ def _prepare(args: argparse.Namespace) -> int:
         started_at.date().isoformat(),
         args.offline,
         research_stage,
+        connector_run=run_dir if args.run else None,
     )
     evidence_summary = _build_evidence_summary(
         data, lisa_config_path, lisa_config
@@ -1706,6 +1860,7 @@ def _prepare(args: argparse.Namespace) -> int:
         "lisa_config_path": str(lisa_config_path) if lisa_config_path else "",
         "lisa_config_sha256": lisa_config_sha256,
         "offline": bool(args.offline),
+        "connector_references": bool(args.run),
         "research_assessments": [],
         "reference_failures": sum(
             1 for item in references if item["status"] == "failed"
@@ -1930,6 +2085,7 @@ def _expand_research(args: argparse.Namespace) -> int:
         datetime.fromisoformat(run["started_at_local"]).date().isoformat(),
         bool(run.get("offline")),
         target,
+        connector_run=run_dir if run.get("connector_references") else None,
     )
     references_path = Path(run["references_path"])
     _atomic_write_json(references_path, references)
@@ -4614,7 +4770,7 @@ def _output_object(
     components = model["components"]
     public_references = [
         {
-            key: item.get(key, "")
+            key: item[key]
             for key in (
                 "id",
                 "title",
@@ -4622,11 +4778,13 @@ def _output_object(
                 "domain",
                 "reviewed_at",
                 "status",
+                "source",
                 "etag",
                 "last_modified",
                 "content_sha256",
                 "limitation",
             )
+            if key in item
         }
         for item in references
     ]
@@ -4983,6 +5141,23 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=VERSION)
     commands = parser.add_subparsers(dest="command", required=True)
 
+    init = commands.add_parser("init-references", help="Reserve a run directory for Microsoft Learn connector pages")
+    init.add_argument("--config", required=True)
+    init.add_argument("--local-time")
+    init.set_defaults(handler=_prepare, run=None)
+
+    save = commands.add_parser("save-reference", help="Save and verify one successful connector page without fetching it")
+    save.add_argument("--run", required=True, help="Run directory returned by init-references")
+    save.add_argument("--id", required=True, help="ID of the fetched manifest URL")
+    page_source = save.add_mutually_exclusive_group(required=True)
+    page_source.add_argument("--source-file", help="Markdown file returned/exported by the connector host")
+    page_source.add_argument("--stdin", action="store_true", help="Read the returned page body as UTF-8 bytes on stdin")
+    save.set_defaults(handler=_save_reference)
+
+    ingest = commands.add_parser("ingest-references", help="Record Markdown fetched through the Microsoft Learn connector")
+    ingest.add_argument("--run", required=True, help="Run directory returned by init-references")
+    ingest.set_defaults(handler=_ingest_references)
+
     prepare = commands.add_parser(
         "prepare", help="Resolve input, refresh references, and prepare a model"
     )
@@ -4992,7 +5167,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="lisa-config.json; analysis and output resolve from relative basePath",
     )
     prepare.add_argument("--local-time")
-    prepare.add_argument(
+    source = prepare.add_mutually_exclusive_group(required=True)
+    source.add_argument("--run", help="Reserved run directory containing ingested Learn pages")
+    source.add_argument("--direct-download", action="store_true", help="Fall back to the HTTP reference cache and direct downloads")
+    source.add_argument(
         "--offline",
         action="store_true",
         help="Use the packaged reference manifest without network retrieval",

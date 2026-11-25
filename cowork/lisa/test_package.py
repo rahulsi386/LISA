@@ -1,3 +1,4 @@
+import hashlib
 import io
 import json
 import runpy
@@ -107,26 +108,22 @@ class LisaPackageTests(unittest.TestCase):
             config.write_text('{"basePath":"."}', encoding="utf-8")
             skills = root / "app" / "skills"
 
-            def cli(skill, *args, mock_http=False):
+            def cli(skill, *args, stdin=None, expected=0):
                 script = skills / f"lisa-{skill}" / "scripts" / (skill.replace("-", "_") + ".py")
-                # The installed skills must not need site-packages for this plain-text project.
-                command = [sys.executable, "-E", "-P", "-B", "-S"]
-                if mock_http:
-                    # Exercise the runner without sending fixture data or relying on live pages.
-                    command += ["-c", """
-import runpy, sys, urllib.request
-from email.message import Message
-from io import BytesIO
-class LocalPage(BytesIO):
-    headers = Message()
-urllib.request.urlopen = lambda *args, **kwargs: LocalPage(b'<title>Fixture</title>')
+                # Neither site-packages nor runner HTTP access is needed for this handoff.
+                command = [sys.executable, "-E", "-P", "-B", "-S", "-c", """
+import runpy, sys
+def offline(event, args):
+    if event == 'urllib.Request':
+        raise SystemExit('Unexpected direct download')
+sys.addaudithook(offline)
 sys.argv = sys.argv[1:]
 runpy.run_path(sys.argv[0], run_name='__main__')
 """]
                 result = subprocess.run([*command, str(script), *map(str, args)], cwd=project,
-                                        capture_output=True, text=True, timeout=120)
-                self.assertEqual(0, result.returncode, result.stderr or result.stdout)
-                return json.loads(result.stdout)
+                                        input=stdin, capture_output=True, timeout=120)
+                self.assertEqual(expected, result.returncode, result.stderr or result.stdout)
+                return json.loads(result.stderr if expected else result.stdout)
 
             when = "2026-11-23T09:00:00+05:30"
             prepared = cli("requirement-analyzer", "prepare", "--config", config, "--local-time", when)
@@ -148,8 +145,32 @@ runpy.run_path(sys.argv[0], run_name='__main__')
             draft = Path(run["run_directory"]) / "completed.json"
             draft.write_text(json.dumps(ledger), encoding="utf-8")
             cli("requirement-analyzer", "publish", "--run", prepared["run"], "--ledger", draft)
-            classified = cli("complexity-classifier", "prepare", "--config", config,
-                             "--local-time", when, mock_http=True)
+            reservation = cli("complexity-classifier", "init-references", "--config", config, "--local-time", when)
+            run_dir = Path(reservation["run_directory"])
+            refs = json.loads(Path(reservation["reference_manifest"]).read_bytes())["references"]
+            markdown = "# Synthetic Learn page\r\n\r\nNon-ASCII: \u00e9. " + "x" * 2100
+            first = refs[0]["id"]
+            save = ("complexity-classifier", "save-reference", "--run", run_dir, "--id")
+            for invalid in (b" \r\n", b"\xff", b'{"isError":true,"content":[{"type":"text","text":"Not found"}]}'):
+                self.assertIn(first, cli(*save, first, "--stdin", stdin=invalid, expected=2)["error"])
+                self.assertEqual([], list((run_dir / "references").iterdir()))
+            receipt = cli(*save, first, "--stdin", stdin=markdown.encode())
+            self.assertEqual({"status": "saved", "id": first, "bytes": len(markdown.encode()),
+                              "sha256": hashlib.sha256(markdown.encode()).hexdigest()}, receipt)
+            self.assertEqual("saved", cli(*save, first, "--stdin", stdin=markdown.encode())["status"])
+            self.assertIn("refusing to overwrite", cli(*save, first, "--stdin", stdin=b"# Other", expected=2)["error"])
+            self.assertEqual(markdown.encode(), (run_dir / "references" / (first + ".md")).read_bytes())
+            exported = root / "synthetic-export.md"
+            exported.write_bytes(markdown.encode())
+            for ref in refs[1:]:
+                cli(*save, ref["id"], "--source-file", exported)
+            ingested = cli("complexity-classifier", "ingest-references", "--run", run_dir)
+            self.assertEqual(len(refs), ingested["retrieved"])
+            classified = cli("complexity-classifier", "prepare", "--config", config, "--run", run_dir)
+            self.assertEqual(run_dir, Path(classified["run"]).parent)
+            active = json.loads(Path(classified["references"]).read_bytes())
+            self.assertNotIn("foundry-agent-service", {r["id"] for r in active})
+            self.assertTrue(all(r["excerpt"] == markdown[:2000] for r in active))
             model = json.loads(Path(classified["model_draft"]).read_bytes())
             unavailable = {row["server"] for row in model["research_register"]["mcp_usage"]
                            if row["status"] == "unavailable"}
@@ -180,6 +201,11 @@ runpy.run_path(sys.argv[0], run_name='__main__')
             self.assertTrue(Path(result["markdown"]).is_file())
             self.assertEqual(output, Path(result["json"]).parent)
             final = json.loads(Path(result["json"]).read_bytes())
+            for ref in final["reference_sources"]:
+                self.assertEqual(("connector-retrieved", "ms-learn-mcp", hashlib.sha256(markdown.encode()).hexdigest()),
+                                 (ref["status"], ref["source"], ref["content_sha256"]))
+                self.assertNotIn("etag", ref)
+                self.assertNotIn("last_modified", ref)
             self.assertEqual(unavailable, {r["server"] for r in final["research_register"]["mcp_usage"]
                                            if r["status"] == "unavailable"})
             self.assertEqual("validated", json.loads((output / "classification-manifest.json").read_bytes())["status"])
