@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "1.0",
+  "skill": "video-generator",
+  "stage": "video",
+  "rootFolder": "video",
+  "producesArtifacts": true,
+  "inputs": [
+    { "relativePath": "storyboard.json", "required": true, "kind": "json" },
+    { "relativePath": "assets", "required": true, "kind": "directory" }
+  ],
+  "runIdPattern": null,
+  "allowedStatuses": ["passed", "blocked"],
+  "manifest": null,
+  "resultSchema": null,
+  "files": [
+    { "relativePath": "output/marketing-video.mp4", "required": true, "schema": null, "kind": "other" },
+    { "relativePath": "output/captions.srt", "required": true, "schema": null, "kind": "other" },
+    { "relativePath": "output/captions.vtt", "required": true, "schema": null, "kind": "other" },
+    { "relativePath": "output/thumbnail.jpg", "required": true, "schema": null, "kind": "image" },
+    { "relativePath": "output/storyboard.jpg", "required": true, "schema": null, "kind": "image" },
+    { "relativePath": "output/timing.json", "required": true, "schema": null, "kind": "json" },
+    { "relativePath": "output/verification.json", "required": true, "schema": null, "kind": "json" },
+    { "relativePath": "watch.html", "required": true, "schema": null, "kind": "html" },
+    { "relativePath": "storyboard.json", "required": true, "schema": null, "kind": "json" }
+  ],
+  "directories": [{ "relativePath": "assets", "required": true }],
+  "patterns": { "video": "^marketing-video\\.mp4$" },
+  "forbiddenPathPatterns": ["(?i)(^|/)(cookies?|tokens?|credentials?|secrets?)\\.(json|txt)$"]
+}
